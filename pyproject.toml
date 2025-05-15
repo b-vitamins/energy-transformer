@@ -3,6 +3,7 @@ name = "energy-transformer"
 version = "0.1.0"
 description = "PyTorch implementation of Energy Transformer"
 authors = ["Ayan Das <bvits@riseup.net>"]
+maintainers = ["Claude 3.7 Sonnet (Anthropic)"]
 readme = "README.md"
 license = "Apache-2.0"
 
