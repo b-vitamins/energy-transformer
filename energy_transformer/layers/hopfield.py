@@ -76,7 +76,7 @@ class HopfieldNetwork(BaseHopfieldNetwork):
 
     def reset_parameters(self) -> None:
         """Initialize learnable parameters."""
-        nn.init.normal_(self.ξ, std=0.02)
+        nn.init.normal_(self.ξ, std=0.002)
 
     def forward(self, g: Tensor) -> Tensor:
         """Compute Hopfield Network energy.
