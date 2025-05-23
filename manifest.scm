@@ -15,7 +15,6 @@
    "python-pytest-cov"
    "python-mypy"
    "python-ruff"
-   "python-rich"
    "python-lsp-server"
    "python-pylsp-mypy"
    "python-pylsp-ruff"
