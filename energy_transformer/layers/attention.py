@@ -1,5 +1,7 @@
 """Energy-based multi-head attention module implementation."""
 
+import math
+
 import torch
 import torch.nn as nn
 from torch import Tensor
@@ -22,7 +24,7 @@ class MultiHeadEnergyAttention(BaseEnergyAttention):
     head_dim : int
         Dimension of the key/query space Y
     beta : float, optional
-        Temperature parameter β for attention. If None, defaults to 0.125.
+        Temperature parameter β. If None, defaults to **1 / √(head_dim)**.
 
     Notes
     -----
@@ -66,7 +68,7 @@ class MultiHeadEnergyAttention(BaseEnergyAttention):
         head_dim : int
             Dimension of the key/query space Y
         beta : float, optional
-            Temperature parameter β. If None, defaults to 0.125.
+            Temperature parameter β. If None, defaults to **1 / √(head_dim)**.
         """
         super().__init__()
         self.in_dim = in_dim
@@ -85,15 +87,15 @@ class MultiHeadEnergyAttention(BaseEnergyAttention):
             torch.empty(num_heads, head_dim, in_dim)
         )  # shape: [H, Y, D]
 
-        # β - configurable temperature parameter
-        self.β = beta if beta is not None else 0.125
+        # β – same default as the original ET implementation
+        self.β = beta if beta is not None else 1.0 / math.sqrt(head_dim)
 
         self.reset_parameters()
 
     def reset_parameters(self) -> None:
         """Initialize learnable parameters."""
-        nn.init.normal_(self.w_k, std=0.002)
-        nn.init.normal_(self.w_q, std=0.002)
+        nn.init.normal_(self.w_k, std=0.02)
+        nn.init.normal_(self.w_q, std=0.02)
 
     def forward(self, g: Tensor) -> Tensor:
         """Compute attention energy.
