@@ -4,6 +4,7 @@
    "bash"
    "poetry"
    "python"
+   "python-accelerate"
    "python-pytorch-cuda"
    "python-torchvision-cuda"
    "python-matplotlib"
