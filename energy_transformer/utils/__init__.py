@@ -1,12 +1,24 @@
 """Utility functions for Energy Transformer."""
 
-from .checkpoint import load_checkpoint, save_checkpoint
-from .image import Patcher, normalize_image, unnormalize_image
+from .vision import (
+    CLSToken,
+    Learnable2DPosEnc,
+    MaskToken,
+    PatchEmbed,
+    SinCos2DPosEnc,
+    _init_trunc_normal,
+    _to_pair,
+    get_2d_sincos_pos_embed,
+)
 
 __all__ = [
-    "Patcher",
-    "unnormalize_image",
-    "normalize_image",
-    "load_checkpoint",
-    "save_checkpoint",
+    # Vision utilities
+    "PatchEmbed",
+    "Learnable2DPosEnc",
+    "SinCos2DPosEnc",
+    "CLSToken",
+    "MaskToken",
+    "get_2d_sincos_pos_embed",
+    "_to_pair",
+    "_init_trunc_normal",
 ]
