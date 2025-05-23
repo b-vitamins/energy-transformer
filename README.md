@@ -10,6 +10,7 @@ Energy Transformer (ET) is a continuous dynamical system with a tractable energy
 
 ## Key Features
 
+- **Specification API**: Declarative model definition using composable specifications
 - **Energy-based formulation**: Forward pass via energy minimization
 - **Parameter efficient**: Achieves strong performance with fewer parameters
 - **Interpretable**: Energy landscape provides insights into model behavior
@@ -25,73 +26,93 @@ pip install -e .
 
 ## Quick Start
 
-### Basic Usage
+### Using Pre-defined Models
 
 ```python
 import torch
-from energy_transformer import ETConfig, EnergyTransformer
+from energy_transformer import realise, vit_base
 
-# Create configuration
-config = ETConfig(
-    d_model=768,
-    d_head=64,
-    n_heads=12,
-    scale_memories=4.0,
-    alpha=0.1,
-    n_steps=12
+# Create a Vision Transformer with Energy blocks
+model = realise(vit_base(img_size=224, patch_size=16))
+
+# Forward pass
+images = torch.randn(4, 3, 224, 224)
+output = model(images)  # (4, 768) - CLS token representation
+```
+
+### Custom Architecture with Specifications
+
+```python
+from energy_transformer import seq, repeat, PatchSpec, PosEncSpec, CLSTokenSpec, ETBlockSpec, NormSpec, realise
+
+# Define model architecture declaratively
+spec = seq(
+    PatchSpec(img_size=224, patch_size=16, in_chans=3, embed_dim=768),
+    PosEncSpec(kind="sincos"),
+    CLSTokenSpec(),
+    repeat(ETBlockSpec(steps=4, alpha=0.125), 12),
+    NormSpec()
 )
 
-# Initialize model
-model = EnergyTransformer(config)
+# Create the actual model
+model = realise(spec)
+```
+
+### Image Processing with Masking
+
+```python
+from energy_transformer import realise, mae_base
+
+# Create model with mask token support
+model = realise(mae_base(img_size=224, patch_size=16))
+
+# Process images with masking
+images = torch.randn(4, 3, 224, 224)
+mask = torch.bernoulli(torch.full((4, 196), 0.75))  # 75% masking
+results = model(images, patch_mask=mask, return_sequence=True)
+```
+
+### Direct Model Usage
+
+```python
+from energy_transformer import EnergyTransformer
+from energy_transformer.layers import LayerNorm, MultiHeadEnergyAttention, HopfieldNetwork
+
+# Create Energy Transformer block
+et_block = EnergyTransformer(
+    layer_norm=LayerNorm(768),
+    attention=MultiHeadEnergyAttention(in_dim=768, num_heads=12, head_dim=64),
+    hopfield=HopfieldNetwork(in_dim=768, hidden_dim=2048),
+    steps=4,
+    alpha=0.125
+)
 
 # Forward pass
 x = torch.randn(2, 10, 768)  # (batch_size, seq_len, d_model)
-output = model(x)
-
-# Track energy during forward pass
-output, trajectory = model(x, return_trajectory=True)
-final_state, energies = model.compute_energy_trajectory(x)
-```
-
-### Image Processing
-
-```python
-from energy_transformer import ImageETConfig, ImageEnergyTransformer
-
-# Configure for images
-config = ImageETConfig(
-    image_shape=(3, 224, 224),
-    patch_size=16,
-    n_mask=100
-)
-
-# Create model
-model = ImageEnergyTransformer(config)
-
-# Process images
-images = torch.randn(4, 3, 224, 224)
-mask = model.create_random_mask(4, images.device)
-results = model(images, mask=mask)
-reconstructed = results['reconstruction']
+output = et_block(x)
 ```
 
 ## Model Architecture
 
 The Energy Transformer consists of three main components:
 
-1. **EnergyLayerNorm**: Modified layer normalization with Lagrangian formulation
-2. **EnergyAttention**: Attention mechanism based on energy minimization
-3. **HopfieldNetwork**: Replaces MLP with associative memory
+1. **Energy Layer Normalization**: Modified layer normalization with Lagrangian formulation
+2. **Energy Attention**: Multi-head attention mechanism based on energy minimization
+3. **Hopfield Network**: Associative memory that replaces traditional MLP
 
 The total energy is the sum of individual component energies, and the forward pass minimizes this energy via gradient descent.
 
-## Examples
+## Pre-defined Configurations
 
-See the `examples/` (coming soon) directory for complete examples:
+```python
+from energy_transformer import vit_tiny, vit_small, vit_base, vit_large, mae_base
 
-- `basic_tutorial.py`: Demonstrates energy minimization (coming soon)
-- `image_reconstruction.py`: Image masking and reconstruction (coming soon)
-- `train_imagenet.py`: Training on ImageNet (coming soon)
+tiny_model = realise(vit_tiny())    # 12 layers, 192 dim
+small_model = realise(vit_small())  # 12 layers, 384 dim  
+base_model = realise(vit_base())    # 12 layers, 768 dim
+large_model = realise(vit_large())  # 24 layers, 1024 dim
+mae_model = realise(mae_base())     # For masked autoencoding
+```
 
 ## Testing
 
@@ -124,4 +145,5 @@ series = {NIPS '23}
 This project is licensed under the Apache License 2.0 - see the LICENSE file for details.
 
 ## Acknowledgments
+
 This unofficial PyTorch port of the [official JAX implementation](https://github.com/bhoov/energy-transformer-jax) was generated entirely by Claude 3.7 Sonnet ([Anthropic](https://www.anthropic.com)).
