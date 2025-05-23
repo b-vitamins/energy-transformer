@@ -1,108 +1,132 @@
 """Energy-based LayerNorm implementation."""
 
+import math
+
 import torch
 import torch.nn as nn
+import torch.nn.functional as F  # noqa: N812
 from torch import Tensor
 
+from .base import BaseLayerNorm
 
-class EnergyLayerNorm(nn.Module):
-    """
-    Modified LayerNorm with energy formulation via Lagrangian.
 
-    Uses a scalar scale (gamma) and optional bias (delta) instead of standard per-feature parameters.
+class LayerNorm(BaseLayerNorm):
+    """Layer normalized token representation with strict energy interpretation.
+
+    Parameters
+    ----------
+    in_dim : int
+        Feature dimension D of token vectors
+    eps : float, optional
+        Epsilon for numerical stability, by default 1e-5
+
+    Notes
+    -----
+    Each token is represented by a vector x ∈ ℝᴰ.
+    ET block operations use a layer-normalized token representation:
+
+    gᵢ = γ·(xᵢ - x̄)/√(1/D·∑ⱼ(xⱼ - x̄)² + ε) + δᵢ
+
+    where x̄ = 1/D·∑ₖ₌₁ᴰ xₖ
+
+    The scalar γ > 0 and vector elements δᵢ are learnable parameters.
+    ε is a small regularization constant.
+
+    This operation can be defined as a partial derivative
+    of the Lagrangian (energy) function:
+
+    L = D·γ·√(1/D·∑ⱼ(xⱼ - x̄)² + ε) + ∑ⱼδⱼ·xⱼ
+
+    such that gᵢ = ∂L/∂xᵢ
+
+    The positivity constraint on γ ensures that L is bounded below,
+    which is essential for a valid energy-based interpretation where
+    probability distributions proportional to e^(-L) must be normalizable.
     """
 
     def __init__(
         self,
-        d_model: int,
-        use_bias: bool = True,
+        in_dim: int,
         eps: float = 1e-5,
     ):
-        """
-        Initialize the EnergyLayerNorm layer.
+        """Initialize LayerNorm module.
 
         Parameters
         ----------
-        d_model : int
-            Feature dimension.
-        use_bias : bool, optional
-            Whether to include a bias term (default: True).
+        in_dim : int
+            Feature dimension D of token vectors
         eps : float, optional
-            Epsilon for numerical stability (default: 1e-5).
+            Small constant for numerical stability, by default 1e-5
         """
         super().__init__()
-        self.d_model = d_model
-        self.use_bias = use_bias
         self.eps = eps
 
-        self.gamma = nn.Parameter(torch.ones(()))
-        self.delta = nn.Parameter(torch.zeros(d_model)) if use_bias else None
+        # Store log(γ) and apply softplus to ensure γ > 0
+        # Initialize to make softplus(logγ) = 1.0
+        self.logγ = nn.Parameter(
+            torch.tensor(math.log(math.exp(1.0) - 1))
+        )  # shape: scalar
 
-    def lagrangian(self, x: Tensor) -> Tensor:
+        # δ ∈ ℝᴰ
+        self.δ = nn.Parameter(torch.empty(in_dim))  # shape: [D]
+
+        self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        """Initialize learnable parameters.
+
+        logγ is initialized to make softplus(logγ) = 1.0,
+        maintaining the standard identity initialization.
         """
-        Compute the Lagrangian (integral) of the LayerNorm operation.
-
-        Parameters
-        ----------
-        x : Tensor
-            Input tensor of shape (..., d_model).
-
-        Returns
-        -------
-        Tensor
-            Scalar Lagrangian value.
-        """
-        d = x.shape[-1]
-        x_centered = x - x.mean(dim=-1, keepdim=True)
-        var_sum = (x_centered**2).sum(dim=-1)
-        term1 = d * self.gamma * torch.sqrt(var_sum / d + self.eps)
-
-        if self.use_bias and self.delta is not None:
-            term2 = (self.delta * x).sum()
-            return term1.sum() + term2
-
-        return term1.sum()
-
-    def g(self, x: Tensor) -> Tensor:
-        """
-        Apply the activation (gradient of the Lagrangian), equivalent to LayerNorm.
-
-        Parameters
-        ----------
-        x : Tensor
-            Input tensor of shape (..., d_model).
-
-        Returns
-        -------
-        Tensor
-            Normalized output tensor.
-        """
-        x_centered = x - x.mean(dim=-1, keepdim=True)
-        var = (x_centered**2).mean(dim=-1, keepdim=True)
-        normalized = self.gamma * x_centered / torch.sqrt(var + self.eps)
-
-        if self.use_bias and self.delta is not None:
-            normalized = normalized + self.delta
-
-        return normalized
+        # Initialize logγ to make softplus(logγ) = 1.0
+        with torch.no_grad():
+            self.logγ.fill_(math.log(math.exp(1.0) - 1.0))
+        nn.init.zeros_(self.δ)
 
     def forward(self, x: Tensor) -> Tensor:
-        """Alias for the LayerNorm operation (g)."""
-        return self.g(x)
-
-    def energy(self, x: Tensor) -> Tensor:
-        """
-        Compute energy via Legendre transform: g(x)*x - Lagrangian(x).
+        """Apply layer normalization to input tensor.
 
         Parameters
         ----------
         x : Tensor
-            Input tensor of shape (..., d_model).
+            Input tensor of shape [..., D] where D is the
+            feature dimension
 
         Returns
         -------
         Tensor
-            Scalar energy value.
+            Normalized output tensor of shape [..., D]
         """
-        g_x = self.g(x)
-        return (g_x * x).sum() - self.lagrangian(x)
+        orig_dtype = x.dtype
+
+        # For mixed precision calculations, use at least float32 internally
+        # but ensure we return the same dtype as input
+        calc_dtype = orig_dtype
+        if orig_dtype == torch.float16:
+            # For numerical stability, use float32 for internal calculations
+            x = x.to(torch.float32)
+            calc_dtype = torch.float32
+
+        # Get positive γ using softplus
+        γ = F.softplus(self.logγ).to(dtype=calc_dtype)
+
+        # Ensure δ has the correct dtype
+        δ = self.δ.to(dtype=calc_dtype)
+
+        # x̄ = 1/D·∑ₖ₌₁ᴰ xₖ
+        x_mean = x.mean(dim=-1, keepdim=True)  # shape: [..., 1]
+
+        # xᵢ - x̄
+        x_c = x - x_mean  # shape: [..., D]
+
+        # 1/D·∑ⱼ(xⱼ - x̄)²
+        var = (x_c**2).mean(dim=-1, keepdim=True)  # shape: [..., 1]
+
+        # gᵢ = γ·(xᵢ - x̄)/√(1/D·∑ⱼ(xⱼ - x̄)² + ε) + δᵢ
+        g = γ * x_c / torch.sqrt(var + self.eps) + δ  # shape: [..., D]
+
+        # Convert back to original dtype if necessary
+        if calc_dtype != orig_dtype:
+            g = g.to(orig_dtype)
+
+        return g
