@@ -2,7 +2,4 @@
 
 from .base import REALISER_REGISTRY, EnergyTransformer
 
-__all__ = [
-    "EnergyTransformer",
-    "REALISER_REGISTRY"
-]
+__all__ = ["EnergyTransformer", "REALISER_REGISTRY"]
