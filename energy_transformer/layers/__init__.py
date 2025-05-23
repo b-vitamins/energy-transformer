@@ -1,11 +1,11 @@
 """Energy Transformer layers."""
 
-from .attention import EnergyAttention
+from .attention import MultiHeadEnergyAttention
 from .hopfield import HopfieldNetwork
-from .layer_norm import EnergyLayerNorm
+from .layer_norm import LayerNorm
 
 __all__ = [
-    "EnergyLayerNorm",
-    "EnergyAttention",
+    "MultiHeadEnergyAttention",
+    "LayerNorm",
     "HopfieldNetwork",
 ]
