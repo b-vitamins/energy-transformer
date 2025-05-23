@@ -1,144 +1,152 @@
-"""Energy-based multi-head attention module implementation.
-
-This module defines an energy-based attention mechanism, where attention operations are
-implicitly defined via an energy function. The gradient of this energy function produces
-the attention outputs.
-"""
-
-import math
+"""Energy-based multi-head attention module implementation."""
 
 import torch
 import torch.nn as nn
+from torch import Tensor
+
+from .base import BaseEnergyAttention
 
 
-class EnergyAttention(nn.Module):
-    """Energy-based multi-head attention.
+class MultiHeadEnergyAttention(BaseEnergyAttention):
+    """Multi-Head Energy Attention.
 
-    Instead of directly computing attention weights and outputs, this module
-    defines an energy function whose gradient gives the attention operation.
+    Defines an energy function whose gradient
+    implicitly defines the attention operation.
 
     Parameters
     ----------
-    d_model : int
-        Dimension of the model embeddings.
-    n_heads : int
-        Number of attention heads.
-    d_head : int
-        Dimension per attention head.
-    per_head_beta : bool, default False
-        Whether to use separate temperature parameters per head.
+    in_dim : int
+        Input dimension D of token vectors
+    num_heads : int
+        Number of attention heads H
+    head_dim : int
+        Dimension of the key/query space Y
+    beta : float, optional
+        Temperature parameter β for attention. If None, defaults to 0.125.
+
+    Notes
+    -----
+    The energy-based attention operation is
+    described by the following energy function:
+
+    E^ATT = -(1/β)·∑ₕ₌₁ᴴ·∑ᶜ₌₁ᴺ·log(∑ᴮ≠ᶜ exp(β·Aₕᴮᶜ))
+
+    where the attention matrix A is computed from query and key tensors:
+
+    Aₕᴮᶜ = ∑ₐ Kₐₕᴮ·Qₐₕᶜ,       A ∈ ℝᴴˣᴺˣᴺ
+    Kₐₕᴮ = ∑ⱼ W^K_ₐₕⱼ·gⱼᴮ,    K ∈ ℝʸˣᴴˣᴺ
+    Qₐₕᶜ = ∑ⱼ W^Q_ₐₕⱼ·gⱼᶜ,    Q ∈ ℝʸˣᴴˣᴺ
+
+    - The tensors W^K ∈ ℝʸˣᴴˣᴰ and W^Q ∈ ℝʸˣᴴˣᴰ are learnable parameters,
+    - N is the sequence length (number of tokens),
+    - H is the number of attention heads,
+    - D is the input dimension of each token,
+    - Y is the key/query projection dimension.
+
+    Each token generates two representations:
+    - query: where should it look for prompts on how to evolve?
+    - key: what should be the contents of tokens that attend to it?
     """
 
     def __init__(
         self,
-        d_model: int,
-        n_heads: int,
-        d_head: int,
-        per_head_beta: bool = False,
+        in_dim: int,
+        num_heads: int = 12,
+        head_dim: int = 64,
+        beta: float = None,
     ):
-        """Initialize the EnergyAttention module."""
-        super().__init__()
-        self.d_model = d_model
-        self.n_heads = n_heads
-        self.d_head = d_head
-        self.per_head_beta = per_head_beta
-
-        # Initialize query and key projection matrices
-        self.wq = nn.Parameter(torch.randn(n_heads, d_head, d_model) * 0.002)
-        self.wk = nn.Parameter(torch.randn(n_heads, d_head, d_model) * 0.002)
-
-        # Temperature parameters
-        if per_head_beta:
-            self.beta = nn.Parameter(torch.ones(n_heads) / math.sqrt(d_head))
-        else:
-            self.register_buffer("beta", torch.tensor(1.0 / math.sqrt(d_head)))
-
-    def _broadcast_beta(
-        self, scores: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Broadcast temperature parameter beta for scores.
+        """Initialize the Energy Attention layer.
 
         Parameters
         ----------
-        scores : torch.Tensor
-            Scores tensor of shape (..., n_heads, query_len, key_len).
-
-        Returns
-        -------
-        Tuple[torch.Tensor, torch.Tensor]
-            Tuple containing beta and inverse beta tensors broadcastable to scores.
+        in_dim : int
+            Input dimension D of token vectors
+        num_heads : int
+            Number of attention heads H
+        head_dim : int
+            Dimension of the key/query space Y
+        beta : float, optional
+            Temperature parameter β. If None, defaults to 0.125.
         """
-        if self.per_head_beta:
-            extra_dims = scores.dim() - 3
-            head_shape = [1] * extra_dims + [self.n_heads, 1, 1]
-            beta = self.beta.view(head_shape)  # (..., n_heads, 1, 1)
-            inv_beta = (1.0 / self.beta).view(
-                [1] * extra_dims + [self.n_heads, 1]
-            )  # (..., n_heads, 1)
-        else:
-            beta = self.beta
-            inv_beta = 1.0 / self.beta
-        return beta, inv_beta
+        super().__init__()
+        self.in_dim = in_dim
+        self.num_heads = num_heads
+        self.head_dim = head_dim
 
-    def energy(self, g: torch.Tensor) -> torch.Tensor:
+        # W^K ∈ ℝʸˣᴴˣᴰ
+        # Note: [H, Y, D] for computational efficiency in PyTorch
+        self.w_k = nn.Parameter(
+            torch.empty(num_heads, head_dim, in_dim)
+        )  # shape: [H, Y, D]
+
+        # W^Q ∈ ℝʸˣᴴˣᴰ
+        # Note: [H, Y, D] for computational efficiency in PyTorch
+        self.w_q = nn.Parameter(
+            torch.empty(num_heads, head_dim, in_dim)
+        )  # shape: [H, Y, D]
+
+        # β - configurable temperature parameter
+        self.β = beta if beta is not None else 0.125
+
+        self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        """Initialize learnable parameters."""
+        nn.init.normal_(self.w_k, std=0.002)
+        nn.init.normal_(self.w_q, std=0.002)
+
+    def forward(self, g: Tensor) -> Tensor:
         """Compute attention energy.
 
         Parameters
         ----------
-        g : torch.Tensor
-            Input tensor with shape (..., seq_len, d_model).
+        g : Tensor
+            Input tensor of shape [..., N, D] where N is the number
+            of tokens and D is the embedding dimension
 
         Returns
         -------
-        torch.Tensor
-            Scalar tensor representing the computed energy.
+        Tensor
+            Scalar energy value (summed over batch, heads, and tokens).
+            Returns zero for inputs with sequence length N=1, as
+            self-attention is undefined for single-token sequences.
         """
-        # (1) Linear projections
-        query = torch.einsum(
-            "...qd,hzd->...qhz", g, self.wq
-        )  # (..., query_len, n_heads, d_head)
-        key = torch.einsum(
-            "...kd,hzd->...khz", g, self.wk
-        )  # (..., key_len, n_heads, d_head)
-
-        # (2) Dot-product scores in head space
-        scores = torch.einsum(
-            "...qhz,...khz->...hqk", query, key
-        )  # (..., n_heads, query_len, key_len)
-
-        # (3) Temperature scaling and log-partition
-        beta, inv_beta = self._broadcast_beta(scores)
-        log_partition = torch.logsumexp(
-            beta * scores, dim=-1
-        )  # (..., n_heads, query_len)
-
-        # (4) Aggregate log-partitions to compute main energy term
-        energy_main = -(inv_beta * log_partition).sum()
-
-        # (5) Positional symmetry-breaking term
+        # Extract sequence length
         seq_len = g.shape[-2]
-        pos_ids = torch.linspace(
-            -0.5, 0.5, seq_len, device=g.device, dtype=g.dtype
-        )
-        pos_ids = pos_ids.view(*([1] * (g.dim() - 2)), seq_len, 1)
-        pos_term = (g * pos_ids).sum() * 1e-3
 
-        return energy_main + pos_term
+        # Single token edge case - return 0 energy (scalar)
+        if seq_len == 1:
+            return torch.zeros((), device=g.device, dtype=g.dtype)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Compute gradient of energy w.r.t. input tensor.
+        # Kₐₕᴮ = ∑ⱼ W^K_ₐₕⱼ·gⱼᴮ,    K ∈ ℝʸˣᴴˣᴺ
+        k = torch.einsum(
+            "...nd,hyd->...nhy", g, self.w_k
+        )  # shape: [..., N, H, Y]
 
-        Parameters
-        ----------
-        x : torch.Tensor
-            Input tensor with shape (..., seq_len, d_model).
+        # Qₐₕᶜ = ∑ⱼ W^Q_ₐₕⱼ·gⱼᶜ,    Q ∈ ℝʸˣᴴˣᴺ
+        q = torch.einsum(
+            "...nd,hyd->...nhy", g, self.w_q
+        )  # shape: [..., N, H, Y]
 
-        Returns
-        -------
-        torch.Tensor
-            Gradient tensor of the same shape as `x`.
-        """
-        x.requires_grad_(True)
-        energy = self.energy(x)
-        grad = torch.autograd.grad(energy, x, create_graph=True)[0]
-        return grad
+        # Aₕᴮᶜ = ∑ₐ Kₐₕᴮ·Qₐₕᶜ,     A ∈ ℝᴴˣᴺˣᴺ
+        a = torch.einsum("...nhy,...mhy->...hnm", k, q)  # shape: [..., H, N, N]
+        # TODO: chunked attention calculation to reduce memory footprint
+        # TODO: flash attention to avoid full N×N materialization
+        # TODO: linear attention approximations for sub-quadratic scaling
+
+        # ∑ᴮ≠ᶜ - Mask first for efficiency
+        # Use broadcasting instead of materializing full mask tensor
+        diag_mask = torch.eye(seq_len, device=g.device).bool()[None, None]
+        a = a.masked_fill(diag_mask, float("-inf"))  # [..., H, N, N]
+
+        # β·Aₕᴮᶜ - Scale after masking
+        βa = self.β * a  # shape: [..., H, N, N]
+
+        # log(∑ᴮ≠ᶜ exp(β·Aₕᴮᶜ))
+        lse = torch.logsumexp(βa, dim=-2)  # [..., H, N]
+
+        # E^ATT = -(1/β)·∑ₕ₌₁ᴴ·∑ᶜ₌₁ᴺ·log(∑ᴮ≠ᶜ exp(β·Aₕᴮᶜ))
+        β_inv = 1.0 / self.β
+        e_att = -(β_inv * lse).sum()
+
+        return e_att
