@@ -3,9 +3,9 @@
 from .base import REALISER_REGISTRY, EnergyTransformer
 from .vision import (
     ClassificationHead,
-    MAEDecoder,
+    LogitsHead,
+    MLPDecoder,
     ViETEncoder,
-    VocabularyHead,
     assemble_encoder,
 )
 
@@ -13,8 +13,8 @@ __all__ = [
     "EnergyTransformer",
     "ViETEncoder",
     "ClassificationHead",
-    "MAEDecoder",
-    "VocabularyHead",
+    "MLPDecoder",
+    "LogitsHead",
     "assemble_encoder",
     "REALISER_REGISTRY",
 ]

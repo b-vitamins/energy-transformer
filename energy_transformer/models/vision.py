@@ -18,8 +18,12 @@ from ..utils.vision import (
 class ViETEncoder(nn.Module):  # type: ignore
     """Task‑agnostic encoder for images using stacked Energy‑Transformer blocks.
 
-    This class uses a builder pattern where pre-constructed components are
-    passed in rather than built internally.
+    This encoder follows the standard Vision Transformer architecture with Energy Transformer
+    blocks instead of standard attention blocks.
+
+    For masking tasks, this implementation uses BEiT-style masking where masked tokens are
+    replaced inside the encoder, rather than MAE-style masking which would remove masked
+    tokens from the sequence entirely.
     """
 
     def __init__(
@@ -42,6 +46,8 @@ class ViETEncoder(nn.Module):  # type: ignore
                          Should be either Learnable2DPosEnc or SinCos2DPosEnc
             cls_token: Optional CLS token module (default: None)
             mask_token: Optional mask token module (default: None)
+                        Note: When using mask_token, patches are replaced with mask tokens
+                        (BEiT-style) rather than removed from the sequence (MAE-style)
         """
         super().__init__()
 
@@ -74,6 +80,8 @@ class ViETEncoder(nn.Module):  # type: ignore
             img: Input images of shape (B, C, H, W)
             patch_mask: Binary mask indicating which patches to mask (1=masked)
                         Shape should be (B, N) where N is the number of patches
+                        When provided, uses BEiT-style masking where masked patches
+                        are replaced with a learned mask token
             return_sequence: If True, returns the full sequence, otherwise CLS token
 
         Returns
@@ -121,11 +129,16 @@ class ViETEncoder(nn.Module):  # type: ignore
             return x[:, 0]  # shape: [B, D] - CLS token only
 
         # Verify shape when returning sequence
-        if return_sequence and not self.cls_token_flag:
+        if return_sequence:
             batch_size, seq_len, embed_dim = x.shape
-            assert seq_len == self.patch_embed.num_patches, (
-                f"Expected sequence length {self.patch_embed.num_patches}, got {seq_len}"
-            )
+            if self.cls_token_flag:
+                assert seq_len == self.patch_embed.num_patches + 1, (
+                    f"Expected sequence length {self.patch_embed.num_patches + 1}, got {seq_len}"
+                )
+            else:
+                assert seq_len == self.patch_embed.num_patches, (
+                    f"Expected sequence length {self.patch_embed.num_patches}, got {seq_len}"
+                )
 
         return x  # shape: [B, N, D] or [B, N+1, D]
 
@@ -179,7 +192,9 @@ def assemble_encoder(modules: Sequence[nn.Module]) -> nn.Module:
             if patch_embed is not None:
                 raise ValueError("Multiple PatchEmbed modules found")
             patch_embed = module
-        elif isinstance(module, Learnable2DPosEnc | SinCos2DPosEnc):
+        elif isinstance(
+            module, Learnable2DPosEnc | SinCos2DPosEnc
+        ):  # Fixed tuple syntax
             if pos_encoder is not None:
                 raise ValueError("Multiple position encoding modules found")
             pos_encoder = module
@@ -207,7 +222,10 @@ def assemble_encoder(modules: Sequence[nn.Module]) -> nn.Module:
 
     # Create default norm layer if none provided
     if norm_layer is None:
-        embed_dim = patch_embed.proj.out_channels
+        # More robust way to get embedding dimension
+        embed_dim = getattr(
+            patch_embed, "embed_dim", patch_embed.proj.out_channels
+        )
         norm_layer = nn.LayerNorm(embed_dim)
 
     # Create the encoder
@@ -245,8 +263,13 @@ class ClassificationHead(nn.Module):  # type: ignore
         return self.classifier(x)  # shape: [B, num_classes]
 
 
-class MAEDecoder(nn.Module):  # type: ignore
-    """Pixel‑space reconstruction for masked‑patch training."""
+class MLPDecoder(nn.Module):  # type: ignore
+    """MLP-based decoder for pixel-space reconstruction.
+
+    Note: This is a simplified decoder implementation that uses an MLP instead of
+    the Transformer architecture used in the original MAE paper. This makes it more
+    lightweight but potentially less expressive than the original MAE decoder.
+    """
 
     def __init__(
         self,
@@ -256,7 +279,7 @@ class MAEDecoder(nn.Module):  # type: ignore
         depth: int = 1,
         hidden: int = 512,
     ):
-        """Initialize inpainting decoder.
+        """Initialize MLP decoder for patch reconstruction.
 
         Args:
             embed_dim: Dimension of input embeddings
@@ -299,11 +322,16 @@ class MAEDecoder(nn.Module):  # type: ignore
         return self.mlp(tokens)  # shape: [B, N, patch_dim]
 
 
-class VocabularyHead(nn.Module):  # type: ignore
-    """Lightweight AR head for unconditional or class‑conditional image generation."""
+class LogitsHead(nn.Module):  # type: ignore
+    """Head that projects token embeddings to vocabulary logits.
+
+    This module produces logits for each token position. For autoregressive generation,
+    causal masking must be applied externally during training, and a sampling loop
+    must be implemented for generation.
+    """
 
     def __init__(self, embed_dim: int, vocab_size: int):
-        """Initialize autoregressive generator.
+        """Initialize logits head.
 
         Args:
             embed_dim: Dimension of input embeddings
@@ -317,21 +345,25 @@ class VocabularyHead(nn.Module):  # type: ignore
         nn.init.zeros_(self.proj.bias)
 
     def forward(self, tokens: Tensor) -> Tensor:
-        """Return logits over codebook/vocab per token: (B, N, vocab_size)."""
+        """Return logits over codebook/vocab per token: (B, N, vocab_size).
+
+        For autoregressive use, apply causal masking externally during training
+        and implement a sampling loop during generation.
+        """
         return self.proj(tokens)  # shape: [B, N, vocab_size]
 
 
 # Register classes in the registry
 REALISER_REGISTRY["ViETEncoder"] = ViETEncoder
 REALISER_REGISTRY["ClassificationHead"] = ClassificationHead
-REALISER_REGISTRY["InpaintingDecoder"] = MAEDecoder
-REALISER_REGISTRY["AutoregressiveGenerator"] = VocabularyHead
+REALISER_REGISTRY["MLPDecoder"] = MLPDecoder
+REALISER_REGISTRY["LogitsHead"] = LogitsHead
 
 
 __all__ = [
     "ViETEncoder",
     "ClassificationHead",
-    "MAEDecoder",
-    "VocabularyHead",
+    "MLPDecoder",
+    "LogitsHead",
     "assemble_encoder",
 ]

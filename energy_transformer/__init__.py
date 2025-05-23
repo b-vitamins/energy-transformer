@@ -23,9 +23,9 @@ Basic usage with specification API:
 from .models import (
     ClassificationHead,
     EnergyTransformer,
-    MAEDecoder,
+    LogitsHead,
+    MLPDecoder,
     ViETEncoder,
-    VocabularyHead,
 )
 
 # Specification API
@@ -56,9 +56,9 @@ __all__ = [
     # Models
     "EnergyTransformer",
     "ViETEncoder",
-    "MAEDecoder",
+    "MLPDecoder",
     "ClassificationHead",
-    "VocabularyHead",
+    "LogitsHead",
     # Spec API and realisation
     "realise",
     "seq",
