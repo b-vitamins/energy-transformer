@@ -1,0 +1,23 @@
+(specifications->manifest
+ '(
+   "git"
+   "bash"
+   "poetry"
+   "python"
+   "python-pytorch-cuda"
+   "python-torchvision-cuda"
+   "python-matplotlib"
+   "python-scikit-learn"
+   "python-tqdm"
+   "python-einops"
+   "python-numpy@1"
+   "python-pytest"
+   "python-pytest-cov"
+   "python-mypy"
+   "python-ruff"
+   "python-rich"
+   "python-lsp-server"
+   "python-pylsp-mypy"
+   "python-pylsp-ruff"
+   "python-matplotlib"
+   "python-pillow"))
