@@ -2,6 +2,7 @@
 
 from abc import ABC, abstractmethod
 
+import torch
 import torch.nn as nn
 from torch import Tensor
 
@@ -29,6 +30,23 @@ class BaseLayerNorm(nn.Module, ABC):  # type: ignore
         Tensor
             Normalized output tensor of shape [..., N, D]
         """
+        raise NotImplementedError
+
+    def reset_parameters(self) -> None:
+        """Reset layer parameters to initial values.
+
+        Override in subclasses to provide specific initialization.
+        Default implementation does nothing.
+        """
+        pass
+
+
+@torch.jit.interface
+class EnergyAttentionInterface:
+    """TorchScript interface for energy attention components."""
+
+    def forward(self, g: Tensor) -> Tensor:  # scalar
+        """Compute scalar energy from normalized tokens."""
         pass
 
 
@@ -41,7 +59,7 @@ class BaseEnergyAttention(nn.Module, ABC):  # type: ignore
     """
 
     @abstractmethod
-    def forward(self, g: Tensor) -> Tensor:
+    def forward(self, g: Tensor) -> Tensor:  # scalar
         """Compute attention energy from normalized tokens.
 
         Parameters
@@ -53,8 +71,25 @@ class BaseEnergyAttention(nn.Module, ABC):  # type: ignore
         Returns
         -------
         Tensor
-            Scalar energy value representing the attention energy
+            Scalar energy value (shape == ()) representing the attention energy
         """
+        raise NotImplementedError
+
+    def reset_parameters(self) -> None:
+        """Reset layer parameters to initial values.
+
+        Override in subclasses to provide specific initialization.
+        Default implementation does nothing.
+        """
+        pass
+
+
+@torch.jit.interface
+class HopfieldNetworkInterface:
+    """TorchScript interface for Hopfield Network components."""
+
+    def forward(self, g: Tensor) -> Tensor:  # scalar
+        """Compute scalar Hopfield energy from normalized tokens."""
         pass
 
 
@@ -66,7 +101,7 @@ class BaseHopfieldNetwork(nn.Module, ABC):  # type: ignore
     """
 
     @abstractmethod
-    def forward(self, g: Tensor) -> Tensor:
+    def forward(self, g: Tensor) -> Tensor:  # scalar
         """Compute Hopfield Network energy.
 
         Parameters
@@ -78,6 +113,37 @@ class BaseHopfieldNetwork(nn.Module, ABC):  # type: ignore
         Returns
         -------
         Tensor
-            Scalar energy value
+            Scalar energy value (shape == ())
+        """
+        raise NotImplementedError
+
+    def reset_parameters(self) -> None:
+        """Reset network parameters to initial values.
+
+        Override in subclasses to provide specific initialization.
+        Default implementation does nothing.
         """
         pass
+
+
+# Utility function for validating scalar tensor returns
+def _validate_scalar_energy(energy: Tensor, component_name: str) -> None:
+    """Validate that energy tensor is a scalar.
+
+    Parameters
+    ----------
+    energy : Tensor
+        Energy tensor to validate
+    component_name : str
+        Name of component for error messages
+
+    Raises
+    ------
+    ValueError
+        If energy tensor is not a scalar
+    """
+    if energy.dim() != 0:
+        raise ValueError(
+            f"{component_name} must return scalar energy tensor, "
+            f"got shape {energy.shape}"
+        )
