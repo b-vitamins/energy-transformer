@@ -70,21 +70,22 @@ def _init_trunc_normal(param: nn.Parameter, std: float = 0.02) -> nn.Parameter:
 
 
 class PatchEmbed(nn.Module):  # type: ignore
-    """Image to patch sequence embedder.
+    """Image to patch sequence embedder using patch extraction and linear projection.
 
-    Converts input images into sequences of embedded patches using a
-    convolutional layer. Supports both fixed and variable resolution inputs.
+    Converts input images into sequences of embedded patches by extracting
+    non-overlapping patches and applying a shared linear transformation.
+    Supports both fixed and variable resolution inputs.
 
     Parameters
     ----------
-    img_size : int or tuple of int, default=224
+    img_size : int or tuple of int, default=32
         Input image spatial size. If int, assumes square image.
-    patch_size : int or tuple of int, default=16
+    patch_size : int or tuple of int, default=4
         Size of each square patch. If int, assumes square patches.
     in_chans : int, default=3
         Number of input channels.
-    embed_dim : int, default=768
-        Output channel dimension (token dimension D).
+    embed_dim : int, default=256
+        Output embedding dimension (token dimension D).
     flatten : bool, default=True
         If True, returns shape (B, N, D); else (B, D, H', W').
 
@@ -100,30 +101,32 @@ class PatchEmbed(nn.Module):  # type: ignore
         support.
     flatten : bool
         Whether to flatten output to sequence format.
-    proj : nn.Conv2d
-        Convolutional layer used for patchification and linear projection.
+    patch_dim : int
+        Dimension of each flattened patch (in_chans * patch_h * patch_w).
+    proj : nn.Linear
+        Linear layer for projecting flattened patches to embedding space.
     """
 
     def __init__(
         self,
-        img_size: int | tuple[int, int] = 224,
-        patch_size: int | tuple[int, int] = 16,
+        img_size: int | tuple[int, int] = 32,
+        patch_size: int | tuple[int, int] = 4,
         in_chans: int = 3,
-        embed_dim: int = 768,
+        embed_dim: int = 256,
         flatten: bool = True,
     ) -> None:
         """Initialize PatchEmbed module.
 
         Parameters
         ----------
-        img_size : int or tuple of int, default=224
+        img_size : int or tuple of int, default=32
             Input image spatial size. If int, assumes square image.
-        patch_size : int or tuple of int, default=16
+        patch_size : int or tuple of int, default=4
             Size of each square patch. If int, assumes square patches.
         in_chans : int, default=3
             Number of input channels.
-        embed_dim : int, default=768
-            Output channel dimension (token dimension D).
+        embed_dim : int, default=256
+            Output embedding dimension (token dimension D).
         flatten : bool, default=True
             If True, returns shape (B, N, D); else (B, D, H', W').
         """
@@ -133,19 +136,15 @@ class PatchEmbed(nn.Module):  # type: ignore
 
         self.patch_size: tuple[int, int] = (patch_h, patch_w)
         self.embed_dim: int = embed_dim
-        self.num_patches: int = (img_h // patch_h) * (
-            img_w // patch_w
-        )  # Initial estimate
+        self.num_patches: int = (img_h // patch_h) * (img_w // patch_w)
         self.flatten: bool = flatten
-        self._dynamic_resolution: bool = False  # Flag for first forward pass
+        self._dynamic_resolution: bool = False
 
-        # Use convolution for patchification with stride == kernel_size
-        self.proj: nn.Conv2d = nn.Conv2d(
-            in_chans,
-            embed_dim,
-            kernel_size=(patch_h, patch_w),
-            stride=(patch_h, patch_w),
-        )
+        # Calculate patch dimension (flattened patch size)
+        self.patch_dim = in_chans * patch_h * patch_w
+
+        # Linear projection for embedding patches
+        self.proj: nn.Linear = nn.Linear(self.patch_dim, embed_dim)
 
         # Initialize weights with truncated normal
         _init_trunc_normal(self.proj.weight)
@@ -153,6 +152,9 @@ class PatchEmbed(nn.Module):  # type: ignore
 
     def forward(self, x: Tensor) -> Tensor:
         """Forward pass for patch embedding.
+
+        Extracts non-overlapping patches from input images and projects them
+        to embedding space using a shared linear transformation.
 
         Parameters
         ----------
@@ -170,24 +172,39 @@ class PatchEmbed(nn.Module):  # type: ignore
         """
         batch_dim, channels, height, width = x.shape
 
-        # Ensure module parameters match input dtype for mixed precision
-        # compatibility
+        # Ensure module parameters match input dtype for mixed precision compatibility
         if x.dtype != self.proj.weight.dtype:
             self.proj = self.proj.to(dtype=x.dtype)
 
-        # Apply convolution for patchification
-        x = self.proj(x)  # shape: [B, D, H', W']
+        # Extract patches using unfold
+        patch_h, patch_w = self.patch_size
+
+        # Use unfold to extract non-overlapping patches
+        patches = x.unfold(2, patch_h, patch_h).unfold(3, patch_w, patch_w)
+        # patches shape: [B, C, num_patches_h, num_patches_w, patch_h, patch_w]
+
+        # Reshape to [B, num_patches, patch_dim]
+        num_patches_h = height // patch_h
+        num_patches_w = width // patch_w
+        patches = patches.contiguous().view(
+            batch_dim, channels, num_patches_h, num_patches_w, -1
+        )
+        patches = patches.permute(0, 2, 3, 1, 4).contiguous()
+        patches = patches.view(batch_dim, num_patches_h * num_patches_w, -1)
 
         # Update num_patches dynamically on first forward pass for true
-        # variable resolution
+        # variable resolution support
         if not self._dynamic_resolution:
-            self.num_patches = x.shape[2] * x.shape[3]
+            self.num_patches = patches.shape[1]
             self._dynamic_resolution = True
 
-        if self.flatten:
-            # Reshape to sequence of patches
-            x = x.flatten(2)  # shape: [B, D, N]
-            x = x.transpose(1, 2)  # shape: [B, N, D]
+        # Apply linear projection: [B, N, patch_dim] -> [B, N, embed_dim]
+        x = self.proj(patches)
+
+        if not self.flatten:
+            # Reshape back to spatial format: [B, N, D] -> [B, D, H', W']
+            x = x.transpose(1, 2)  # [B, D, N]
+            x = x.view(batch_dim, self.embed_dim, num_patches_h, num_patches_w)
 
         return x
 
