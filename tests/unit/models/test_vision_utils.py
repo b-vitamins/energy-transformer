@@ -3,7 +3,7 @@ import pytest
 from energy_transformer.models.vision.utils import create_model_config
 
 
-def test_create_model_config_defaults():
+def test_create_model_config_defaults() -> None:
     cfg = create_model_config()
     assert cfg["embed_dim"] == 768
     assert cfg["img_size"] == 224
@@ -13,13 +13,13 @@ def test_create_model_config_defaults():
     assert cfg["et_steps"] == 4
 
 
-def test_create_model_config_override_and_size():
+def test_create_model_config_override_and_size() -> None:
     cfg = create_model_config("small", img_size=128, num_classes=10)
     assert cfg["embed_dim"] == 384
     assert cfg["img_size"] == 128
     assert cfg["num_classes"] == 10
 
 
-def test_create_model_config_unknown_size():
+def test_create_model_config_unknown_size() -> None:
     with pytest.raises(ValueError):
         create_model_config("giant")

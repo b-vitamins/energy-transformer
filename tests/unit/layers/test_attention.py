@@ -9,7 +9,14 @@ from energy_transformer.layers.attention import (
 )
 
 
-def manual_energy(g, w_k, w_q, beta, include_diag=True, attn_mask=None):
+def manual_energy(
+    g: torch.Tensor,
+    w_k: torch.Tensor,
+    w_q: torch.Tensor,
+    beta: float,
+    include_diag: bool = True,
+    attn_mask: torch.Tensor | None = None,
+) -> torch.Tensor:
     k = torch.einsum("nd,hyd->nhy", g, w_k)
     q = torch.einsum("nd,hyd->nhy", g, w_q)
     a = torch.einsum("nhy,mhy->hnm", k, q)
@@ -22,7 +29,7 @@ def manual_energy(g, w_k, w_q, beta, include_diag=True, attn_mask=None):
     return -(1 / beta) * lse.sum()
 
 
-def test_get_diag_mask_caches_by_length():
+def test_get_diag_mask_caches_by_length() -> None:
     clear_diag_cache()
     mask1 = _get_diag_mask(torch.device("cpu"), 4)
     mask2 = _get_diag_mask(torch.device("cpu"), 4)
@@ -37,7 +44,7 @@ def test_get_diag_mask_caches_by_length():
     "shape,chunk",
     [((2, 5), 10), ((3, 2048), 512)],
 )
-def test_chunked_logsumexp_matches_torch(shape, chunk):
+def test_chunked_logsumexp_matches_torch(shape: tuple[int, int], chunk: int) -> None:
     torch.manual_seed(0)
     logits = torch.randn(*shape)
     expected = torch.logsumexp(logits, dim=-1)
@@ -45,7 +52,7 @@ def test_chunked_logsumexp_matches_torch(shape, chunk):
     assert torch.allclose(result, expected, atol=1e-6)
 
 
-def test_attention_energy_matches_manual():
+def test_attention_energy_matches_manual() -> None:
     g = torch.tensor([[1.0, 0.0], [0.0, 1.0]])
     attn = MultiHeadEnergyAttention(
         in_dim=2,
@@ -63,7 +70,7 @@ def test_attention_energy_matches_manual():
     assert torch.allclose(result, expected)
 
 
-def test_attention_single_token_returns_zero():
+def test_attention_single_token_returns_zero() -> None:
     g = torch.randn(1, 2)
     attn = MultiHeadEnergyAttention(
         in_dim=2,

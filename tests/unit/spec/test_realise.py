@@ -16,18 +16,18 @@ from energy_transformer.spec import (
 from energy_transformer.spec.realise import RealisationError, realise
 
 
-def test_spec_immutability():
+def test_spec_immutability() -> None:
     spec = MHEASpec(num_heads=2, head_dim=8)
     with pytest.raises(FrozenInstanceError):
         spec.num_heads = 4  # type: ignore[misc]
 
 
-def test_pos_embed_validation_error():
+def test_pos_embed_validation_error() -> None:
     with pytest.raises(ValidationError):
         PosEmbedSpec(init_std=0.0)
 
 
-def test_seq_dimension_propagation_and_validation():
+def test_seq_dimension_propagation_and_validation() -> None:
     model = seq(
         PatchEmbedSpec(img_size=8, patch_size=4, embed_dim=16),
         CLSTokenSpec(),
@@ -39,7 +39,7 @@ def test_seq_dimension_propagation_and_validation():
     model.validate()  # should not raise
 
 
-def test_parallel_add_mode_dimension():
+def test_parallel_add_mode_dimension() -> None:
     p = parallel(
         PatchEmbedSpec(img_size=8, patch_size=4, embed_dim=16),
         PatchEmbedSpec(img_size=8, patch_size=4, embed_dim=16),
@@ -48,7 +48,7 @@ def test_parallel_add_mode_dimension():
     assert p.get_embedding_dim() == 16
 
 
-def test_parallel_add_mode_unknown_dimension():
+def test_parallel_add_mode_unknown_dimension() -> None:
     p = parallel(
         PatchEmbedSpec(img_size=8, patch_size=4, embed_dim=16),
         LayerNormSpec(),
@@ -57,7 +57,7 @@ def test_parallel_add_mode_unknown_dimension():
     assert p.get_embedding_dim() == 16
 
 
-def test_realise_simple_sequence():
+def test_realise_simple_sequence() -> None:
     spec = seq(
         PatchEmbedSpec(img_size=4, patch_size=2, embed_dim=8, in_chans=3),
         CLSTokenSpec(),
@@ -70,6 +70,6 @@ def test_realise_simple_sequence():
     assert out.shape == (1, 5, 8)
 
 
-def test_realise_requires_context_error():
+def test_realise_requires_context_error() -> None:
     with pytest.raises(RealisationError):
         realise(CLSTokenSpec())
