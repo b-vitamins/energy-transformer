@@ -7,21 +7,21 @@ import torch
 from energy_transformer.layers.hopfield import (
     ActivationFunction,
     HopfieldNetwork,
-    get_energy_transformer_init_std,
     get_energy_function,
+    get_energy_transformer_init_std,
     he_scaled_init_std,
     quadratic_energy,
     register_energy_function,
 )
 
 
-def test_he_scaled_init_std_formula():
+def test_he_scaled_init_std_formula() -> None:
     assert math.isclose(he_scaled_init_std(4), math.sqrt(2.0 / 4))
     assert math.isclose(he_scaled_init_std(4, 8), math.sqrt(2.0 / 8))
     assert math.isclose(get_energy_transformer_init_std(3, 6), he_scaled_init_std(3, 6))
 
 
-def test_get_energy_function_values():
+def test_get_energy_function_values() -> None:
     h = torch.tensor([1.0, -2.0])
     relu_fn = get_energy_function(ActivationFunction.RELU)
     softmax_fn = get_energy_function(ActivationFunction.SOFTMAX)
@@ -34,7 +34,7 @@ def test_get_energy_function_values():
     assert torch.allclose(tanh_fn(h), -torch.sum(torch.log(torch.cosh(h.clamp(-10, 10)))))
 
 
-def test_register_energy_function_decorator():
+def test_register_energy_function_decorator() -> None:
     @register_energy_function("dummy")
     def dummy_energy(h: torch.Tensor) -> torch.Tensor:
         return -h.sum()
@@ -43,12 +43,12 @@ def test_register_energy_function_decorator():
     assert dummy_energy(torch.tensor([1.0, 2.0])) == -3.0
 
 
-def test_hopfieldnetwork_custom_activation_requires_energy_fn():
+def test_hopfieldnetwork_custom_activation_requires_energy_fn() -> None:
     with pytest.raises(ValueError):
         HopfieldNetwork(in_dim=1, activation=ActivationFunction.CUSTOM)
 
 
-def test_hopfieldnetwork_warning_energy_fn_ignored():
+def test_hopfieldnetwork_warning_energy_fn_ignored() -> None:
     with warnings.catch_warnings(record=True) as w:
         HopfieldNetwork(
             in_dim=1,
@@ -61,7 +61,7 @@ def test_hopfieldnetwork_warning_energy_fn_ignored():
         )
 
 
-def test_hopfieldnetwork_forward_quadratic_energy():
+def test_hopfieldnetwork_forward_quadratic_energy() -> None:
     net = HopfieldNetwork(
         in_dim=2,
         hidden_dim=1,

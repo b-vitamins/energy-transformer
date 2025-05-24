@@ -1,39 +1,40 @@
 import itertools
-import math
+from collections.abc import Iterable
+from typing import Any, cast
 
-import torch
 import pytest
+import torch
 
 from energy_transformer.layers.simplicial import (
-    canonical,
-    unrank,
     SimplexGenerator,
-    UnionSimplexGenerator,
     SimplicialComplex,
+    UnionSimplexGenerator,
     _get_membership,
-    lse,
+    canonical,
     energy,
+    lse,
+    unrank,
 )
 
 
-def test_canonical_filters_and_sorts():
-    simplex = [3, 2, 2, -1, "a", 1]
-    assert canonical(simplex) == (1, 2, 3)
+def test_canonical_filters_and_sorts() -> None:
+    simplex: list[Any] = [3, 2, 2, -1, "a", 1]
+    assert canonical(cast(Iterable[int], simplex)) == (1, 2, 3)
     assert canonical([]) == ()
 
 
-def test_unrank_matches_combinations():
+def test_unrank_matches_combinations() -> None:
     n, k, r = 5, 3, 3
     combos = list(itertools.combinations(range(n), k))
     assert unrank(r, n, k) == combos[r]
 
 
-def test_unrank_out_of_range():
+def test_unrank_out_of_range() -> None:
     with pytest.raises(ValueError):
         unrank(10, 4, 2)
 
 
-def test_simplex_generator_basics():
+def test_simplex_generator_basics() -> None:
     gen = SimplexGenerator((0, 1, 2, 3), k=1)
     assert gen.n == 4
     assert gen.total_count == 6
@@ -50,7 +51,7 @@ def test_simplex_generator_basics():
     assert gen.all() == expected
 
 
-def test_simplex_generator_sampling_rules():
+def test_simplex_generator_sampling_rules() -> None:
     gen = SimplexGenerator((0, 1, 2), k=1)
     with pytest.raises(ValueError):
         gen.sample(4, replacement=False, strict=True)
@@ -64,8 +65,8 @@ def test_simplex_generator_sampling_rules():
     assert res.complete
 
 
-def test_union_simplex_generator():
-    facets = [(0, 1, 2), (1, 2, 3)]
+def test_union_simplex_generator() -> None:
+    facets: list[tuple[int, ...]] = [(0, 1, 2), (1, 2, 3)]
     gen = UnionSimplexGenerator(facets, k=1)
     assert gen.computation_safe
     assert len(gen) == 5
@@ -80,7 +81,7 @@ def test_union_simplex_generator():
     assert set(all_simplices) == expected
 
 
-def test_simplicial_complex_properties_and_query():
+def test_simplicial_complex_properties_and_query() -> None:
     complex = SimplicialComplex([(0, 1, 2), (1, 3)])
     assert complex.dimension == 2
     assert (0, 1, 2) in complex.facets
@@ -98,7 +99,7 @@ def test_simplicial_complex_properties_and_query():
     assert count == {1: 4}
 
 
-def test_membership_matrix():
+def test_membership_matrix() -> None:
     κ = [(0, 1), (1, 2)]
     μ = _get_membership(κ, 3, torch.device("cpu"), torch.float32).coalesce()
     assert μ.shape == torch.Size([3, 2])
@@ -106,13 +107,13 @@ def test_membership_matrix():
     assert indices == [[0, 1, 1, 2], [0, 0, 1, 1]]
 
 
-def test_energy_matches_lse_relationship():
+def test_energy_matches_lse_relationship() -> None:
     torch.manual_seed(0)
     ξ = torch.randn(2, 3)
     g = torch.randn(3)
     κ = [(0, 1), (2,)]
     β = 1.0
     e = energy(β, ξ, g, κ)
-    l = lse(β, ξ, g, κ)
-    expected = -l + 0.5 * torch.dot(g, g)
+    lse_val = lse(β, ξ, g, κ)
+    expected = -lse_val + 0.5 * torch.dot(g, g)
     assert torch.allclose(e, expected)
