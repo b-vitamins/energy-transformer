@@ -12,13 +12,22 @@ from typing import NamedTuple
 import torch
 
 __all__ = [
-    "QuerySpec",
+    "canonical",
     "SimplexGenerator",
     "UnionSimplexGenerator",
-    "SimplexQuery",
     "SimplicialComplex",
-    "canonical",
+    "QuerySpec",
+    "SimplexQuery",
+    "update",
+    "energy",
+    "lse",
+    "SIMILARITIES",
+    "dot_similarity",
+    "ced_similarity",
+    "manhattan_similarity",
+    "cosine_similarity",
 ]
+
 
 # Simple safety limits
 MAX_FACET_SIZE = 50
@@ -1159,35 +1168,246 @@ def _get_membership(
     return membership(κ_hashable, n, str(device), str(dtype))
 
 
-def lse(
-    β: float, ξ: torch.Tensor, g: torch.Tensor, κ: Sequence[Sequence[int]]
-) -> torch.Tensor:
-    """Compute log-sum-exp term using sparse operations.
+# --- Similarity Functions ---------------------------------------------------
 
-    Implements: (1/β) * log(Σ_μ Σ_σ exp(β * Ξ_σ^μ · S_σ))
-    where Ξ_σ^μ · S_σ = Σ_{v∈σ} ξ[μ,v] * g[v].
+
+def dot_similarity(
+    ξ: torch.Tensor, g: torch.Tensor, μ: torch.Tensor, k: int | None = None
+) -> torch.Tensor:
+    """Dot-product based similarity (default).
+
+    Returns tensor of shape (P,) — one score per stored pattern.
+
+    Parameters
+    ----------
+    ξ : torch.Tensor, shape (P, N)
+        Pattern matrix.
+    g : torch.Tensor, shape (N,)
+        State vector.
+    μ : torch.Tensor
+        Sparse membership matrix.
+    k : int | None, optional
+        Dimension (unused for dot product).
+
+    Returns
+    -------
+    torch.Tensor, shape (P,)
+        Pattern-wise similarities (higher values = more similar).
+    """
+    y = ξ * g  # (P, N)
+    dot = torch.sparse.mm(μ.t(), y.t()).t()  # (P, |κ|)
+    return dot.sum(dim=1)  # (P,)
+
+
+def ced_similarity(
+    ξ: torch.Tensor, g: torch.Tensor, μ: torch.Tensor, k: int | None = None
+) -> torch.Tensor:
+    """Cumulative Euclidean Distance (CED) similarity.
+
+    CED: sqrt(Σ_{edges in σ} ||ξ_edge^μ - g_edge||_2^2)
+    Implemented fully on GPU with sparse ops.
+
+    NOTE: Works for any k ≥ 1. For k=1 (edges) it reduces to ordinary
+    Euclidean distance between two-element vectors.
+
+    Parameters
+    ----------
+    ξ : torch.Tensor, shape (P, N)
+        Pattern matrix.
+    g : torch.Tensor, shape (N,)
+        State vector.
+    μ : torch.Tensor
+        Sparse membership matrix.
+    k : int | None, optional
+        Dimension (informational).
+
+    Returns
+    -------
+    torch.Tensor, shape (P,)
+        Negative distances (higher values = more similar).
+    """
+    # (P,N) × (N,) → (P,N) broadcasted diff
+    diff = ξ - g  # (P, N)
+
+    # Squared L2 norm for all vertices in every simplex
+    sq = diff.pow(2)
+
+    # sum immediately instead of materializing (P, |κ|) tensor
+    s_sum = torch.sparse.mm(μ.t(), sq.t()).t().sum(dim=1)  # (P,)
+    dist = s_sum.sqrt_()  # in-place square root
+    return -dist  # negative ⇒ similarity
+
+
+def manhattan_similarity(
+    ξ: torch.Tensor, g: torch.Tensor, μ: torch.Tensor, k: int | None = None
+) -> torch.Tensor:
+    """Manhattan distance similarity.
+
+    Manhattan distance: Σ_{edges in σ} Σ_{v∈edge} |ξ[μ,v] - g[v]|
+
+    Parameters
+    ----------
+    ξ : torch.Tensor, shape (P, N)
+        Pattern matrix.
+    g : torch.Tensor, shape (N,)
+        State vector.
+    μ : torch.Tensor
+        Sparse membership matrix.
+    k : int | None, optional
+        Dimension (informational).
+
+    Returns
+    -------
+    torch.Tensor, shape (P,)
+        Negative distances (higher values = more similar).
+    """
+    # (P,N) × (N,) → (P,N) broadcasted diff
+    diff = ξ - g  # (P, N)
+
+    # Absolute differences
+    abs_diff = torch.abs(diff)
+
+    # sum immediately instead of materializing (P, |κ|) tensor
+    s_sum = torch.sparse.mm(μ.t(), abs_diff.t()).t().sum(dim=1)  # (P,)
+    return -s_sum  # negative ⇒ similarity
+
+
+def cosine_similarity(
+    ξ: torch.Tensor, g: torch.Tensor, μ: torch.Tensor, k: int | None = None
+) -> torch.Tensor:
+    """Cosine similarity between patterns and state.
+
+    Computes cosine similarity for each simplex, then sums over simplices.
+    Fully vectorized implementation for GPU efficiency.
+
+    Parameters
+    ----------
+    ξ : torch.Tensor, shape (P, N)
+        Pattern matrix.
+    g : torch.Tensor, shape (N,)
+        State vector.
+    μ : torch.Tensor
+        Sparse membership matrix.
+    k : int | None, optional
+        Dimension (informational).
+
+    Returns
+    -------
+    torch.Tensor, shape (P,)
+        Cosine similarities (higher values = more similar).
+    """
+    # Pre-normalize once (add small epsilon for numerical stability)
+    eps = 1e-8
+    ξ_norm = ξ / (ξ.norm(dim=1, keepdim=True) + eps)  # (P, N)
+    g_norm = g / (g.norm() + eps)  # (N,)
+
+    # Element-wise product of normalized vectors
+    prod = ξ_norm * g_norm  # (P, N) broadcasted
+
+    # Sum over vertices per simplex and immediately sum over simplices
+    # Safe sparse-left/dense-right form for torch.sparse.mm
+    sim = torch.sparse.mm(μ.t(), prod.t()).t()  # (P, |κ|)
+    return sim.sum(dim=1)  # (P,)
+
+
+def cmd_similarity(
+    ξ: torch.Tensor, g: torch.Tensor, μ: torch.Tensor, k: int | None = None
+) -> torch.Tensor:
+    """Cayley-Menger Distance (CMD) similarity.
+
+    CMD computes simplex volume using Cayley-Menger determinant.
+
+    Parameters
+    ----------
+    ξ : torch.Tensor, shape (P, N)
+        Pattern matrix.
+    g : torch.Tensor, shape (N,)
+        State vector.
+    μ : torch.Tensor
+        Sparse membership matrix.
+    k : int | None, optional
+        Dimension of simplices.
+
+    Returns
+    -------
+    torch.Tensor, shape (P,)
+        Negative volumes (higher values = more similar).
+
+    Raises
+    ------
+    NotImplementedError
+        CMD similarity is not yet fully implemented.
+    """
+    raise NotImplementedError(
+        "Cayley-Menger similarity not yet implemented. "
+        "Use 'ced', 'manhattan', 'cosine', or 'dot' instead, "
+        "or supply your own similarity function."
+    )
+
+
+# Registry for string-based similarity selection
+SIMILARITIES: dict[
+    str,
+    Callable[
+        [torch.Tensor, torch.Tensor, torch.Tensor, int | None], torch.Tensor
+    ],
+] = {
+    "dot": dot_similarity,
+    "ced": ced_similarity,
+    "manhattan": manhattan_similarity,
+    "cosine": cosine_similarity,
+}  # 'cmd' will be added once implemented
+
+
+# --- Core Functions with Pluggable Similarity -------------------------------
+
+
+def lse(
+    β: float,
+    ξ: torch.Tensor,
+    g: torch.Tensor,
+    κ: Sequence[Sequence[int]],
+    *,
+    similarity: str
+    | Callable[
+        [torch.Tensor, torch.Tensor, torch.Tensor, int | None], torch.Tensor
+    ] = "dot",
+    k: int | None = None,
+) -> torch.Tensor:
+    """Log-sum-exp over pattern × simplex similarities with custom metric.
 
     Parameters
     ----------
     β : float
-        Inverse temperature parameter (β = 1/T). Must be positive.
+        Inverse temperature parameter (β = 1/T).
     ξ : torch.Tensor, shape (P, N)
-        Pattern matrix with P patterns and N vertices.
+        Pattern matrix.
     g : torch.Tensor, shape (N,)
-        State vector on the vertices.
+        State vector.
     κ : Sequence[Sequence[int]]
         Simplicial complex structure.
+    similarity : str or Callable, optional
+        Similarity function. Either a string key ('dot', 'ced', 'manhattan',
+        'cosine') or a custom callable. Default is 'dot'.
+    k : int | None, optional
+        Dimension parameter for similarity function.
 
     Returns
     -------
     torch.Tensor
         Scalar log-sum-exp term.
-
-    Raises
-    ------
-    ValueError
-        If β ≤ 0 or tensor shapes are incompatible.
     """
+    # Handle similarity function selection
+    if isinstance(similarity, str):
+        if similarity not in SIMILARITIES:
+            raise ValueError(
+                f"Unknown similarity '{similarity}'. "
+                f"Available: {list(SIMILARITIES.keys())}"
+            )
+        similarity_fn = SIMILARITIES[similarity]
+    else:
+        similarity_fn = similarity
+
     if β <= 0:
         raise ValueError(f"β must be positive, got {β}")
 
@@ -1210,50 +1430,57 @@ def lse(
     # Mixed precision handling for numerical stability
     if device.type == "cuda" and dtype in (torch.float16, torch.bfloat16):
         ξ_compute, g_compute = ξ.float(), g.float()
+        μ_compute = μ.float() if μ.dtype != torch.float32 else μ
     else:
-        ξ_compute, g_compute = ξ, g
+        ξ_compute, g_compute, μ_compute = ξ, g, μ
 
-    # Core computation: Y[μ,v] = ξ[μ,v] * g[v]
-    y = ξ_compute * g_compute  # (P, N)
-
-    # Sparse matrix multiply: dot[μ,σ] = Σ_{v∈σ} Y[μ,v] = Ξ_σ^μ · S_σ
-    dot = torch.sparse.mm(μ.t(), y.t()).t()  # (P, |κ|)
+    # 1. Pattern-wise similarities using custom function
+    sim = similarity_fn(ξ_compute, g_compute, μ_compute, k)  # (P,)
 
     # Convert back to original precision if needed
     if device.type == "cuda" and dtype in (torch.float16, torch.bfloat16):
-        dot = dot.to(dtype)
+        sim = sim.to(dtype)
 
-    # Numerically stable log-sum-exp over both dimensions
-    return (1 / β) * torch.logsumexp(dot * β, dim=(0, 1))
+    # 2. Numerically stable log-sum-exp
+    return (1 / β) * torch.logsumexp(sim * β, dim=0)
 
 
 def energy(
-    β: float, ξ: torch.Tensor, g: torch.Tensor, κ: Sequence[Sequence[int]]
+    β: float,
+    ξ: torch.Tensor,
+    g: torch.Tensor,
+    κ: Sequence[Sequence[int]],
+    *,
+    similarity: str
+    | Callable[
+        [torch.Tensor, torch.Tensor, torch.Tensor, int | None], torch.Tensor
+    ] = "dot",
+    k: int | None = None,
 ) -> torch.Tensor:
-    """Compute the Simplicial Hopfield energy function.
-
-    Implements: E = -lse(β, ξ, g, κ) + ½ ||g||²
-
-    This combines the pattern-matching term (LSE) with quadratic
-    regularization to prevent unbounded growth of the state vector.
+    """Energy with general similarity.
 
     Parameters
     ----------
     β : float
-        Inverse temperature parameter (β = 1/T).
+        Inverse temperature parameter.
     ξ : torch.Tensor, shape (P, N)
-        Pattern matrix with stored memories.
+        Pattern matrix.
     g : torch.Tensor, shape (N,)
-        Current state vector.
+        State vector.
     κ : Sequence[Sequence[int]]
-        Simplicial complex defining higher-order interactions.
+        Simplicial complex structure.
+    similarity : str or Callable, optional
+        Similarity function. Either a string key or a custom callable.
+        Default is 'dot'.
+    k : int | None, optional
+        Dimension parameter.
 
     Returns
     -------
     torch.Tensor
         Scalar energy value.
     """
-    lse_term = lse(β, ξ, g, κ)
+    lse_term = lse(β, ξ, g, κ, similarity=similarity, k=k)
     regularization = 0.5 * torch.dot(g, g)
     return -lse_term + regularization
 
@@ -1263,39 +1490,47 @@ def update(
     ξ: torch.Tensor,
     g: torch.Tensor,
     κ: Sequence[Sequence[int]],
+    *,
+    similarity: str
+    | Callable[
+        [torch.Tensor, torch.Tensor, torch.Tensor, int | None], torch.Tensor
+    ] = "dot",
+    k: int | None = None,
 ) -> torch.Tensor:
-    """Compute the Simplicial Hopfield update rule.
-
-    Implements: g⁽ᵗ⁾ = softmax(1/β * Σ_σ Ξ_σᵀ g_σ⁽ᵗ⁻¹⁾) Ξ
-
-    This computes pattern-wise similarities via the simplicial structure,
-    applies temperature-scaled softmax attention, and returns the weighted
-    combination of stored patterns.
-
-    Complexity: O(P * nnz(κ)) with two GPU kernel launches.
+    """Simplicial Hopfield update with pluggable similarity.
 
     Parameters
     ----------
     β : float
-        Inverse temperature parameter (β = 1/T).
+        Inverse temperature parameter.
     ξ : torch.Tensor, shape (P, N)
-        Pattern matrix with P stored patterns.
+        Pattern matrix.
     g : torch.Tensor, shape (N,)
-        State vector at previous time step t-1.
+        State vector from previous time step.
     κ : Sequence[Sequence[int]]
         Simplicial complex structure.
+    similarity : str or Callable, optional
+        Similarity function. Either a string key ('dot', 'ced', 'manhattan',
+        'cosine') or a custom callable. Default is 'dot'.
+    k : int | None, optional
+        Dimension parameter for similarity function.
 
     Returns
     -------
     torch.Tensor, shape (N,)
-        Updated state vector at time step t. Returns real-valued vector;
-        use .sign() for ±1 spins in binary-spin applications.
-
-    Raises
-    ------
-    ValueError
-        If inputs have incompatible shapes or are on different devices.
+        Updated state vector.
     """
+    # Handle similarity function selection
+    if isinstance(similarity, str):
+        if similarity not in SIMILARITIES:
+            raise ValueError(
+                f"Unknown similarity '{similarity}'. "
+                f"Available: {list(SIMILARITIES.keys())}"
+            )
+        similarity_fn = SIMILARITIES[similarity]
+    else:
+        similarity_fn = similarity
+
     if β <= 0:
         raise ValueError(f"β must be positive, got {β}")
 
@@ -1317,32 +1552,26 @@ def update(
     # Mixed precision handling for numerical stability
     if device.type == "cuda" and dtype in (torch.float16, torch.bfloat16):
         ξ_compute, g_compute = ξ.float(), g.float()
+        μ_compute = μ.float() if μ.dtype != torch.float32 else μ
     else:
-        ξ_compute, g_compute = ξ, g
+        ξ_compute, g_compute, μ_compute = ξ, g, μ
 
-    # Element-wise multiply: Y[μ,v] = ξ[μ,v] * g_prev[v]
-    y = ξ_compute * g_compute  # (P, N)
-
-    # Compute simplex-wise similarities: dot[μ,σ] = Σ_{v∈σ} Y[μ,v]
-    dot = torch.sparse.mm(μ.t(), y.t()).t()  # (P, |κ|)
+    # 1. Pattern-wise similarities using custom function
+    sim = similarity_fn(ξ_compute, g_compute, μ_compute, k)  # (P,)
 
     # Convert back to original precision if needed
     if device.type == "cuda" and dtype in (torch.float16, torch.bfloat16):
-        dot = dot.to(dtype)
+        sim = sim.to(dtype)
 
-    # Sum over simplices to get pattern-wise similarities
-    similarity = dot.sum(dim=1)  # (P,)
-
-    # Temperature-scaled softmax attention over patterns
-    # For extreme β values with fp16, compute in float32 for headroom
+    # 2. Temperature-scaled softmax attention over patterns
     if (
         device.type == "cuda"
         and dtype in (torch.float16, torch.bfloat16)
         and β > 100
     ):
-        α = torch.softmax(similarity.float() / β, dim=0).to(dtype)
+        α = torch.softmax(sim.float() / β, dim=0).to(dtype)
     else:
-        α = torch.softmax(similarity / β, dim=0)  # (P,)
+        α = torch.softmax(sim / β, dim=0)  # (P,)
 
-    # Weighted combination of patterns
+    # 3. Weighted combination of patterns
     return α @ ξ  # (N,)
