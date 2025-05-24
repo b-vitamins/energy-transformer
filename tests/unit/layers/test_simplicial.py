@@ -1,0 +1,118 @@
+import itertools
+import math
+
+import torch
+import pytest
+
+from energy_transformer.layers.simplicial import (
+    canonical,
+    unrank,
+    SimplexGenerator,
+    UnionSimplexGenerator,
+    SimplicialComplex,
+    _get_membership,
+    lse,
+    energy,
+)
+
+
+def test_canonical_filters_and_sorts():
+    simplex = [3, 2, 2, -1, "a", 1]
+    assert canonical(simplex) == (1, 2, 3)
+    assert canonical([]) == ()
+
+
+def test_unrank_matches_combinations():
+    n, k, r = 5, 3, 3
+    combos = list(itertools.combinations(range(n), k))
+    assert unrank(r, n, k) == combos[r]
+
+
+def test_unrank_out_of_range():
+    with pytest.raises(ValueError):
+        unrank(10, 4, 2)
+
+
+def test_simplex_generator_basics():
+    gen = SimplexGenerator((0, 1, 2, 3), k=1)
+    assert gen.n == 4
+    assert gen.total_count == 6
+    assert bool(gen)
+    assert len(gen) == 6
+    expected = [
+        frozenset({0, 1}),
+        frozenset({0, 2}),
+        frozenset({0, 3}),
+        frozenset({1, 2}),
+        frozenset({1, 3}),
+        frozenset({2, 3}),
+    ]
+    assert gen.all() == expected
+
+
+def test_simplex_generator_sampling_rules():
+    gen = SimplexGenerator((0, 1, 2), k=1)
+    with pytest.raises(ValueError):
+        gen.sample(4, replacement=False, strict=True)
+
+    res = gen.sample(4, replacement=False, strict=False)
+    assert len(res.data) == 3
+    assert not res.complete
+
+    res = gen.sample(5, replacement=True)
+    assert len(res.data) == 5
+    assert res.complete
+
+
+def test_union_simplex_generator():
+    facets = [(0, 1, 2), (1, 2, 3)]
+    gen = UnionSimplexGenerator(facets, k=1)
+    assert gen.computation_safe
+    assert len(gen) == 5
+    all_simplices = gen.all()
+    expected = {
+        frozenset({0, 1}),
+        frozenset({0, 2}),
+        frozenset({1, 2}),
+        frozenset({1, 3}),
+        frozenset({2, 3}),
+    }
+    assert set(all_simplices) == expected
+
+
+def test_simplicial_complex_properties_and_query():
+    complex = SimplicialComplex([(0, 1, 2), (1, 3)])
+    assert complex.dimension == 2
+    assert (0, 1, 2) in complex.facets
+    assert {0, 1} in complex
+    assert {0, 3} not in complex
+
+    result = complex.simplices(1).collect()
+    assert set(result[1]) == {
+        frozenset({0, 1}),
+        frozenset({0, 2}),
+        frozenset({1, 2}),
+        frozenset({1, 3}),
+    }
+    count = complex.simplices(1).count()
+    assert count == {1: 4}
+
+
+def test_membership_matrix():
+    κ = [(0, 1), (1, 2)]
+    μ = _get_membership(κ, 3, torch.device("cpu"), torch.float32).coalesce()
+    assert μ.shape == torch.Size([3, 2])
+    indices = μ.indices().tolist()
+    assert indices == [[0, 1, 1, 2], [0, 0, 1, 1]]
+
+
+def test_energy_matches_lse_relationship():
+    torch.manual_seed(0)
+    ξ = torch.randn(2, 3)
+    g = torch.randn(3)
+    κ = [(0, 1), (2,)]
+    β = 1.0
+    e = energy(β, ξ, g, κ)
+    l = lse(β, ξ, g, κ)
+    expected = -l + 0.5 * torch.dot(g, g)
+    assert torch.allclose(e, expected)
