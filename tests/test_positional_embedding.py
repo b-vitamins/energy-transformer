@@ -1,6 +1,8 @@
 import torch
+
 from energy_transformer.spec import PosEmbedSpec
-from energy_transformer.spec.realise import realise, SpecInfo
+from energy_transformer.spec.realise import SpecInfo, realise
+
 
 def test_positional_embedding_init_std():
     torch.manual_seed(0)
