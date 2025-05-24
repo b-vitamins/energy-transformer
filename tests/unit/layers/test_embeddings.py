@@ -47,4 +47,3 @@ def test_positional_embedding_adds_values() -> None:
     out = pos(x)
     assert out.shape == (1, 5, 2)
     assert torch.allclose(out, torch.ones_like(out))
-

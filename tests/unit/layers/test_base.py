@@ -40,5 +40,3 @@ def test_default_reset_parameters_return_none() -> None:
     assert DummyLayerNorm().reset_parameters() is None
     assert DummyEnergyAttention().reset_parameters() is None
     assert DummyHopfieldNetwork().reset_parameters() is None
-
-

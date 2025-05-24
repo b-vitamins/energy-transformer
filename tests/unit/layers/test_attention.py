@@ -44,7 +44,9 @@ def test_get_diag_mask_caches_by_length() -> None:
     "shape,chunk",
     [((2, 5), 10), ((3, 2048), 512)],
 )
-def test_chunked_logsumexp_matches_torch(shape: tuple[int, int], chunk: int) -> None:
+def test_chunked_logsumexp_matches_torch(
+    shape: tuple[int, int], chunk: int
+) -> None:
     torch.manual_seed(0)
     logits = torch.randn(*shape)
     expected = torch.logsumexp(logits, dim=-1)

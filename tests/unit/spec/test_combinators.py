@@ -96,6 +96,7 @@ def test_parallel_add_operator() -> None:
     combined2 = b1 + parallel(b2, join_mode="concat")
     assert len(combined2) == 2
 
+
 def test_sequential_getitem_and_slice() -> None:
     model = seq(make_patch(), CLSTokenSpec(), LayerNormSpec())
     assert model[0] is model.parts[0]
@@ -120,6 +121,8 @@ def test_parallel_getitem_and_slice() -> None:
 
 
 def test_parallel_find_branches_by_type() -> None:
-    p = parallel(make_patch(), LayerNormSpec(), make_patch(32), join_mode="concat")
+    p = parallel(
+        make_patch(), LayerNormSpec(), make_patch(32), join_mode="concat"
+    )
     found = p.find_branches_by_type(PatchEmbedSpec)
     assert len(found) == 2

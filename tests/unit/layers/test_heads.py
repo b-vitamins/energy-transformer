@@ -12,7 +12,9 @@ def test_classification_head_output_shape() -> None:
 
 
 def test_classification_head_pooling() -> None:
-    head = ClassificationHead(embed_dim=4, num_classes=2, use_cls_token=False, drop_rate=0.0)
+    head = ClassificationHead(
+        embed_dim=4, num_classes=2, use_cls_token=False, drop_rate=0.0
+    )
     x = torch.randn(2, 3, 4)
     out = head(x)
     assert out.shape == (2, 2)
@@ -24,4 +26,3 @@ def test_feature_head_global_avg() -> None:
     out = head(x)
     expected = x.mean(dim=1)
     assert torch.allclose(out, expected)
-

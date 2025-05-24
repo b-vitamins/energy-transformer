@@ -82,7 +82,9 @@ def test_mhea_estimate_params_with_bias() -> None:
     "num_heads,head_dim,dropout",
     [(0, 4, 0.0), (2, 0, 0.0), (2, 4, -0.1), (2, 4, 1.1)],
 )
-def test_mhea_validate_bad(num_heads: int, head_dim: int, dropout: float) -> None:
+def test_mhea_validate_bad(
+    num_heads: int, head_dim: int, dropout: float
+) -> None:
     with pytest.raises(ValidationError):
         MHEASpec(num_heads=num_heads, head_dim=head_dim, dropout=dropout)
 
@@ -130,7 +132,9 @@ def test_cls_token_spec_behaviour() -> None:
 
 
 def test_patch_embed_spec_tokens_and_params() -> None:
-    spec = PatchEmbedSpec(img_size=8, patch_size=4, embed_dim=16, in_chans=3, bias=False)
+    spec = PatchEmbedSpec(
+        img_size=8, patch_size=4, embed_dim=16, in_chans=3, bias=False
+    )
     assert spec.get_token_count() == 4
     assert spec.get_embedding_dim() == 16
     assert not spec.modifies_tokens()
