@@ -20,7 +20,7 @@ mypy = "^1.10"
 ruff = "^0.4.0"
 
 [tool.poetry.group.examples.dependencies]
-torchvision = "0.20.1a0"
+torchvision = "^0.20"
 matplotlib = "^3.5"
 pillow = "^9.0"
 
