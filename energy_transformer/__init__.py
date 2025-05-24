@@ -19,7 +19,6 @@ from .spec import (
 
 __all__ = [
     "EnergyTransformer",
-    "LogitsHead",
     "realise",
     "seq",
     "repeat",

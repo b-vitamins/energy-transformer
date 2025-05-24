@@ -26,50 +26,54 @@ pip install -e .
 
 ## Quick Start
 
-### Using Pre-defined Models
+### Basic Usage
 
 ```python
 import torch
-from energy_transformer import realise, vit_base
+from energy_transformer import realise, seq, repeat
+from energy_transformer.spec import (
+    PatchEmbedSpec,
+    PosEmbedSpec,
+    CLSTokenSpec,
+    ETSpec,
+    LayerNormSpec,
+)
 
-# Create a Vision Transformer with Energy blocks
-model = realise(vit_base(img_size=224, patch_size=16))
+spec = seq(
+    PatchEmbedSpec(img_size=224, patch_size=16, in_chans=3, embed_dim=768),
+    PosEmbedSpec(),
+    CLSTokenSpec(),
+    repeat(ETSpec(steps=4, alpha=0.125), 12),
+    LayerNormSpec(),
+)
 
-# Forward pass
+model = realise(spec)
+
 images = torch.randn(4, 3, 224, 224)
-output = model(images)  # (4, 768) - CLS token representation
+output = model(images)
 ```
 
 ### Custom Architecture with Specifications
 
 ```python
-from energy_transformer import seq, repeat, PatchSpec, PosEncSpec, CLSTokenSpec, ETBlockSpec, NormSpec, realise
-
-# Define model architecture declaratively
-spec = seq(
-    PatchSpec(img_size=224, patch_size=16, in_chans=3, embed_dim=768),
-    PosEncSpec(kind="sincos"),
-    CLSTokenSpec(),
-    repeat(ETBlockSpec(steps=4, alpha=0.125), 12),
-    NormSpec()
+from energy_transformer import realise, seq, repeat
+from energy_transformer.spec import (
+    PatchEmbedSpec,
+    PosEmbedSpec,
+    CLSTokenSpec,
+    ETSpec,
+    LayerNormSpec,
 )
 
-# Create the actual model
+spec = seq(
+    PatchEmbedSpec(img_size=224, patch_size=16, in_chans=3, embed_dim=768),
+    PosEmbedSpec(kind="sincos"),
+    CLSTokenSpec(),
+    repeat(ETSpec(steps=4, alpha=0.125), 12),
+    LayerNormSpec(),
+)
+
 model = realise(spec)
-```
-
-### Image Processing with Masking
-
-```python
-from energy_transformer import realise, mae_base
-
-# Create model with mask token support
-model = realise(mae_base(img_size=224, patch_size=16))
-
-# Process images with masking
-images = torch.randn(4, 3, 224, 224)
-mask = torch.bernoulli(torch.full((4, 196), 0.75))  # 75% masking
-results = model(images, patch_mask=mask, return_sequence=True)
 ```
 
 ### Direct Model Usage
@@ -102,17 +106,6 @@ The Energy Transformer consists of three main components:
 
 The total energy is the sum of individual component energies, and the forward pass minimizes this energy via gradient descent.
 
-## Pre-defined Configurations
-
-```python
-from energy_transformer import vit_tiny, vit_small, vit_base, vit_large, mae_base
-
-tiny_model = realise(vit_tiny())    # 12 layers, 192 dim
-small_model = realise(vit_small())  # 12 layers, 384 dim  
-base_model = realise(vit_base())    # 12 layers, 768 dim
-large_model = realise(vit_large())  # 24 layers, 1024 dim
-mae_model = realise(mae_base())     # For masked autoencoding
-```
 
 ## Testing
 

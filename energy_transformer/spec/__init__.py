@@ -70,9 +70,4 @@ __all__ = [
     "validate_positive",
     "validate_probability",
     "to_pair",
-    "vit_tiny",
-    "vit_small",
-    "vit_base",
-    "vit_large",
-    "custom_et_model",
 ]
