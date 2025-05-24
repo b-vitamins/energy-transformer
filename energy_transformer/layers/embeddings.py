@@ -166,6 +166,7 @@ class PositionalEmbedding2D(nn.Module):  # type: ignore
         num_patches: int,
         embed_dim: int,
         include_cls: bool = False,
+        init_std: float = 0.02,
     ) -> None:
         """Initialize PositionalEmbedding2D module.
 
@@ -177,16 +178,19 @@ class PositionalEmbedding2D(nn.Module):  # type: ignore
             Embedding dimension of tokens.
         include_cls : bool, default=False
             Whether to include position for a CLS token at the beginning.
+        init_std : float, default=0.02
+            Standard deviation for parameter initialization.
         """
         super().__init__()
         seq_len = num_patches + (1 if include_cls else 0)
+        self.init_std = init_std
         self.pos_embed = nn.Parameter(torch.zeros(1, seq_len, embed_dim))
 
         self._init_weights()
 
     def _init_weights(self) -> None:
         """Initialize positional embedding weights."""
-        nn.init.trunc_normal_(self.pos_embed, std=0.02)
+        nn.init.trunc_normal_(self.pos_embed, std=self.init_std)
 
     def forward(self, x: Tensor) -> Tensor:
         """Add positional embeddings to input tokens.

@@ -845,6 +845,7 @@ def _realise_pos_embed(spec: PosEmbedSpec, info: SpecInfo) -> nn.Module:
             num_patches=info.token_count,
             embed_dim=info.embedding_dim,
             include_cls=spec.include_cls,
+            init_std=spec.init_std,
         )
     except ImportError as e:
         raise RealisationError(
