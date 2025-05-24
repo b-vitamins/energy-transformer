@@ -1,6 +1,7 @@
 import pytest
 from energy_transformer.spec import (
     CLSTokenSpec,
+    ETSpec,
     LayerNormSpec,
     PatchEmbedSpec,
     ValidationError,
@@ -93,3 +94,31 @@ def test_parallel_add_operator():
     assert len(combined) == 2
     combined2 = b1 + parallel(b2, join_mode="concat")
     assert len(combined2) == 2
+
+def test_sequential_getitem_and_slice():
+    model = seq(make_patch(), CLSTokenSpec(), LayerNormSpec())
+    assert model[0] is model.parts[0]
+    sliced = model[1:]
+    assert isinstance(sliced, type(model))
+    assert sliced.parts == model.parts[1:]
+
+
+def test_sequential_find_and_count_parts():
+    model = seq(make_patch(), repeat(ETSpec(), 2), LayerNormSpec())
+    parts = model.find_parts_by_type(ETSpec)
+    assert len(parts) == 2
+    assert model.count_parts_by_type(ETSpec) == 2
+
+
+def test_parallel_getitem_and_slice():
+    p = parallel(make_patch(), make_patch(32), join_mode="concat")
+    assert p[0] is p.branches[0]
+    sliced = p[1:]
+    assert isinstance(sliced, type(p))
+    assert sliced.branches == p.branches[1:]
+
+
+def test_parallel_find_branches_by_type():
+    p = parallel(make_patch(), LayerNormSpec(), make_patch(32), join_mode="concat")
+    found = p.find_branches_by_type(PatchEmbedSpec)
+    assert len(found) == 2
