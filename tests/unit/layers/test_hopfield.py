@@ -18,7 +18,9 @@ def test_hopfield_custom_energy_function() -> None:
     def custom_fn(h: torch.Tensor) -> torch.Tensor:
         return h.sum()
 
-    net = HopfieldNetwork(in_dim=2, hidden_dim=2, multiplier=1.0, energy_fn=custom_fn)
+    net = HopfieldNetwork(
+        in_dim=2, hidden_dim=2, multiplier=1.0, energy_fn=custom_fn
+    )
     with torch.no_grad():
         net.ξ.fill_(1.0)
     g = torch.ones(2, 2)
