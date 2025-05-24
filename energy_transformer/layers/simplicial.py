@@ -7,7 +7,9 @@ import random
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
 from functools import lru_cache
-from typing import NamedTuple
+from typing import NamedTuple, cast
+
+from torch import Tensor
 
 import torch
 
@@ -1196,7 +1198,7 @@ def dot_similarity(
     """
     y = ξ * g  # (P, N)
     dot = torch.sparse.mm(μ.t(), y.t()).t()  # (P, |κ|)
-    return dot.sum(dim=1)  # (P,)
+    return cast(Tensor, dot.sum(dim=1))  # (P,)
 
 
 def ced_similarity(
@@ -1235,7 +1237,7 @@ def ced_similarity(
     # sum immediately instead of materializing (P, |κ|) tensor
     s_sum = torch.sparse.mm(μ.t(), sq.t()).t().sum(dim=1)  # (P,)
     dist = s_sum.sqrt_()  # in-place square root
-    return -dist  # negative ⇒ similarity
+    return cast(Tensor, -dist)  # negative ⇒ similarity
 
 
 def manhattan_similarity(
@@ -1269,7 +1271,7 @@ def manhattan_similarity(
 
     # sum immediately instead of materializing (P, |κ|) tensor
     s_sum = torch.sparse.mm(μ.t(), abs_diff.t()).t().sum(dim=1)  # (P,)
-    return -s_sum  # negative ⇒ similarity
+    return cast(Tensor, -s_sum)  # negative ⇒ similarity
 
 
 def cosine_similarity(
@@ -1307,7 +1309,7 @@ def cosine_similarity(
     # Sum over vertices per simplex and immediately sum over simplices
     # Safe sparse-left/dense-right form for torch.sparse.mm
     sim = torch.sparse.mm(μ.t(), prod.t()).t()  # (P, |κ|)
-    return sim.sum(dim=1)  # (P,)
+    return cast(Tensor, sim.sum(dim=1))  # (P,)
 
 
 def cmd_similarity(

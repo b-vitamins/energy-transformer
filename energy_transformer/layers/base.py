@@ -7,7 +7,7 @@ import torch.nn as nn
 from torch import Tensor
 
 
-class BaseLayerNorm(nn.Module, ABC):  # type: ignore
+class BaseLayerNorm(nn.Module, ABC):
     """Base class for all layer normalization implementations.
 
     Defines the interface required for layer normalization components
@@ -45,12 +45,12 @@ class BaseLayerNorm(nn.Module, ABC):  # type: ignore
 class EnergyAttentionInterface:
     """TorchScript interface for energy attention components."""
 
-    def forward(self, g: Tensor) -> Tensor:  # scalar
+    def forward(self, g: Tensor) -> Tensor:  # type: ignore[empty-body]
         """Compute scalar energy from normalized tokens."""
         pass
 
 
-class BaseEnergyAttention(nn.Module, ABC):  # type: ignore
+class BaseEnergyAttention(nn.Module, ABC):
     """Base class for all energy-based attention implementations.
 
     Defines the interface required for attention components used
@@ -88,12 +88,12 @@ class BaseEnergyAttention(nn.Module, ABC):  # type: ignore
 class HopfieldNetworkInterface:
     """TorchScript interface for Hopfield Network components."""
 
-    def forward(self, g: Tensor) -> Tensor:  # scalar
+    def forward(self, g: Tensor) -> Tensor:  # type: ignore[empty-body]
         """Compute scalar Hopfield energy from normalized tokens."""
         pass
 
 
-class BaseHopfieldNetwork(nn.Module, ABC):  # type: ignore
+class BaseHopfieldNetwork(nn.Module, ABC):
     """Base class for all Hopfield Network implementations.
 
     All Hopfield Networks must implement the forward method

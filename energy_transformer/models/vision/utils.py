@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any, cast
 
 import torch.nn as nn
-
-if TYPE_CHECKING:
-    from torch.nn import Module
 
 __all__ = [
     "VisionModelMixin",
@@ -23,7 +20,7 @@ class VisionModelMixin:
     nn.Module. It provides vision-specific utilities and initialization.
     """
 
-    def init_vit_weights(self: Module) -> None:
+    def init_vit_weights(self) -> None:
         """Initialize weights following Vision Transformer conventions.
 
         This applies the same initialization scheme as the original ViT:
@@ -32,7 +29,8 @@ class VisionModelMixin:
         - Zero initialization for classification heads
         - Ones for layer norm weights, zeros for layer norm biases
         """
-        self.apply(self._init_vit_weights)
+        module = cast(nn.Module, self)
+        module.apply(self._init_vit_weights)
 
     def _init_vit_weights(self, module: nn.Module) -> None:
         """Initialize a single module following ViT conventions."""
@@ -51,7 +49,7 @@ class VisionModelMixin:
             if module.bias is not None:
                 nn.init.zeros_(module.bias)
 
-    def get_model_info(self: Module) -> dict[str, Any]:
+    def get_model_info(self) -> dict[str, Any]:
         """Get model configuration information.
 
         Returns
@@ -59,11 +57,12 @@ class VisionModelMixin:
         Dict[str, Any]
             Dictionary containing model configuration details.
         """
+        module = cast(nn.Module, self)
         info = {
-            "model_type": self.__class__.__name__,
-            "num_parameters": sum(p.numel() for p in self.parameters()),
+            "model_type": module.__class__.__name__,
+            "num_parameters": sum(p.numel() for p in module.parameters()),
             "num_trainable_parameters": sum(
-                p.numel() for p in self.parameters() if p.requires_grad
+                p.numel() for p in module.parameters() if p.requires_grad
             ),
         }
 

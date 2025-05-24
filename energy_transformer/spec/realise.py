@@ -38,6 +38,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, cast
 
+from torch import Tensor
+
 import torch
 import torch.nn as nn
 
@@ -455,7 +457,7 @@ def _realise_parallel(spec: ParallelSpec, info: SpecInfo) -> nn.Module:
         )
 
     # Create module that combines branches
-    class ParallelModule(nn.Module):  # type: ignore[misc]
+    class ParallelModule(nn.Module):
         """Module that combines parallel branches according to join mode."""
 
         def __init__(self, branches: list[nn.Module], join_mode: str) -> None:
@@ -490,12 +492,12 @@ def _realise_parallel(spec: ParallelSpec, info: SpecInfo) -> nn.Module:
             if self.join_mode == "concat":
                 return torch.cat(outputs, dim=-1)
             elif self.join_mode == "add":
-                return sum(outputs)
+                return cast(Tensor, sum(outputs))
             elif self.join_mode == "multiply":
                 result = outputs[0]
                 for output in outputs[1:]:
                     result = result * output
-                return result
+                return cast(Tensor, result)
             else:
                 raise ValueError(f"Unsupported join mode: {self.join_mode}")
 

@@ -1,6 +1,6 @@
 """Base Energy Transformer model definition."""
 
-from typing import NamedTuple
+from typing import NamedTuple, cast
 
 import torch
 import torch.nn as nn
@@ -34,7 +34,7 @@ class ETOutput(NamedTuple):
     trajectory: Tensor | None = None
 
 
-class EnergyTransformer(nn.Module):  # type: ignore
+class EnergyTransformer(nn.Module):
     """Base Energy Transformer with gradient descent optimization.
 
     Defines a composite energy function that combines attention-based and
@@ -148,12 +148,12 @@ class EnergyTransformer(nn.Module):  # type: ignore
 
         # E^ATT = attention(g, mask)
         try:
-            e_att = self.attention(g, attn_mask=energy_mask)  # scalar
+            e_att = cast(Tensor, self.attention(g, attn_mask=energy_mask))
         except TypeError:
-            e_att = self.attention(g)  # scalar
+            e_att = cast(Tensor, self.attention(g))
 
         # E^HN = hopfield(g)
-        e_hn = self.hopfield(g)  # scalar
+        e_hn = cast(Tensor, self.hopfield(g))
 
         # E^TOTAL = E^ATT + E^HN
         return e_att + e_hn  # scalar

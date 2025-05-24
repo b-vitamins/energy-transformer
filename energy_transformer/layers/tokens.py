@@ -11,7 +11,7 @@ __all__ = [
 ]
 
 
-class CLSToken(nn.Module):  # type: ignore
+class CLSToken(nn.Module):
     """Learnable classification token.
 
     Implements a learnable classification token that is prepended to the

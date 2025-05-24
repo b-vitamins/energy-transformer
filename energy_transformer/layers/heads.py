@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import torch.nn as nn
 from torch import Tensor
+from typing import cast
 
 __all__ = [
     "ClassificationHead",
@@ -11,7 +12,7 @@ __all__ = [
 ]
 
 
-class ClassificationHead(nn.Module):  # type: ignore
+class ClassificationHead(nn.Module):
     """Classification head for vision models.
 
     Implements a standard classification head that processes the CLS token
@@ -74,6 +75,7 @@ class ClassificationHead(nn.Module):  # type: ignore
         self.use_cls_token = use_cls_token
 
         # Pre-logits processing (following original ViT design)
+        self.pre_logits: nn.Module
         if representation_size is not None:
             self.pre_logits = nn.Sequential(
                 nn.Linear(embed_dim, representation_size), nn.Tanh()
@@ -134,12 +136,12 @@ class ClassificationHead(nn.Module):  # type: ignore
 
         # Apply dropout and classification
         x = self.drop(x)
-        logits = self.head(x)  # (B, num_classes)
+        logits = cast(Tensor, self.head(x))  # (B, num_classes)
 
         return logits
 
 
-class FeatureHead(nn.Module):  # type: ignore
+class FeatureHead(nn.Module):
     """Feature extraction head for vision models.
 
     Extracts feature representations from token sequences without applying

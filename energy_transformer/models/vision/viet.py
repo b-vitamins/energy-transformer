@@ -19,7 +19,7 @@ Architectural Mapping:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import torch.nn as nn
 from torch import Tensor
@@ -42,7 +42,7 @@ __all__ = [
 ]
 
 
-class VisionEnergyTransformer(nn.Module, VisionModelMixin):  # type: ignore
+class VisionEnergyTransformer(nn.Module, VisionModelMixin):
     """Vision Energy Transformer - ViET.
 
     A Vision Transformer that uses Energy Transformer blocks instead of
@@ -281,12 +281,12 @@ class VisionEnergyTransformer(nn.Module, VisionModelMixin):  # type: ignore
 
         # 6. Extract features or classify (ViT Step 5)
         if return_features:
-            features = self.feature_head(x)  # (B, D)
+            features = cast(Tensor, self.feature_head(x))  # (B, D)
             if return_energy_info:
                 return {"features": features, "energy_info": energy_info}
             return features
         else:
-            logits = self.head(x)  # (B, num_classes)
+            logits = cast(Tensor, self.head(x))  # (B, num_classes)
             if return_energy_info:
                 return {"logits": logits, "energy_info": energy_info}
             return logits
