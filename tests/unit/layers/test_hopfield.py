@@ -81,3 +81,30 @@ def test_hopfield_gradients_flow() -> None:
     energy.backward()
     assert g.grad is not None
     assert net.ξ.grad is not None
+
+
+def test_hopfield_zero_weights_energy_zero() -> None:
+    net = HopfieldNetwork(in_dim=3, hidden_dim=2)
+    with torch.no_grad():
+        net.ξ.zero_()
+    g = torch.randn(5, 3)
+    energy = net(g)
+    assert torch.allclose(energy, torch.tensor(0.0))
+
+
+def test_hopfield_negative_activations() -> None:
+    net = HopfieldNetwork(in_dim=2, hidden_dim=2)
+    with torch.no_grad():
+        net.ξ.copy_(torch.tensor([[1.0, -1.0], [0.5, 0.5]]))
+    g = torch.tensor([[1.0, 2.0], [-1.0, 1.0]])
+    energy = net(g)
+    h = torch.matmul(g, net.ξ.t())
+    expected = -0.5 * (torch.relu(h) ** 2).sum()
+    assert torch.allclose(energy, expected, atol=1e-6)
+    assert torch.all(torch.relu(h[h < 0]) == 0)
+
+
+def test_hopfield_hidden_dim_override() -> None:
+    net = HopfieldNetwork(in_dim=2, hidden_dim=5, multiplier=0.1)
+    assert net.hidden_dim == 5
+    assert net.ξ.shape == (5, 2)
