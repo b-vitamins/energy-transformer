@@ -1,4 +1,5 @@
 import torch
+import pytest
 
 from energy_transformer.layers.hopfield import HopfieldNetwork
 
@@ -39,3 +40,44 @@ def test_hopfield_energy_is_scalar() -> None:
     g = torch.randn(2, 2)
     energy = net(g)
     assert energy.shape == torch.Size([])
+
+def test_hopfield_reset_parameters_std() -> None:
+    torch.manual_seed(0)
+    net = HopfieldNetwork(in_dim=4, hidden_dim=6)
+    # Parameter statistics after initialization
+    std_expected = 1.0 / (net.in_dim * net.hidden_dim) ** 0.25
+    assert net.ξ.mean().abs() < 0.1
+    assert torch.isclose(net.ξ.std(), torch.tensor(std_expected), atol=5e-2)
+
+
+def test_hopfield_forward_with_batch_dims() -> None:
+    net = HopfieldNetwork(in_dim=2, hidden_dim=3, multiplier=1.0)
+    with torch.no_grad():
+        net.ξ.copy_(torch.tensor([[1.0, 0.0], [0.0, 1.0], [1.0, -1.0]]))
+    g = torch.tensor([
+        [[1.0, 2.0], [0.0, -1.0], [3.0, 0.5]],
+        [[-1.0, 1.0], [2.0, 0.0], [0.5, 0.5]],
+    ])
+    energy = net(g)
+    h = torch.matmul(g, net.ξ.t())
+    expected = -0.5 * (torch.relu(h) ** 2).sum()
+    assert torch.allclose(energy, expected, atol=1e-6)
+
+
+def test_hopfield_energy_function_must_return_scalar() -> None:
+    def bad_fn(h: torch.Tensor) -> torch.Tensor:
+        return h.mean(dim=-1)  # returns tensor of shape [..., N]
+
+    net = HopfieldNetwork(in_dim=2, hidden_dim=2, energy_fn=bad_fn)
+    g = torch.randn(2, 2)
+    with pytest.raises(AssertionError):
+        net(g)
+
+
+def test_hopfield_gradients_flow() -> None:
+    net = HopfieldNetwork(in_dim=2, hidden_dim=2)
+    g = torch.randn(3, 2, requires_grad=True)
+    energy = net(g)
+    energy.backward()
+    assert g.grad is not None
+    assert net.ξ.grad is not None
