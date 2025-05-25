@@ -93,3 +93,44 @@ def test_classification_head_representation_weights_not_zero() -> None:
     head = ClassificationHead(embed_dim=3, num_classes=2, representation_size=4)
     w = head.pre_logits[0].weight
     assert not torch.all(w == 0)
+
+def test_classification_head_head_input_dim_dependent_on_representation_size() -> None:
+    head_no_rep = ClassificationHead(embed_dim=4, num_classes=2)
+    head_rep = ClassificationHead(embed_dim=4, num_classes=2, representation_size=6)
+    assert head_no_rep.head.in_features == 4
+    assert head_rep.head.in_features == 6
+
+
+def test_classification_head_representation_bias_zero() -> None:
+    head = ClassificationHead(embed_dim=3, num_classes=1, representation_size=5)
+    bias = head.pre_logits[0].bias
+    assert torch.all(bias == 0)
+
+
+def test_classification_head_representation_forward() -> None:
+    head = ClassificationHead(
+        embed_dim=2,
+        num_classes=2,
+        representation_size=2,
+        drop_rate=0.0,
+    )
+    with torch.no_grad():
+        head.pre_logits[0].weight.copy_(torch.eye(2))
+        head.pre_logits[0].bias.zero_()
+        head.head.weight.copy_(torch.eye(2))
+        head.head.bias.zero_()
+    x = torch.tensor([[[1.0, -1.0]], [[-2.0, 3.0]]])
+    out = head(x)
+    expected = torch.tanh(x[:, 0])
+    assert torch.allclose(out, expected)
+
+
+def test_classification_head_global_average_outputs_expected() -> None:
+    head = ClassificationHead(embed_dim=2, num_classes=1, use_cls_token=False, drop_rate=0.0)
+    with torch.no_grad():
+        head.head.weight.fill_(1.0)
+        head.head.bias.zero_()
+    x = torch.tensor([[[1.0, 2.0], [3.0, 4.0]]])
+    out = head(x)
+    expected = torch.tensor([[5.0]])
+    assert torch.allclose(out, expected)
