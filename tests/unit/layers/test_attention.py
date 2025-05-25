@@ -1,4 +1,6 @@
+import math
 import torch
+import pytest
 
 from energy_transformer.layers.attention import MultiHeadEnergyAttention
 
@@ -73,3 +75,69 @@ def test_attention_single_token_zero() -> None:
     g = torch.randn(1, 1, 3)
     energy = attn(g)
     assert torch.allclose(energy, torch.tensor(0.0))
+
+
+def test_attention_parameter_shapes_and_bias() -> None:
+    attn_no_bias = MultiHeadEnergyAttention(
+        in_dim=3, num_heads=2, head_dim=4, bias=False
+    )
+    assert attn_no_bias.w_k.shape == (2, 4, 3)
+    assert attn_no_bias.w_q.shape == (2, 4, 3)
+    assert attn_no_bias.b_k is None
+    assert attn_no_bias.b_q is None
+
+    attn_bias = MultiHeadEnergyAttention(
+        in_dim=3, num_heads=2, head_dim=4, bias=True
+    )
+    assert attn_bias.b_k.shape == (4,)
+    assert attn_bias.b_q.shape == (4,)
+
+
+def test_attention_default_beta_matches_manual() -> None:
+    head_dim = 4
+    attn = MultiHeadEnergyAttention(
+        in_dim=2, num_heads=1, head_dim=head_dim, beta=None, bias=False
+    )
+    assert attn.β == pytest.approx(1.0 / math.sqrt(head_dim))
+    with torch.no_grad():
+        attn.w_k.zero_()
+        attn.w_q.zero_()
+        attn.w_k[0, :2].copy_(torch.eye(2))
+        attn.w_q[0, :2].copy_(torch.eye(2))
+    g = torch.tensor([[1.0, 0.0], [0.0, 1.0]])
+    energy = attn(g)
+    expected = _manual_energy(g, attn.w_k, attn.w_q, beta=attn.β)
+    assert torch.allclose(energy, expected, atol=1e-6)
+
+
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
+def test_attention_mixed_precision(dtype: torch.dtype) -> None:
+    attn = MultiHeadEnergyAttention(
+        in_dim=1, num_heads=1, head_dim=1, beta=1.0, bias=False
+    )
+    with torch.no_grad():
+        attn.w_k.fill_(1.0)
+        attn.w_q.fill_(1.0)
+    g = torch.ones(1, 2, 1, dtype=dtype)
+    energy = attn(g)
+    expected = _manual_energy(g, attn.w_k.to(dtype), attn.w_q.to(dtype))
+    assert energy.dtype == dtype
+    assert torch.allclose(energy, expected, atol=1e-3)
+
+
+def test_attention_mask_broadcast() -> None:
+    attn = MultiHeadEnergyAttention(
+        in_dim=1, num_heads=2, head_dim=1, beta=1.0, bias=False
+    )
+    with torch.no_grad():
+        attn.w_k.fill_(1.0)
+        attn.w_q.fill_(1.0)
+    g = torch.ones(1, 3, 1)
+    mask = torch.tensor(
+        [[0.0, float("-inf"), 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
+    )
+    mask = mask.unsqueeze(0).unsqueeze(0)  # shape [1, 1, N, N]
+    energy = attn(g, attn_mask=mask)
+    expanded_mask = mask.expand(1, 2, 3, 3)
+    expected = _manual_energy(g, attn.w_k, attn.w_q, attn_mask=expanded_mask)
+    assert torch.allclose(energy, expected, atol=1e-6)
