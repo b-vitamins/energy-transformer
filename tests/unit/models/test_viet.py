@@ -3,10 +3,10 @@ import torch
 
 from energy_transformer.models.vision.viet import (
     VisionEnergyTransformer,
-    viet_small_patch16_224,
-    viet_tiny_patch16_224,
     viet_base_patch16_224,
     viet_large_patch16_224,
+    viet_small_patch16_224,
+    viet_tiny_patch16_224,
 )
 
 

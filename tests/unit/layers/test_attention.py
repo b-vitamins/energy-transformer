@@ -1,6 +1,7 @@
 import math
-import torch
+
 import pytest
+import torch
 
 from energy_transformer.layers.attention import MultiHeadEnergyAttention
 

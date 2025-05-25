@@ -94,9 +94,14 @@ def test_classification_head_representation_weights_not_zero() -> None:
     w = head.pre_logits[0].weight
     assert not torch.all(w == 0)
 
-def test_classification_head_head_input_dim_dependent_on_representation_size() -> None:
+
+def test_classification_head_head_input_dim_dependent_on_representation_size() -> (
+    None
+):
     head_no_rep = ClassificationHead(embed_dim=4, num_classes=2)
-    head_rep = ClassificationHead(embed_dim=4, num_classes=2, representation_size=6)
+    head_rep = ClassificationHead(
+        embed_dim=4, num_classes=2, representation_size=6
+    )
     assert head_no_rep.head.in_features == 4
     assert head_rep.head.in_features == 6
 
@@ -126,7 +131,9 @@ def test_classification_head_representation_forward() -> None:
 
 
 def test_classification_head_global_average_outputs_expected() -> None:
-    head = ClassificationHead(embed_dim=2, num_classes=1, use_cls_token=False, drop_rate=0.0)
+    head = ClassificationHead(
+        embed_dim=2, num_classes=1, use_cls_token=False, drop_rate=0.0
+    )
     with torch.no_grad():
         head.head.weight.fill_(1.0)
         head.head.bias.zero_()
