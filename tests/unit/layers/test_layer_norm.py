@@ -90,3 +90,44 @@ def test_export_standard_layernorm_parameters() -> None:
     γ = functional.softplus(ln.logγ).item()
     assert torch.allclose(ref.weight, torch.full((5,), γ))
     assert torch.allclose(ref.bias, ln.δ)
+
+
+def test_energy_lagrangian_manual_computation() -> None:
+    ln = LayerNorm(in_dim=4)
+    with torch.no_grad():
+        ln.logγ.fill_(0.7)
+        ln.δ.copy_(torch.tensor([0.1, -0.2, 0.3, 0.4]))
+
+    x = torch.randn(3, 4)
+    energy = ln.get_energy_lagrangian(x)
+
+    γ = functional.softplus(ln.logγ)
+    var = torch.var(x, dim=-1, unbiased=False)
+    expected = ln.in_dim * γ * torch.sqrt(var + ln.eps) + (ln.δ * x).sum(dim=-1)
+    assert torch.allclose(energy, expected, atol=1e-6)
+
+
+def test_layernorm_additional_dims_matches_torch() -> None:
+    torch.manual_seed(0)
+    ln = LayerNorm(in_dim=3)
+    x = torch.randn(2, 4, 3)
+    out = ln(x)
+
+    ref = torch.nn.LayerNorm(3, eps=ln.eps)
+    with torch.no_grad():
+        ref.weight.fill_(functional.softplus(ln.logγ).item())
+        ref.bias.copy_(ln.δ)
+    expected = ref(x)
+    assert torch.allclose(out, expected, atol=1e-6)
+
+
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
+def test_energy_lagrangian_mixed_precision(dtype: torch.dtype) -> None:
+    ln = LayerNorm(in_dim=2)
+    x = torch.randn(4, 2)
+    energy_fp32 = ln.get_energy_lagrangian(x)
+
+    x_mp = x.to(dtype)
+    energy_mp = ln.get_energy_lagrangian(x_mp)
+    assert energy_mp.dtype == dtype
+    assert torch.allclose(energy_mp.to(torch.float32), energy_fp32, atol=1e-2)
