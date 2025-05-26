@@ -87,7 +87,8 @@ def test_forward_returns_energy_and_trajectory() -> None:
     # Use SGD mode for predictable step sizes
     out = model(x.clone(), track="both", mode="sgd")
     assert isinstance(out, ETOutput)
-    # After two steps with gradient 2.5 per element and alpha=1.0: 1 - 2.5 - 2.5 = -4
+    # After 2 steps with gradient 2.5 / element
+    # alpha=1.0: 1 - 2.5 - 2.5 = -4
     assert torch.allclose(out.tokens, torch.full_like(x, -4.0))
     assert out.final_energy is not None
     assert out.trajectory is not None
@@ -222,7 +223,7 @@ def test_inference_mode_requires_detach() -> None:
         # Should raise error without detach
         with pytest.raises(
             RuntimeError,
-            match="EnergyTransformer optimization requires gradient computation",
+            match="EnergyTransformer requires gradient computation",
         ):
             model(x.clone())
 
