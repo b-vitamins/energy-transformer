@@ -2,12 +2,11 @@
 
 from abc import ABC, abstractmethod
 
-import torch
 import torch.nn as nn
 from torch import Tensor
 
 
-class BaseLayerNorm(nn.Module, ABC):  # type: ignore
+class BaseLayerNorm(nn.Module, ABC):  # type: ignore[misc]
     """Base class for all layer normalization implementations.
 
     Defines the interface required for layer normalization components
@@ -41,16 +40,7 @@ class BaseLayerNorm(nn.Module, ABC):  # type: ignore
         pass
 
 
-@torch.jit.interface
-class EnergyAttentionInterface:
-    """TorchScript interface for energy attention components."""
-
-    def forward(self, g: Tensor) -> Tensor:  # scalar
-        """Compute scalar energy from normalized tokens."""
-        pass
-
-
-class BaseEnergyAttention(nn.Module, ABC):  # type: ignore
+class BaseEnergyAttention(nn.Module, ABC):  # type: ignore[misc]
     """Base class for all energy-based attention implementations.
 
     Defines the interface required for attention components used
@@ -84,16 +74,7 @@ class BaseEnergyAttention(nn.Module, ABC):  # type: ignore
         pass
 
 
-@torch.jit.interface
-class HopfieldNetworkInterface:
-    """TorchScript interface for Hopfield Network components."""
-
-    def forward(self, g: Tensor) -> Tensor:  # scalar
-        """Compute scalar Hopfield energy from normalized tokens."""
-        pass
-
-
-class BaseHopfieldNetwork(nn.Module, ABC):  # type: ignore
+class BaseHopfieldNetwork(nn.Module, ABC):  # type: ignore[misc]
     """Base class for all Hopfield Network implementations.
 
     All Hopfield Networks must implement the forward method
@@ -126,7 +107,6 @@ class BaseHopfieldNetwork(nn.Module, ABC):  # type: ignore
         pass
 
 
-# Utility function for validating scalar tensor returns
 def _validate_scalar_energy(energy: Tensor, component_name: str) -> None:
     """Validate that energy tensor is a scalar.
 
