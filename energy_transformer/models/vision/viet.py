@@ -1,20 +1,58 @@
 """Vision Energy Transformer (ViET) implementation.
 
-Architectural Mapping:
-=====================
+This module implements the Vision Energy Transformer, which replaces standard
+transformer components with energy-based alternatives as described in
+"Energy Transformer" (Hoover et al., 2023).
 
-| ViT Component          | ViET Component         | Status     |
-|------------------------|------------------------|------------|
-| Patch Embedding        | PatchEmbedding         | Identical  |
-| CLS Token              | CLSToken               | Identical  |
-| Positional Embedding   | PositionalEmbedding2D  | Identical  |
-| Positional Dropout     | nn.Dropout             | Identical  |
-| Transformer Encoder    | EnergyTransformer      | Replaced   |
-| ├─ Standard Attention  | ├─ Energy Attention    | Replaced   |
-| ├─ Standard LayerNorm  | ├─ Energy LayerNorm    | Replaced   |
-| └─ MLP                 | └─ Hopfield Network    | Replaced   |
-| Final LayerNorm        | nn.LayerNorm           | Identical  |
-| Classification Head    | ClassificationHead     | Identical  |
+The ViET architecture maintains the overall structure of Vision Transformers
+while fundamentally changing the computational mechanism from direct feedforward
+processing to iterative energy minimization. This provides better theoretical
+grounding and improved interpretability through energy landscapes.
+
+Key Differences from Standard ViT
+---------------------------------
+- Multi-Head Energy Attention instead of standard self-attention
+- Hopfield Networks instead of MLP blocks
+- Energy-based LayerNorm with learnable temperature
+- Iterative refinement through gradient descent on energy landscape
+
+Classes
+-------
+VisionEnergyTransformer
+    Main ViET model that orchestrates energy-based components
+
+Factory Functions
+-----------------
+viet_tiny, viet_small, viet_base, viet_large
+    Standard configurations matching ViT sizes
+viet_tiny_cifar, viet_small_cifar
+    CIFAR-optimized configurations
+viet_2l_cifar, viet_4l_cifar, viet_6l_cifar
+    Shallow variants for computational efficiency
+
+Example
+-------
+>>> # Create a 2-layer ViET for CIFAR-100
+>>> model = viet_2l_cifar(num_classes=100)
+>>>
+>>> # Forward pass with energy information
+>>> images = torch.randn(32, 3, 32, 32)
+>>> result = model(images, return_energy_info=True)
+>>> logits = result['logits']
+>>> energy_trajectory = result['energy_info']['block_energies']
+
+Parameters
+----------
+The key hyperparameters for ViET are:
+- `et_steps`: Number of energy minimization steps (default: 4-6)
+- `et_alpha`: Step size for gradient descent (default: 0.125-10.0)
+- `hopfield_hidden_dim`: Hidden dimension for Hopfield networks
+
+References
+----------
+.. [1] Hoover, B., Liang, Y., Pham, B., Panda, R., Strobelt, H., Chau, D. H.,
+       Zaki, M. J., & Krotov, D. (2023). Energy Transformer.
+       arXiv preprint arXiv:2302.07253.
 """
 
 from __future__ import annotations
@@ -26,97 +64,70 @@ from torch import Tensor
 
 from ...layers.attention import MultiHeadEnergyAttention
 from ...layers.embeddings import PatchEmbedding, PositionalEmbedding2D
-from ...layers.heads import ClassificationHead, FeatureHead
+from ...layers.heads import ClassificationHead
 from ...layers.hopfield import HopfieldNetwork
 from ...layers.layer_norm import LayerNorm
 from ...layers.tokens import CLSToken
 from ...models.base import EnergyTransformer
-from .utils import VisionModelMixin, create_model_config
-
-__all__ = [
-    "VisionEnergyTransformer",
-    "viet_tiny_patch16_224",
-    "viet_small_patch16_224",
-    "viet_base_patch16_224",
-    "viet_large_patch16_224",
-]
 
 
-class VisionEnergyTransformer(nn.Module, VisionModelMixin):  # type: ignore
-    """Vision Energy Transformer - ViET.
+class VisionEnergyTransformer(nn.Module):  # type: ignore
+    """Vision Energy Transformer (ViET).
 
-    A Vision Transformer that uses Energy Transformer blocks instead of
-    standard Transformer blocks. Maintains complete architectural fidelity
-    to the original ViT except for the core computation mechanism:
-
+    A Vision Transformer that replaces standard components with energy-based
+    alternatives:
     - Standard Attention → Multi-Head Energy Attention
     - Standard LayerNorm → Energy-based LayerNorm
-    - MLP layers → Hopfield Networks
+    - MLP → Hopfield Network
     - Feedforward computation → Energy minimization
 
     Parameters
     ----------
-    img_size : int, default=224
+    img_size : int
         Input image size (assumed square).
-    patch_size : int, default=16
+    patch_size : int
         Size of image patches (assumed square).
-    in_chans : int, default=3
+    in_chans : int
         Number of input channels.
-    embed_dim : int, default=768
-        Embedding dimension.
-    depth : int, default=12
-        Number of Energy Transformer blocks.
-    num_classes : int, default=1000
+    num_classes : int
         Number of output classes.
-    num_heads : int, default=12
+    embed_dim : int
+        Embedding dimension.
+    depth : int
+        Number of Energy Transformer blocks.
+    num_heads : int
         Number of attention heads.
-    head_dim : int, default=64
+    head_dim : int
         Dimension of each attention head.
-    hopfield_hidden_dim : int, default=3072
-        Hidden dimension for Hopfield networks. Typically 4 * embed_dim.
-    et_steps : int, default=4
+    hopfield_hidden_dim : int
+        Hidden dimension for Hopfield networks.
+    et_steps : int
         Number of energy optimization steps per block.
-    et_alpha : float, default=0.125
+    et_alpha : float
         Step size for energy optimization.
-    drop_rate : float, default=0.0
-        Dropout rate for positional embeddings.
-    representation_size : int, optional
+    drop_rate : float
+        Dropout rate.
+    representation_size : int | None
         Size of representation layer before classification head.
-        If None, uses embed_dim directly.
-
-    Examples
-    --------
-    >>> # Standard ViET-Base
-    >>> model = VisionEnergyTransformer()
-    >>> logits = model(torch.randn(2, 3, 224, 224))
-    >>> print(logits.shape)  # (2, 1000)
-
-    >>> # Feature extraction
-    >>> features = model(images, return_features=True)
-    >>> print(features.shape)  # (2, 768)
-
-    >>> # With energy analysis
-    >>> result = model(images, return_energy_info=True)
-    >>> print(result['logits'].shape, result['energy_info'])
     """
 
     def __init__(
         self,
-        img_size: int = 224,
-        patch_size: int = 16,
-        in_chans: int = 3,
-        embed_dim: int = 768,
-        depth: int = 12,
-        num_classes: int = 1000,
-        num_heads: int = 12,
-        head_dim: int = 64,
-        hopfield_hidden_dim: int = 3072,
-        et_steps: int = 4,
-        et_alpha: float = 0.125,
+        img_size: int,
+        patch_size: int,
+        in_chans: int,
+        num_classes: int,
+        embed_dim: int,
+        depth: int,
+        num_heads: int,
+        head_dim: int,
+        hopfield_hidden_dim: int,
+        et_steps: int,
+        et_alpha: float,
         drop_rate: float = 0.0,
         representation_size: int | None = None,
     ) -> None:
-        """Initialize Vision Energy Transformer."""
+        """Initialize VisionImageTransformer."""
         super().__init__()
 
         # Store configuration
@@ -126,7 +137,7 @@ class VisionEnergyTransformer(nn.Module, VisionModelMixin):  # type: ignore
         self.depth = depth
         self.num_classes = num_classes
 
-        # Patch embedding (exactly like ViT)
+        # Patch embedding
         self.patch_embed = PatchEmbedding(
             img_size=img_size,
             patch_size=patch_size,
@@ -135,21 +146,20 @@ class VisionEnergyTransformer(nn.Module, VisionModelMixin):  # type: ignore
         )
         num_patches = self.patch_embed.num_patches
 
-        # CLS token (exactly like ViT)
+        # CLS token
         self.cls_token = CLSToken(embed_dim)
 
-        # Positional embeddings (exactly like ViT)
-        # Include CLS token in positional embedding
+        # Positional embeddings (include CLS token)
         self.pos_embed = PositionalEmbedding2D(
             num_patches=num_patches,
             embed_dim=embed_dim,
             include_cls=True,
         )
 
-        # Positional dropout (exactly like ViT)
+        # Positional dropout
         self.pos_drop = nn.Dropout(p=drop_rate)
 
-        # Energy Transformer blocks (replaces Transformer encoders)
+        # Energy Transformer blocks
         self.et_blocks = nn.ModuleList(
             [
                 EnergyTransformer(
@@ -164,16 +174,16 @@ class VisionEnergyTransformer(nn.Module, VisionModelMixin):  # type: ignore
                         hidden_dim=hopfield_hidden_dim,
                     ),
                     steps=et_steps,
-                    α=et_alpha,
+                    alpha=et_alpha,
                 )
                 for _ in range(depth)
             ]
         )
 
-        # Final layer normalization (exactly like ViT)
-        self.norm = nn.LayerNorm(embed_dim)
+        # Final layer normalization
+        self.norm = LayerNorm(embed_dim)
 
-        # Classification head (exactly like ViT)
+        # Classification head
         self.head = ClassificationHead(
             embed_dim=embed_dim,
             num_classes=num_classes,
@@ -182,13 +192,7 @@ class VisionEnergyTransformer(nn.Module, VisionModelMixin):  # type: ignore
             use_cls_token=True,
         )
 
-        # Feature extraction head
-        self.feature_head = FeatureHead(use_cls_token=True)
-
-        # Initialize weights following ViT conventions
-        self.init_vit_weights()
-
-        # Special initialization for CLS token and positional embeddings
+        # Initialize special tokens
         nn.init.trunc_normal_(self.cls_token.cls_token, std=0.02)
         nn.init.trunc_normal_(self.pos_embed.pos_embed, std=0.02)
 
@@ -205,23 +209,18 @@ class VisionEnergyTransformer(nn.Module, VisionModelMixin):  # type: ignore
         ----------
         x : Tensor
             Input images of shape (B, C, H, W).
-        return_features : bool, default=False
+        return_features : bool
             If True, return features instead of logits.
-        return_energy_info : bool, default=False
+        return_energy_info : bool
             If True, return energy information from ET blocks.
-        et_kwargs : dict, optional
+        et_kwargs : dict | None
             Additional arguments passed to Energy Transformer blocks.
 
         Returns
         -------
-        Union[Tensor, dict]
-            If return_energy_info is False:
-                - Tensor of shape (B, num_classes) if return_features is False
-                - Tensor of shape (B, embed_dim) if return_features is True
-            If return_energy_info is True:
-                - Dictionary with 'logits'/'features' and 'energy_info' keys
+        Tensor | dict
+            Logits, features, or dictionary with energy information.
         """
-        x.shape[0]
         et_kwargs = et_kwargs or {}
 
         # Validate input size
@@ -231,17 +230,17 @@ class VisionEnergyTransformer(nn.Module, VisionModelMixin):  # type: ignore
                 f"({self.img_size}, {self.img_size})"
             )
 
-        # 1. Patch embedding (ViT Step 1)
+        # 1. Patch embedding
         x = self.patch_embed(x)  # (B, N, D)
 
-        # 2. Prepend CLS token (ViT Step 2)
+        # 2. Prepend CLS token
         x = self.cls_token(x)  # (B, N+1, D)
 
-        # 3. Add positional embeddings (ViT Step 3)
+        # 3. Add positional embeddings
         x = self.pos_embed(x)  # (B, N+1, D)
         x = self.pos_drop(x)
 
-        # 4. Energy Transformer blocks (replaces ViT Transformer encoders)
+        # 4. Energy Transformer blocks
         energy_info: dict[str, Any] = {}
         if return_energy_info:
             block_energies = []
@@ -249,7 +248,6 @@ class VisionEnergyTransformer(nn.Module, VisionModelMixin):  # type: ignore
 
         for _i, et_block in enumerate(self.et_blocks):
             if return_energy_info:
-                # Get energy information from this block
                 result = et_block(
                     x, return_energy=True, return_trajectory=True, **et_kwargs
                 )
@@ -264,24 +262,21 @@ class VisionEnergyTransformer(nn.Module, VisionModelMixin):  # type: ignore
                 else:
                     x = result
             else:
-                # Standard forward pass
-                x = et_block(x, **et_kwargs)  # (B, N+1, D)
+                x = et_block(x, **et_kwargs)
 
         if return_energy_info:
             energy_info = {
                 "block_energies": block_energies,
                 "block_trajectories": block_trajectories,
-                "total_energy": (
-                    sum(block_energies) if block_energies else None
-                ),
+                "total_energy": sum(block_energies) if block_energies else None,
             }
 
-        # 5. Final layer normalization (ViT Step 4)
+        # 5. Final layer normalization
         x = self.norm(x)  # (B, N+1, D)
 
-        # 6. Extract features or classify (ViT Step 5)
+        # 6. Extract features or classify
         if return_features:
-            features = self.feature_head(x)  # (B, D)
+            features = x[:, 0]  # CLS token features
             if return_energy_info:
                 return {"features": features, "energy_info": energy_info}
             return features
@@ -291,120 +286,181 @@ class VisionEnergyTransformer(nn.Module, VisionModelMixin):  # type: ignore
                 return {"logits": logits, "energy_info": energy_info}
             return logits
 
-    def get_attention_maps(
-        self, x: Tensor, layer_idx: int | None = None
-    ) -> dict[str, Any]:
-        """Extract attention maps for visualization.
 
-        Note: This returns energy gradients rather than attention weights,
-        as Energy Transformers don't compute explicit attention matrices.
-
-        Parameters
-        ----------
-        x : Tensor
-            Input images of shape (B, C, H, W).
-        layer_idx : int, optional
-            Specific layer to extract from. If None, returns all layers.
-
-        Returns
-        -------
-        dict
-            Dictionary with attention-like information from energy gradients.
-        """
-        # This would require hooking into the energy computation
-        # For now, return a placeholder
-        return {
-            "message": "Energy-based attention maps require gradient analysis"
-        }
-
-    def freeze_patch_embed(self) -> None:
-        """Freeze patch embedding parameters for fine-tuning."""
-        for param in self.patch_embed.parameters():
-            param.requires_grad = False
-
-    def unfreeze_patch_embed(self) -> None:
-        """Unfreeze patch embedding parameters."""
-        for param in self.patch_embed.parameters():
-            param.requires_grad = True
-
-    def freeze_backbone(self) -> None:
-        """Freeze all parameters except classification head."""
-        for name, param in self.named_parameters():
-            if not name.startswith("head."):
-                param.requires_grad = False
-
-    def unfreeze_backbone(self) -> None:
-        """Unfreeze all parameters."""
-        for param in self.parameters():
-            param.requires_grad = True
+# Factory functions
 
 
-# Factory functions for standard configurations
-
-
-def viet_tiny_patch16_224(**kwargs: Any) -> VisionEnergyTransformer:
-    """ViET-Tiny with 16x16 patches on 224x224 images.
-
-    Parameters
-    ----------
-    **kwargs
-        Additional arguments passed to VisionEnergyTransformer.
-
-    Returns
-    -------
-    VisionEnergyTransformer
-        ViET-Tiny model instance.
-    """
-    config = create_model_config("tiny", **kwargs)
+def viet_tiny(**kwargs: Any) -> VisionEnergyTransformer:
+    """ViET-Tiny configuration."""
+    config: dict[str, Any] = dict(
+        embed_dim=192,
+        depth=12,
+        num_heads=3,
+        head_dim=64,
+        hopfield_hidden_dim=768,  # 4x embed_dim
+        et_steps=4,
+        et_alpha=0.125,
+    )
+    config.update(kwargs)
     return VisionEnergyTransformer(**config)
 
 
-def viet_small_patch16_224(**kwargs: Any) -> VisionEnergyTransformer:
-    """ViET-Small with 16x16 patches on 224x224 images.
-
-    Parameters
-    ----------
-    **kwargs
-        Additional arguments passed to VisionEnergyTransformer.
-
-    Returns
-    -------
-    VisionEnergyTransformer
-        ViET-Small model instance.
-    """
-    config = create_model_config("small", **kwargs)
+def viet_small(**kwargs: Any) -> VisionEnergyTransformer:
+    """ViET-Small configuration."""
+    config: dict[str, Any] = dict(
+        embed_dim=384,
+        depth=12,
+        num_heads=6,
+        head_dim=64,
+        hopfield_hidden_dim=1536,  # 4x embed_dim
+        et_steps=4,
+        et_alpha=0.125,
+    )
+    config.update(kwargs)
     return VisionEnergyTransformer(**config)
 
 
-def viet_base_patch16_224(**kwargs: Any) -> VisionEnergyTransformer:
-    """ViET-Base with 16x16 patches on 224x224 images.
-
-    Parameters
-    ----------
-    **kwargs
-        Additional arguments passed to VisionEnergyTransformer.
-
-    Returns
-    -------
-    VisionEnergyTransformer
-        ViET-Base model instance.
-    """
-    config = create_model_config("base", **kwargs)
+def viet_base(**kwargs: Any) -> VisionEnergyTransformer:
+    """ViET-Base configuration."""
+    config: dict[str, Any] = dict(
+        embed_dim=768,
+        depth=12,
+        num_heads=12,
+        head_dim=64,
+        hopfield_hidden_dim=3072,  # 4x embed_dim
+        et_steps=4,
+        et_alpha=0.125,
+    )
+    config.update(kwargs)
     return VisionEnergyTransformer(**config)
 
 
-def viet_large_patch16_224(**kwargs: Any) -> VisionEnergyTransformer:
-    """ViET-Large with 16x16 patches on 224x224 images.
+def viet_large(**kwargs: Any) -> VisionEnergyTransformer:
+    """ViET-Large configuration."""
+    config: dict[str, Any] = dict(
+        embed_dim=1024,
+        depth=24,
+        num_heads=16,
+        head_dim=64,
+        hopfield_hidden_dim=4096,  # 4x embed_dim
+        et_steps=4,
+        et_alpha=0.125,
+    )
+    config.update(kwargs)
+    return VisionEnergyTransformer(**config)
 
-    Parameters
-    ----------
-    **kwargs
-        Additional arguments passed to VisionEnergyTransformer.
 
-    Returns
-    -------
-    VisionEnergyTransformer
-        ViET-Large model instance.
-    """
-    config = create_model_config("large", **kwargs)
+# CIFAR-specific configurations
+
+
+def viet_tiny_cifar(
+    num_classes: int = 100, **kwargs: Any
+) -> VisionEnergyTransformer:
+    """ViET-Tiny for CIFAR datasets."""
+    config: dict[str, Any] = dict(
+        img_size=32,
+        patch_size=4,
+        in_chans=3,
+        num_classes=num_classes,
+        embed_dim=192,
+        depth=12,
+        num_heads=3,
+        head_dim=64,
+        hopfield_hidden_dim=768,
+        et_steps=4,
+        et_alpha=0.125,
+        drop_rate=0.1,
+    )
+    config.update(kwargs)
+    return VisionEnergyTransformer(**config)
+
+
+def viet_small_cifar(
+    num_classes: int = 100, **kwargs: Any
+) -> VisionEnergyTransformer:
+    """ViET-Small for CIFAR datasets."""
+    config: dict[str, Any] = dict(
+        img_size=32,
+        patch_size=4,
+        in_chans=3,
+        num_classes=num_classes,
+        embed_dim=384,
+        depth=12,
+        num_heads=6,
+        head_dim=64,
+        hopfield_hidden_dim=1536,
+        et_steps=4,
+        et_alpha=0.125,
+        drop_rate=0.1,
+    )
+    config.update(kwargs)
+    return VisionEnergyTransformer(**config)
+
+
+# Shallow CIFAR configurations for testing
+
+
+def viet_2l_cifar(
+    num_classes: int = 100, **kwargs: Any
+) -> VisionEnergyTransformer:
+    """Vision Energy Transformer with only 2 layers for CIFAR datasets."""
+    config: dict[str, Any] = dict(
+        img_size=32,
+        patch_size=4,
+        in_chans=3,
+        num_classes=num_classes,
+        embed_dim=192,
+        depth=2,  # Shallow!
+        num_heads=8,
+        head_dim=64,
+        hopfield_hidden_dim=576,  # 3x embed_dim
+        et_steps=6,
+        et_alpha=10.0,
+        drop_rate=0.1,
+    )
+    config.update(kwargs)
+    return VisionEnergyTransformer(**config)
+
+
+def viet_4l_cifar(
+    num_classes: int = 100, **kwargs: Any
+) -> VisionEnergyTransformer:
+    """Vision Energy Transformer with 4 layers for CIFAR datasets."""
+    config: dict[str, Any] = dict(
+        img_size=32,
+        patch_size=4,
+        in_chans=3,
+        num_classes=num_classes,
+        embed_dim=192,
+        depth=4,
+        num_heads=8,
+        head_dim=64,
+        hopfield_hidden_dim=576,
+        et_steps=5,
+        et_alpha=5.0,
+        drop_rate=0.1,
+    )
+    config.update(kwargs)
+    return VisionEnergyTransformer(**config)
+
+
+def viet_6l_cifar(
+    num_classes: int = 100, **kwargs: Any
+) -> VisionEnergyTransformer:
+    """Vision Energy Transformer with 6 layers for CIFAR datasets."""
+    config: dict[str, Any] = dict(
+        img_size=32,
+        patch_size=4,
+        in_chans=3,
+        num_classes=num_classes,
+        embed_dim=192,
+        depth=6,
+        num_heads=8,
+        head_dim=64,
+        hopfield_hidden_dim=576,
+        et_steps=4,
+        et_alpha=2.5,
+        drop_rate=0.1,
+    )
+    config.update(kwargs)
     return VisionEnergyTransformer(**config)
