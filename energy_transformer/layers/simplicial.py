@@ -220,7 +220,7 @@ class SimplexGenerator(ABC):
         self,
         num_vertices: int,
         max_dim: int,
-        budget: int,
+        budget: float,
         dim_weights: dict[int, float] | None = None,
     ) -> list[list[int]]:
         """Generate simplices according to the specific strategy.
@@ -231,8 +231,8 @@ class SimplexGenerator(ABC):
             Number of vertices in the complex.
         max_dim : int
             Maximum simplex dimension to generate.
-        budget : int
-            Edge budget for generation.
+        budget : float
+            Edge budget for generation (as fraction if <=1, or absolute count).
         dim_weights : dict[int, float] | None
             Optional dimension weights.
 
@@ -251,7 +251,7 @@ class RandomSimplexGenerator(SimplexGenerator):
         self,
         num_vertices: int,
         max_dim: int,
-        budget: int,
+        budget: float,
         dim_weights: dict[int, float] | None = None,
     ) -> list[list[int]]:
         """Generate random simplices within budget.
@@ -269,9 +269,18 @@ class RandomSimplexGenerator(SimplexGenerator):
             num_vertices, max_dim, dim_weights
         )
 
+        # Convert budget fraction to integer edge count if needed
+        if 0 < budget <= 1.0:
+            edge_budget = int(budget * num_vertices * (num_vertices - 1) // 2)
+        else:
+            edge_budget = int(budget)
+
+        if edge_budget < 1:
+            raise ValueError("Budget too small – would generate empty complex.")
+
         # Allocate budget to generate simplices
         simplices, remaining = SimplexBudgetManager.allocate_budget(
-            budget, dim_weights, candidates_by_size
+            edge_budget, dim_weights, candidates_by_size
         )
 
         # Use remaining budget for edges if available
@@ -342,14 +351,14 @@ class TopologyAwareSimplexGenerator(SimplexGenerator):
         self,
         num_vertices: int,
         max_dim: int,
-        budget: int,
+        budget: float,
         dim_weights: dict[int, float] | None = None,
     ) -> list[list[int]]:
         """Generate topology-aware simplices.
 
         Uses k-NN for edges and optionally Delaunay triangulation
         for higher-order simplices. The budget parameter is interpreted
-        as a fraction for subsampling if needed.
+        as a fraction (0-1) for subsampling the generated simplices.
         """
         if len(self.coordinates) != num_vertices:
             raise ValueError(
@@ -537,12 +546,9 @@ def _autogen_simps(
     if isinstance(generator, TopologyAwareSimplexGenerator):
         simplices = generator.generate(num_vertices, max_dim, twiddle)
     else:
-        # For random generation, convert twiddle to edge budget
-        budget = int(twiddle * num_vertices * (num_vertices - 1) // 2)
-        if budget < 1:
-            raise ValueError("Budget too small – would generate empty complex.")
+        # For random generation, twiddle is used as budget fraction
         simplices = generator.generate(
-            num_vertices, max_dim, budget, dim_weights
+            num_vertices, max_dim, twiddle, dim_weights
         )
 
     if not simplices:
