@@ -1,42 +1,50 @@
-#!/usr/bin/env python3
 """Demonstrate topology-aware simplex generation."""
 
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.patches import Polygon  # Import Polygon from correct module
 
-from energy_transformer.layers.simplicial import _topology_aware_simps
+from energy_transformer.layers.simplicial import (
+    TopologyAwareSimplexGenerator,
+)
+
+# Type alias for clarity
+Coordinate = tuple[int, int]
+Simplex = list[int]
 
 
-def visualize_topology(grid_size=8):
+def visualize_topology(grid_size: int = 8) -> None:
     """Visualize topology-aware vs random simplices."""
     # Generate coordinates
-    coords = [(i, j) for i in range(grid_size) for j in range(grid_size)]
+    coords: list[Coordinate] = [
+        (i, j) for i in range(grid_size) for j in range(grid_size)
+    ]
     num_patches = len(coords)
 
     # Topology-aware simplices
-    topo_simplices = _topology_aware_simps(
-        coordinates=coords,
-        k_neighbors=6,
-        include_delaunay=True,
+    generator = TopologyAwareSimplexGenerator(
+        coordinates=coords, k_neighbors=6, include_delaunay=True
+    )
+    topo_simplices = generator.generate(
+        num_vertices=num_patches,
         max_dim=2,
-        budget_fraction=0.15,
+        budget=0.15,  # budget_fraction
     )
 
-    # Random simplices (simplified)
     np.random.seed(42)
     n_random = len(topo_simplices)
-    random_simplices = []
+    random_simplices: list[Simplex] = []
 
     for _ in range(n_random // 2):
         # Random edge
         i, j = np.random.choice(num_patches, 2, replace=False)
-        random_simplices.append(sorted([i, j]))
+        random_simplices.append(sorted([int(i), int(j)]))
 
     for _ in range(n_random // 4):
         # Random triangle
         i, j, k = np.random.choice(num_patches, 3, replace=False)
-        random_simplices.append(sorted([i, j, k]))
+        random_simplices.append(sorted([int(i), int(j), int(k)]))
 
     # Plot
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
@@ -71,7 +79,7 @@ def visualize_topology(grid_size=8):
         triangles = [s for s in simplices if len(s) == 3]
         for tri in triangles:
             points = [coords[idx] for idx in tri]
-            triangle = plt.Polygon(
+            triangle = Polygon(
                 [(p[1], p[0]) for p in points],
                 facecolor="red",
                 alpha=0.15,
@@ -107,11 +115,13 @@ def visualize_topology(grid_size=8):
         ("Random", random_simplices),
     ]:
         edges = [s for s in simplices if len(s) == 2]
-        distances = []
+        distances: list[float] = []
 
         for edge in edges:
-            p1, p2 = np.array(coords[edge[0]]), np.array(coords[edge[1]])
-            distances.append(np.linalg.norm(p1 - p2))
+            coord1, coord2 = coords[edge[0]], coords[edge[1]]
+            p1_array = np.array(coord1)
+            p2_array = np.array(coord2)
+            distances.append(float(np.linalg.norm(p1_array - p2_array)))
 
         if distances:
             print(f"{name}:")
@@ -120,7 +130,7 @@ def visualize_topology(grid_size=8):
             print()
 
 
-def main():
+def main() -> None:
     """Run demonstration."""
     print("Topology-Aware Simplex Generation Demo")
     print("=" * 40)
