@@ -11,8 +11,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.amp import (
-    GradScaler,  # type: ignore[attr-defined]
-    autocast,  # type: ignore[attr-defined]
+    GradScaler,
+    autocast,
 )
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
