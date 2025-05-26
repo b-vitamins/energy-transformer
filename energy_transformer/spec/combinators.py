@@ -1,931 +1,1049 @@
-"""Combinators for composing Energy Transformer model specifications.
+"""Specification combinators for composing model architectures.
 
 This module provides composition operators for building complex model
-architectures from primitive specifications. The combinators handle
-dimension propagation, validation, and provide intuitive APIs for
-model construction.
+architectures from primitive specifications. Combinators handle dimension
+propagation, validation, and support various architectural patterns including
+sequential, parallel, conditional, and graph-based compositions.
 
-Design Principles:
-- Compositional: Complex models built from simple primitives
-- Type-safe: Comprehensive validation and error checking
-- Immutable: All combinators produce new specifications
-- Intuitive: Natural operators like >> and + for composition
-
-Example
--------
->>> model = seq(
-...     PatchEmbedSpec(img_size=224, patch_size=16, embed_dim=768),
-...     CLSTokenSpec(),
-...     repeat(ETSpec(steps=4), 12),
-...     LayerNormSpec()
-... )
+The combinator system enables building sophisticated architectures through
+simple, composable operations while maintaining type safety and validation.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
-from typing import Any, ClassVar
+from typing import Any, Literal, TypeVar, overload
 
-from .primitives import EmbeddingDim, Spec, TokenCount, ValidationError
+from .primitives import Context, Spec
 
 __all__ = [
-    "SequentialSpec",
-    "ParallelSpec",
+    "Sequential",
+    "Parallel",
+    "Conditional",
+    "Residual",
+    "Graph",
+    "Loop",
+    "Switch",
     "seq",
     "parallel",
-    "repeat",
-    # Aliases
-    "Seq",
-    "Parallel",
-    "Repeat",
+    "residual",
+    "cond",
+    "loop",
+    "switch",
+    "graph",
+    "Identity",
+    "Lambda",
+    "transformer_block",
+    "multi_scale",
+    "mixture_of_experts",
 ]
+
+T = TypeVar("T", bound=Spec)
+S = TypeVar("S", bound=Spec)
 
 
 @dataclass(frozen=True)
-class SequentialSpec(Spec):
+class Sequential(Spec):
     """Sequential composition of specifications.
 
-    Executes specifications in order, propagating dimensions and token counts
-    through the pipeline. This is the primary combinator for building
-    transformer architectures.
+    Executes specifications in order, with outputs flowing from one
+    specification to the next. Supports operator chaining and provides
+    full sequence functionality including indexing and slicing.
 
     Parameters
     ----------
-    parts : tuple[Spec, ...], default=()
-        The specifications to execute in sequence.
-
-    Examples
-    --------
-    >>> # Basic usage
-    >>> seq(PatchEmbedSpec(...), CLSTokenSpec(), ETSpec())
-
-    >>> # Using operators
-    >>> PatchEmbedSpec(...) >> CLSTokenSpec() >> ETSpec()
-
-    >>> # Complex composition
-    >>> seq(
-    ...     PatchEmbedSpec(img_size=224, patch_size=16, embed_dim=768),
-    ...     PosEmbedSpec(include_cls=True),
-    ...     CLSTokenSpec(),
-    ...     repeat(ETSpec(steps=4), 12),
-    ...     LayerNormSpec()
-    ... )
+    parts : tuple[Spec, ...]
+        Specifications to execute in sequence
     """
 
     parts: tuple[Spec, ...] = field(default_factory=tuple)
 
-    _spec_type: ClassVar[str] = "sequential"
-
-    def _validate_parameters(self) -> None:
-        """Validate sequential specification parameters.
-
-        Raises
-        ------
-        ValidationError
-            If the sequence contains invalid specifications.
-        """
-        # Validate that all parts are specs
-        for i, part in enumerate(self.parts):
-            if not isinstance(part, Spec):
-                raise ValidationError(
-                    f"Part {i} is not a Spec: {type(part).__name__}",
-                    spec_type=self.__class__.__name__,
-                    suggestion="Ensure all parts are Spec instances",
-                )
-
-    def __rshift__(self, other: Any) -> SequentialSpec:
-        """Append a specification using the >> operator.
+    def __rshift__(self, other: Spec) -> Sequential:
+        """Chain specs using >> operator.
 
         Parameters
         ----------
-        other : Any
-            The specification to append.
+        other : Spec
+            Specification to append
 
         Returns
         -------
-        SequentialSpec
-            New sequential spec with the appended specification.
-
-        Raises
-        ------
-        TypeError
-            If other cannot be appended to SequentialSpec.
-
-        Examples
-        --------
-        >>> patch_embed = PatchEmbedSpec(...)
-        >>> cls_token = CLSTokenSpec()
-        >>> model = patch_embed >> cls_token
+        Sequential
+            New sequence with appended spec
         """
-        if isinstance(other, SequentialSpec):
-            return SequentialSpec(parts=self.parts + other.parts)
-        elif isinstance(other, Spec):
-            return SequentialSpec(parts=self.parts + (other,))
-        else:
-            raise TypeError(
-                f"Cannot append {type(other).__name__} to SequentialSpec. "
-                f"Expected Spec or SequentialSpec."
-            )
+        if isinstance(other, Sequential):
+            return Sequential(parts=self.parts + other.parts)
+        return Sequential(parts=self.parts + (other,))
 
-    def __add__(self, other: Any) -> SequentialSpec:
-        """Concatenate specifications using the + operator.
+    def __lshift__(self, other: Spec) -> Sequential:
+        """Prepend spec using << operator.
 
         Parameters
         ----------
-        other : Any
-            The specification to concatenate.
+        other : Spec
+            Specification to prepend
 
         Returns
         -------
-        SequentialSpec
-            New sequential spec with the concatenated specification.
-
-        Examples
-        --------
-        >>> seq1 = seq(PatchEmbedSpec(...), CLSTokenSpec())
-        >>> seq2 = seq(ETSpec(), LayerNormSpec())
-        >>> combined = seq1 + seq2
+        Sequential
+            New sequence with prepended spec
         """
-        return self.__rshift__(other)
+        if isinstance(other, Sequential):
+            return Sequential(parts=other.parts + self.parts)
+        return Sequential(parts=(other,) + self.parts)
 
-    def __len__(self) -> int:
-        """Get the number of parts in the sequence.
-
-        Returns
-        -------
-        int
-            Number of parts in the sequence.
-        """
-        return len(self.parts)
-
-    def __getitem__(self, idx: int | slice) -> Spec | SequentialSpec:
-        """Get a part or slice of parts from the sequence.
+    def __or__(self, other: Spec) -> Parallel:
+        """Create parallel composition using | operator.
 
         Parameters
         ----------
-        idx : int or slice
-            Index or slice to retrieve.
+        other : Spec
+            Specification to run in parallel
 
         Returns
         -------
-        Spec or SequentialSpec
-            The requested part or a new SequentialSpec with sliced parts.
+        Parallel
+            Parallel composition of self and other
+        """
+        return Parallel(branches=(self, other))
 
-        Examples
-        --------
-        >>> model = seq(PatchEmbedSpec(...), CLSTokenSpec(), ETSpec())
-        >>> first_part = model[0]  # PatchEmbedSpec
-        >>> sub_model = model[1:]  # SequentialSpec with CLSTokenSpec & ETSpec
+    def __getitem__(self, idx: int | slice) -> Spec | Sequential:
+        """Index or slice the sequence.
+
+        Parameters
+        ----------
+        idx : int | slice
+            Index or slice to access
+
+        Returns
+        -------
+        Spec | Sequential
+            Single spec or subsequence
         """
         if isinstance(idx, slice):
-            return SequentialSpec(parts=self.parts[idx])
+            return Sequential(parts=self.parts[idx])
         return self.parts[idx]
 
+    def __len__(self) -> int:
+        """Return number of parts."""
+        return len(self.parts)
+
     def __iter__(self) -> Iterator[Spec]:
-        """Iterate over parts in the sequence.
-
-        Returns
-        -------
-        Iterator[Spec]
-            Iterator over the parts in the sequence.
-
-        Examples
-        --------
-        >>> model = seq(PatchEmbedSpec(...), CLSTokenSpec(), ETSpec())
-        >>> for part in model:
-        ...     print(part.__class__.__name__)
-        """
+        """Iterate over parts."""
         return iter(self.parts)
 
-    def __contains__(self, item: Any) -> bool:
-        """Check if an item is in the sequence.
+    def children(self) -> list[Spec]:
+        """Return all parts as children."""
+        return list(self.parts)
+
+    def validate(self, context: Context) -> list[str]:
+        """Validate sequence with context propagation.
 
         Parameters
         ----------
-        item : Any
-            Item to check for.
+        context : Context
+            Initial context
 
         Returns
         -------
-        bool
-            True if item is in the sequence, False otherwise.
-
-        Examples
-        --------
-        >>> model = seq(PatchEmbedSpec(...), CLSTokenSpec())
-        >>> cls_spec = CLSTokenSpec()
-        >>> cls_spec in model  # False (different instance)
+        list[str]
+            Validation issues
         """
-        return item in self.parts
+        issues = super().validate(context)
+        current_context = context
 
-    def get_embedding_dim(self) -> EmbeddingDim | None:
-        """Get the final embedding dimension from the sequence.
-
-        Finds the last component that defines an embedding dimension.
-
-        Returns
-        -------
-        EmbeddingDim | None
-            The final embedding dimension, or None if not determinable.
-
-        Examples
-        --------
-        >>> model = seq(PatchEmbedSpec(embed_dim=768), ETSpec())
-        >>> model.get_embedding_dim()  # 768
-        """
-        if not self.parts:
-            return None
-
-        # Find the last component that defines embedding_dim
-        for part in reversed(self.parts):
-            dim = part.get_embedding_dim()
-            if dim is not None:
-                return dim
-
-        return None
-
-    def get_token_count(self) -> TokenCount | None:
-        """Get the final token count from the sequence.
-
-        Computes the token count by propagating through all parts,
-        accounting for both base token counts and added tokens.
-
-        Returns
-        -------
-        TokenCount | None
-            The final token count, or None if not determinable.
-
-        Examples
-        --------
-        >>> model = seq(
-        ...     PatchEmbedSpec(img_size=224, patch_size=16),  # 196 tokens
-        ...     CLSTokenSpec()  # +1 token
-        ... )
-        >>> model.get_token_count()  # 197
-        """
-        if not self.parts:
-            return None
-
-        token_count: TokenCount | None = None
-        for part in self.parts:
-            # Update base token count if this part defines one
-            part_count = part.get_token_count()
-            if part_count is not None:
-                token_count = part_count
-
-            # Add any tokens this part contributes
-            if token_count is not None:
-                token_count += part.adds_tokens()
-
-        return token_count
-
-    def modifies_tokens(self) -> bool:
-        """Check if any part modifies tokens.
-
-        Returns
-        -------
-        bool
-            True if any part modifies tokens.
-        """
-        return any(part.modifies_tokens() for part in self.parts)
-
-    def validate(
-        self,
-        upstream_embedding_dim: EmbeddingDim | None = None,
-        upstream_token_count: TokenCount | None = None,
-    ) -> None:
-        """Validate the sequence and all its parts.
-
-        Validates each part in order, propagating dimensions and token counts
-        through the sequence to ensure compatibility.
-
-        Parameters
-        ----------
-        upstream_embedding_dim : EmbeddingDim | None, optional
-            Embedding dimension from upstream specs.
-        upstream_token_count : TokenCount | None, optional
-            Token count from upstream specs.
-
-        Raises
-        ------
-        ValidationError
-            If any part in the sequence fails validation or if dimensions
-            are incompatible.
-
-        Examples
-        --------
-        >>> model = seq(PatchEmbedSpec(...), ETSpec())
-        >>> model.validate()  # Raises ValidationError if invalid
-        """
-        # First validate our own parameters
-        self._validate_parameters()
-
-        current_dim = upstream_embedding_dim
-        current_count = upstream_token_count
-
-        # Validate each part with propagating dimensions
         for i, part in enumerate(self.parts):
-            try:
-                part.validate(current_dim, current_count)
-            except ValidationError as e:
-                # Add context about which part failed
-                raise ValidationError(
-                    f"Part {i} ({part.__class__.__name__}) failed "
-                    f"validation: {e}",
-                    spec_type=self.__class__.__name__,
-                ) from e
+            part_issues = part.validate(current_context)
+            issues.extend(f"Part {i}: {issue}" for issue in part_issues)
+            current_context = part.apply_context(current_context)
 
-            # Update context for next part
-            part_dim = part.get_embedding_dim()
-            if part_dim is not None:
-                current_dim = part_dim
+        return issues
 
-            part_count = part.get_token_count()
-            if part_count is not None:
-                current_count = part_count
-
-            # Account for added tokens
-            if current_count is not None:
-                current_count += part.adds_tokens()
-
-    def estimate_params(
-        self, context_embedding_dim: EmbeddingDim | None = None
-    ) -> int:
-        """Estimate total parameter count for the sequence.
+    def apply_context(self, context: Context) -> Context:
+        """Apply all parts in sequence to context.
 
         Parameters
         ----------
-        context_embedding_dim : EmbeddingDim | None, optional
-            Initial embedding dimension context.
+        context : Context
+            Initial context
 
         Returns
         -------
-        int
-            Estimated total parameter count for all parts.
-
-        Examples
-        --------
-        >>> model = seq(PatchEmbedSpec(...), ETSpec())
-        >>> model.estimate_params()  # Total parameters across all parts
+        Context
+            Final context after all parts
         """
-        total_params = 0
-        current_dim = context_embedding_dim
-
         for part in self.parts:
-            total_params += part.estimate_params(current_dim)
-            # Update dimension context for next part
-            part_dim = part.get_embedding_dim()
-            if part_dim is not None:
-                current_dim = part_dim
-
-        return total_params
-
-    def find_parts_by_type(self, spec_type: type[Spec]) -> list[Spec]:
-        """Find all parts of a specific type in the sequence.
-
-        Parameters
-        ----------
-        spec_type : type[Spec]
-            The type of spec to find.
-
-        Returns
-        -------
-        list[Spec]
-            List of parts matching the specified type.
-
-        Examples
-        --------
-        >>> model = seq(PatchEmbedSpec(...), ETSpec(), ETSpec())
-        >>> et_blocks = model.find_parts_by_type(ETSpec)
-        >>> len(et_blocks)  # 2
-        """
-        return [part for part in self.parts if isinstance(part, spec_type)]
-
-    def count_parts_by_type(self, spec_type: type[Spec]) -> int:
-        """Count parts of a specific type in the sequence.
-
-        Parameters
-        ----------
-        spec_type : type[Spec]
-            The type of spec to count.
-
-        Returns
-        -------
-        int
-            Number of parts of the specified type.
-
-        Examples
-        --------
-        >>> model = seq(PatchEmbedSpec(...), repeat(ETSpec(), 12))
-        >>> model.count_parts_by_type(ETSpec)  # 12
-        """
-        return len(self.find_parts_by_type(spec_type))
+            context = part.apply_context(context)
+        return context
 
 
 @dataclass(frozen=True)
-class ParallelSpec(Spec):
-    """Parallel composition of specifications.
+class Parallel(Spec):
+    """Parallel composition with flexible merging strategies.
 
-    Executes specifications in parallel and combines their outputs.
-    Useful for branching architectures, ensemble methods, or
-    multi-scale processing.
+    Executes multiple specifications in parallel and combines their
+    outputs according to the specified merge strategy. Supports
+    weighted combinations and dimension-specific merging.
 
     Parameters
     ----------
-    branches : tuple[Spec, ...], default=()
-        The parallel branches to execute.
-    join_mode : {"concat", "add", "multiply"}, default="concat"
-        How to combine branch outputs.
-
-    Examples
-    --------
-    >>> # Ensemble of different ET configurations
-    >>> ensemble = parallel(
-    ...     ETSpec(steps=4, alpha=0.1),
-    ...     ETSpec(steps=8, alpha=0.2),
-    ...     join_mode="add"
-    ... )
-
-    >>> # Multi-scale processing
-    >>> multi_scale = parallel(
-    ...     seq(PatchEmbedSpec(patch_size=8), ETSpec()),
-    ...     seq(PatchEmbedSpec(patch_size=16), ETSpec()),
-    ...     join_mode="concat"
-    ... )
+    branches : tuple[Spec, ...]
+        Specifications to execute in parallel
+    merge : str
+        How to combine outputs: "concat", "add", "multiply", "mean", "max"
+    merge_dim : str, optional
+        Dimension name for merge validation
+    weights : tuple[float, ...], optional
+        Weights for weighted merge strategies
     """
 
     branches: tuple[Spec, ...] = field(default_factory=tuple)
-    join_mode: str = "concat"
+    merge: Literal["concat", "add", "multiply", "mean", "max"] = "concat"
+    merge_dim: str | None = None
+    weights: tuple[float, ...] | None = None
 
-    _spec_type: ClassVar[str] = "parallel"
-
-    def _validate_parameters(self) -> None:
-        """Validate parallel specification parameters.
-
-        Raises
-        ------
-        ValidationError
-            If branches are empty, join_mode is invalid, or branches
-            are incompatible.
-        """
-        # Validate join mode
-        valid_modes = {"concat", "add", "multiply"}
-        if self.join_mode not in valid_modes:
-            raise ValidationError(
-                f"Invalid join_mode '{self.join_mode}'. "
-                f"Must be one of: {', '.join(valid_modes)}",
-                spec_type=self.__class__.__name__,
-                suggestion="Use 'concat', 'add', or 'multiply'",
-            )
-
-        # Validate branches
-        if not self.branches:
-            raise ValidationError(
-                "ParallelSpec must have at least one branch",
-                spec_type=self.__class__.__name__,
-                suggestion="Add at least one Spec to the branches",
-            )
-
-        # Validate that all branches are specs
-        for i, branch in enumerate(self.branches):
-            if not isinstance(branch, Spec):
-                raise ValidationError(
-                    f"Branch {i} is not a Spec: {type(branch).__name__}",
-                    spec_type=self.__class__.__name__,
-                    suggestion="Ensure all branches are Spec instances",
-                )
-
-    def __add__(self, other: Any) -> ParallelSpec:
-        """Add a branch using the + operator.
+    def __or__(self, other: Spec) -> Parallel:
+        """Add branch using | operator.
 
         Parameters
         ----------
-        other : Any
-            The specification to add as a branch.
+        other : Spec
+            Specification to add as branch
 
         Returns
         -------
-        ParallelSpec
-            New parallel spec with the added branch.
-
-        Raises
-        ------
-        TypeError
-            If other cannot be added to ParallelSpec.
-
-        Examples
-        --------
-        >>> branch1 = ETSpec(steps=4)
-        >>> branch2 = ETSpec(steps=8)
-        >>> ensemble = parallel(branch1) + branch2
+        Parallel
+            New parallel with added branch
         """
-        if (
-            isinstance(other, ParallelSpec)
-            and other.join_mode == self.join_mode
-        ):
-            return ParallelSpec(
+        if isinstance(other, Parallel) and other.merge == self.merge:
+            return Parallel(
                 branches=self.branches + other.branches,
-                join_mode=self.join_mode,
+                merge=self.merge,
+                merge_dim=self.merge_dim,
+                weights=self.weights,
             )
-        elif isinstance(other, Spec):
-            return ParallelSpec(
-                branches=self.branches + (other,), join_mode=self.join_mode
-            )
-        else:
-            raise TypeError(
-                f"Cannot add {type(other).__name__} to ParallelSpec. "
-                f"Expected Spec or compatible ParallelSpec."
-            )
-
-    def __len__(self) -> int:
-        """Get the number of branches.
-
-        Returns
-        -------
-        int
-            Number of branches in the parallel spec.
-        """
-        return len(self.branches)
-
-    def __getitem__(self, idx: int | slice) -> Spec | ParallelSpec:
-        """Get a branch or slice of branches.
-
-        Parameters
-        ----------
-        idx : int or slice
-            Index or slice to retrieve.
-
-        Returns
-        -------
-        Spec or ParallelSpec
-            The requested branch or a new ParallelSpec with sliced branches.
-
-        Examples
-        --------
-        >>> ensemble = parallel(ETSpec(), ETSpec(), ETSpec())
-        >>> first_branch = ensemble[0]
-        >>> sub_ensemble = ensemble[1:]
-        """
-        if isinstance(idx, slice):
-            return ParallelSpec(
-                branches=self.branches[idx], join_mode=self.join_mode
-            )
-        return self.branches[idx]
-
-    def __iter__(self) -> Iterator[Spec]:
-        """Iterate over branches.
-
-        Returns
-        -------
-        Iterator[Spec]
-            Iterator over the branches.
-
-        Examples
-        --------
-        >>> ensemble = parallel(ETSpec(), ETSpec())
-        >>> for branch in ensemble:
-        ...     print(branch.__class__.__name__)
-        """
-        return iter(self.branches)
-
-    def get_embedding_dim(self) -> EmbeddingDim | None:
-        """Get the output embedding dimension based on join mode.
-
-        Returns
-        -------
-        EmbeddingDim | None
-            The output embedding dimension, or None if not determinable.
-
-        Notes
-        -----
-        - For "concat": Sum of all branch embedding dimensions
-        - For "add"/"multiply": All branches must have same dimension
-
-        Examples
-        --------
-        >>> # Concatenation case
-        >>> branches = parallel(
-        ...     seq(PatchEmbedSpec(embed_dim=384)),
-        ...     seq(PatchEmbedSpec(embed_dim=512)),
-        ...     join_mode="concat"
-        ... )
-        >>> branches.get_embedding_dim()  # 896 (384 + 512)
-        """
-        if not self.branches:
-            return None
-
-        dims = [b.get_embedding_dim() for b in self.branches]
-
-        if self.join_mode == "concat":
-            # Sum dimensions when concatenating
-            if None in dims:
-                return None
-            valid_dims = [d for d in dims if d is not None]
-            return sum(valid_dims) if valid_dims else None
-        else:
-            # For add and multiply, all dimensions must match
-            non_none_dims = [d for d in dims if d is not None]
-            if not non_none_dims:
-                return None
-            if len(set(non_none_dims)) != 1:
-                return None  # Dimensions don't match
-            return non_none_dims[0]
-
-    def modifies_tokens(self) -> bool:
-        """Check if any branch modifies tokens.
-
-        Returns
-        -------
-        bool
-            True if any branch modifies tokens.
-        """
-        return any(branch.modifies_tokens() for branch in self.branches)
-
-    def validate(
-        self,
-        upstream_embedding_dim: EmbeddingDim | None = None,
-        upstream_token_count: TokenCount | None = None,
-    ) -> None:
-        """Validate the parallel spec and all its branches.
-
-        Parameters
-        ----------
-        upstream_embedding_dim : EmbeddingDim | None, optional
-            Embedding dimension from upstream specs.
-        upstream_token_count : TokenCount | None, optional
-            Token count from upstream specs.
-
-        Raises
-        ------
-        ValidationError
-            If validation fails or branches are incompatible.
-
-        Examples
-        --------
-        >>> ensemble = parallel(ETSpec(), ETSpec(), join_mode="add")
-        >>> ensemble.validate(upstream_embedding_dim=768)
-        """
-        # First validate our own parameters
-        self._validate_parameters()
-
-        # Validate each branch independently
-        for i, branch in enumerate(self.branches):
-            try:
-                branch.validate(upstream_embedding_dim, upstream_token_count)
-            except ValidationError as e:
-                raise ValidationError(
-                    f"Branch {i} ({branch.__class__.__name__}) failed "
-                    f"validation: {e}",
-                    spec_type=self.__class__.__name__,
-                ) from e
-
-        # For add and multiply, verify dimensions are compatible
-        if self.join_mode in ["add", "multiply"]:
-            dims = [
-                b.get_embedding_dim()
-                for b in self.branches
-                if b.get_embedding_dim() is not None
-            ]
-            if len(set(dims)) > 1:
-                raise ValidationError(
-                    f"All branches must produce same embedding dimension "
-                    f"for join_mode='{self.join_mode}',"
-                    f"got dimensions: {dims}",
-                    spec_type=self.__class__.__name__,
-                    suggestion="Use 'concat' mode or ensure all branches "
-                    "have the same output dimension",
-                )
-
-    def estimate_params(
-        self, context_embedding_dim: EmbeddingDim | None = None
-    ) -> int:
-        """Estimate total parameter count for all branches.
-
-        Parameters
-        ----------
-        context_embedding_dim : EmbeddingDim | None, optional
-            Embedding dimension context for all branches.
-
-        Returns
-        -------
-        int
-            Estimated total parameter count for all branches.
-
-        Examples
-        --------
-        >>> ensemble = parallel(ETSpec(), ETSpec())
-        >>> ensemble.estimate_params(context_embedding_dim=768)
-        """
-        return sum(
-            branch.estimate_params(context_embedding_dim)
-            for branch in self.branches
+        return Parallel(
+            branches=self.branches + (other,),
+            merge=self.merge,
+            merge_dim=self.merge_dim,
+            weights=self.weights,
         )
 
-    def find_branches_by_type(self, spec_type: type[Spec]) -> list[Spec]:
-        """Find all branches of a specific type.
+    def children(self) -> list[Spec]:
+        """Return all branches as children."""
+        return list(self.branches)
+
+    def validate(self, context: Context) -> list[str]:
+        """Validate all branches and merge compatibility.
 
         Parameters
         ----------
-        spec_type : type[Spec]
-            The type of spec to find.
+        context : Context
+            Validation context
 
         Returns
         -------
-        list[Spec]
-            List of branches matching the specified type.
-
-        Examples
-        --------
-        >>> ensemble = parallel(ETSpec(), LayerNormSpec(), ETSpec())
-        >>> et_branches = ensemble.find_branches_by_type(ETSpec)
-        >>> len(et_branches)  # 2
+        list[str]
+            Validation issues
         """
-        return [
-            branch for branch in self.branches if isinstance(branch, spec_type)
-        ]
+        issues = super().validate(context)
 
+        for i, branch in enumerate(self.branches):
+            branch_issues = branch.validate(context)
+            issues.extend(f"Branch {i}: {issue}" for issue in branch_issues)
 
-def seq(*parts: Any) -> SequentialSpec:
-    """Create a sequential specification from multiple parts.
+        # Validate merge compatibility
+        if self.merge in ["add", "multiply", "mean", "max"]:
+            dims = []
+            for branch in self.branches:
+                branch_ctx = branch.apply_context(context.child())
+                if dim := branch_ctx.get_dim(self.merge_dim or "embed_dim"):
+                    dims.append(dim)
 
-    Combines specifications into a pipeline where outputs flow from
-    one part to the next. This is the primary way to build transformer
-    architectures.
+            if len(set(dims)) > 1:
+                issues.append(
+                    f"Incompatible dimensions for {self.merge} merge: {dims}"
+                )
 
-    Parameters
-    ----------
-    *parts : Any
-        Variable number of specifications to combine sequentially.
-
-    Returns
-    -------
-    SequentialSpec
-        A sequential specification combining all parts.
-
-    Raises
-    ------
-    TypeError
-        If any part is not a valid specification.
-
-    Examples
-    --------
-    >>> # Basic vision transformer
-    >>> model = seq(
-    ...     PatchEmbedSpec(img_size=224, patch_size=16, embed_dim=768),
-    ...     PosEmbedSpec(include_cls=True),
-    ...     CLSTokenSpec(),
-    ...     repeat(ETSpec(steps=4), 12),
-    ...     LayerNormSpec()
-    ... )
-
-    >>> # Can also use operator chaining
-    >>> model = (PatchEmbedSpec(...) >>
-    ...          CLSTokenSpec() >>
-    ...          ETSpec())
-    """
-    if not parts:
-        return SequentialSpec()
-
-    result_parts: list[Spec] = []
-    for i, part in enumerate(parts):
-        if isinstance(part, SequentialSpec):
-            # Flatten nested sequential specs
-            result_parts.extend(part.parts)
-        elif isinstance(part, Spec):
-            result_parts.append(part)
-        else:
-            raise TypeError(
-                f"Part {i} is not a Spec: {type(part).__name__}. "
-                f"Expected Spec instance."
+        # Validate weights
+        if self.weights and len(self.weights) != len(self.branches):
+            issues.append(
+                f"Weight count ({len(self.weights)}) doesn't match "
+                f"branch count ({len(self.branches)})"
             )
 
-    return SequentialSpec(parts=tuple(result_parts))
+        return issues
 
 
-def parallel(*branches: Any, join_mode: str = "concat") -> ParallelSpec:
-    """Create a parallel specification from multiple branches.
+@dataclass(frozen=True)
+class Conditional(Spec):
+    """Conditional specification execution.
 
-    Combines specifications to execute in parallel, with outputs
-    combined according to the specified join mode.
+    Executes different specifications based on a runtime condition
+    evaluated against the context. Supports dynamic architecture
+    selection and optional fallback branches.
 
     Parameters
     ----------
-    *branches : Any
-        Variable number of specifications to combine in parallel.
-    join_mode : {"concat", "add", "multiply"}, default="concat"
-        How to combine branch outputs.
+    condition : Callable[[Context], bool]
+        Function to evaluate condition
+    if_true : Spec
+        Specification to use if condition is true
+    if_false : Spec, optional
+        Specification to use if condition is false
+    """
+
+    condition: Callable[[Context], bool]
+    if_true: Spec
+    if_false: Spec | None = None
+
+    def children(self) -> list[Spec]:
+        """Return both branches as children."""
+        children = [self.if_true]
+        if self.if_false:
+            children.append(self.if_false)
+        return children
+
+    def validate(self, context: Context) -> list[str]:
+        """Validate the branch that would execute.
+
+        Parameters
+        ----------
+        context : Context
+            Validation context
+
+        Returns
+        -------
+        list[str]
+            Validation issues
+        """
+        issues = super().validate(context)
+
+        if self.condition(context):
+            issues.extend(self.if_true.validate(context))
+        elif self.if_false:
+            issues.extend(self.if_false.validate(context))
+
+        return issues
+
+    def apply_context(self, context: Context) -> Context:
+        """Apply the appropriate branch to context.
+
+        Parameters
+        ----------
+        context : Context
+            Input context
+
+        Returns
+        -------
+        Context
+            Updated context
+        """
+        if self.condition(context):
+            return self.if_true.apply_context(context)
+        elif self.if_false:
+            return self.if_false.apply_context(context)
+        return context
+
+
+@dataclass(frozen=True)
+class Residual(Spec):
+    """Residual connection with flexible merging.
+
+    Wraps a specification with a residual connection, supporting
+    various merge strategies including gating and scaling.
+
+    Parameters
+    ----------
+    inner : Spec
+        Specification to wrap with residual
+    merge : str
+        Merge strategy: "add", "concat", "gate"
+    gate_dim : str, optional
+        Dimension for gating (required for gate merge)
+    scale : float
+        Scale factor for residual branch
+    """
+
+    inner: Spec
+    merge: Literal["add", "concat", "gate"] = "add"
+    gate_dim: str | None = None
+    scale: float = 1.0
+
+    def children(self) -> list[Spec]:
+        """Return inner spec as child."""
+        return [self.inner]
+
+    def validate(self, context: Context) -> list[str]:
+        """Validate inner spec and merge configuration.
+
+        Parameters
+        ----------
+        context : Context
+            Validation context
+
+        Returns
+        -------
+        list[str]
+            Validation issues
+        """
+        issues = super().validate(context)
+        issues.extend(self.inner.validate(context))
+
+        if self.merge == "gate" and not self.gate_dim:
+            issues.append("Gate merge requires gate_dim")
+
+        if self.scale <= 0:
+            issues.append(f"Scale must be positive, got {self.scale}")
+
+        return issues
+
+
+@dataclass(frozen=True)
+class Graph(Spec):
+    """Graph-based composition for complex architectures.
+
+    Represents computation as a directed graph where nodes are
+    specifications and edges define data flow. Supports arbitrary
+    DAG architectures with optional edge transformations.
+
+    Parameters
+    ----------
+    nodes : dict[str, Spec]
+        Named specification nodes
+    edges : list[tuple[str, str, str | None]]
+        Edges as (source, target, transform)
+    inputs : list[str]
+        Input node names
+    outputs : list[str]
+        Output node names
+    """
+
+    nodes: dict[str, Spec] = field(default_factory=dict)
+    edges: list[tuple[str, str, str | None]] = field(default_factory=list)
+    inputs: list[str] = field(default_factory=list)
+    outputs: list[str] = field(default_factory=list)
+
+    def add_node(self, name: str, spec: Spec) -> Graph:
+        """Add a node to the graph.
+
+        Parameters
+        ----------
+        name : str
+            Node name
+        spec : Spec
+            Node specification
+
+        Returns
+        -------
+        Graph
+            New graph with added node
+        """
+        nodes = dict(self.nodes)
+        nodes[name] = spec
+        return Graph(
+            nodes=nodes,
+            edges=self.edges,
+            inputs=self.inputs,
+            outputs=self.outputs,
+        )
+
+    def add_edge(
+        self, from_node: str, to_node: str, transform: str | None = None
+    ) -> Graph:
+        """Add an edge to the graph.
+
+        Parameters
+        ----------
+        from_node : str
+            Source node name
+        to_node : str
+            Target node name
+        transform : str, optional
+            Edge transformation
+
+        Returns
+        -------
+        Graph
+            New graph with added edge
+        """
+        edges = list(self.edges)
+        edges.append((from_node, to_node, transform))
+        return Graph(
+            nodes=self.nodes,
+            edges=edges,
+            inputs=self.inputs,
+            outputs=self.outputs,
+        )
+
+    def children(self) -> list[Spec]:
+        """Return all node specs as children."""
+        return list(self.nodes.values())
+
+    def validate(self, context: Context) -> list[str]:
+        """Validate graph structure and all nodes.
+
+        Parameters
+        ----------
+        context : Context
+            Validation context
+
+        Returns
+        -------
+        list[str]
+            Validation issues
+        """
+        issues = super().validate(context)
+
+        # Check graph connectivity
+        for from_node, to_node, _ in self.edges:
+            if from_node not in self.nodes and from_node not in self.inputs:
+                issues.append(f"Unknown source node: {from_node}")
+            if to_node not in self.nodes and to_node not in self.outputs:
+                issues.append(f"Unknown target node: {to_node}")
+
+        # Check for cycles
+        if self._has_cycle():
+            issues.append("Graph contains cycles")
+
+        # Validate nodes
+        for name, spec in self.nodes.items():
+            node_issues = spec.validate(context)
+            issues.extend(f"Node {name}: {issue}" for issue in node_issues)
+
+        return issues
+
+    def _has_cycle(self) -> bool:
+        """Check if graph contains cycles using DFS."""
+        visited = set()
+        rec_stack = set()
+
+        def dfs(node: str) -> bool:
+            visited.add(node)
+            rec_stack.add(node)
+
+            for from_node, to_node, _ in self.edges:
+                if from_node == node:
+                    if to_node not in visited:
+                        if dfs(to_node):
+                            return True
+                    elif to_node in rec_stack:
+                        return True
+
+            rec_stack.remove(node)
+            return False
+
+        for node in self.nodes:
+            if node not in visited:
+                if dfs(node):
+                    return True
+
+        return False
+
+
+@dataclass(frozen=True)
+class Loop(Spec):
+    """Repeated application with optional unrolling.
+
+    Applies a specification multiple times, with support for
+    static unrolling and weight sharing control.
+
+    Parameters
+    ----------
+    body : Spec
+        Specification to repeat
+    times : int | str
+        Number of iterations or dimension name
+    unroll : bool
+        Whether to unroll at compile time
+    share_weights : bool
+        Whether to share weights across iterations
+    """
+
+    body: Spec
+    times: int | str
+    unroll: bool = False
+    share_weights: bool = True
+
+    def children(self) -> list[Spec]:
+        """Return body spec, potentially multiple times if unrolled."""
+        if self.unroll and isinstance(self.times, int):
+            return [self.body] * self.times
+        return [self.body]
+
+    def validate(self, context: Context) -> list[str]:
+        """Validate loop configuration and body.
+
+        Parameters
+        ----------
+        context : Context
+            Validation context
+
+        Returns
+        -------
+        list[str]
+            Validation issues
+        """
+        issues = super().validate(context)
+
+        # Resolve times if it's a dimension
+        if isinstance(self.times, str):
+            if context.get_dim(self.times) is None:
+                issues.append(f"Unknown loop count dimension: {self.times}")
+        elif self.times <= 0:
+            issues.append(f"Loop count must be positive, got {self.times}")
+
+        issues.extend(self.body.validate(context))
+        return issues
+
+
+@dataclass(frozen=True)
+class Switch(Spec):
+    """Multi-way conditional based on context value.
+
+    Selects from multiple specifications based on a key value,
+    with optional default case for unmatched keys.
+
+    Parameters
+    ----------
+    key : str | Callable[[Context], Any]
+        Key name or function to compute key
+    cases : dict[Any, Spec]
+        Mapping from key values to specifications
+    default : Spec, optional
+        Default specification for unmatched keys
+    """
+
+    key: str | Callable[[Context], Any]
+    cases: dict[Any, Spec] = field(default_factory=dict)
+    default: Spec | None = None
+
+    def children(self) -> list[Spec]:
+        """Return all case specs and default."""
+        children = list(self.cases.values())
+        if self.default:
+            children.append(self.default)
+        return children
+
+    def validate(self, context: Context) -> list[str]:
+        """Validate all cases.
+
+        Parameters
+        ----------
+        context : Context
+            Validation context
+
+        Returns
+        -------
+        list[str]
+            Validation issues
+        """
+        issues = super().validate(context)
+
+        for key, spec in self.cases.items():
+            case_issues = spec.validate(context)
+            issues.extend(f"Case {key}: {issue}" for issue in case_issues)
+
+        if self.default:
+            default_issues = self.default.validate(context)
+            issues.extend(f"Default: {issue}" for issue in default_issues)
+
+        return issues
+
+
+@dataclass(frozen=True)
+class Identity(Spec):
+    """Identity specification that passes through unchanged.
+
+    Useful as a no-op placeholder or for conditional branches
+    that should preserve the input without modification.
+    """
+
+    def children(self) -> list[Spec]:
+        """Return empty list as identity has no children."""
+        return []
+
+
+@dataclass(frozen=True)
+class Lambda(Spec):
+    """Custom transformation specification.
+
+    Wraps a custom function for use in specification pipelines,
+    enabling arbitrary transformations while maintaining the
+    specification interface.
+
+    Parameters
+    ----------
+    fn : Callable[[Any, Context], Any]
+        Transformation function
+    name : str
+        Descriptive name for the transformation
+    """
+
+    fn: Callable[[Any, Context], Any]
+    name: str = "lambda"
+
+    def children(self) -> list[Spec]:
+        """Return empty list as lambda has no children."""
+        return []
+
+
+# Factory functions with type inference
+
+
+@overload
+def seq() -> Sequential: ...
+
+
+@overload
+def seq(spec: T, /) -> T: ...
+
+
+@overload
+def seq(spec1: Spec, spec2: Spec, /, *specs: Spec) -> Sequential: ...
+
+
+def seq(*specs: Spec) -> Sequential | Spec:
+    """Create a sequential composition of specifications.
+
+    Composes specifications to execute in order, with outputs from each
+    specification flowing to the next. When given a single specification,
+    returns it unchanged for seamless composition.
+
+    Parameters
+    ----------
+    *specs : Spec
+        Variable number of specifications to compose sequentially
 
     Returns
     -------
-    ParallelSpec
-        A parallel specification combining all branches.
-
-    Raises
-    ------
-    TypeError
-        If any branch is not a valid specification.
-    ValidationError
-        If join_mode is invalid.
+    Sequential | Spec
+        Empty Sequential if no arguments, the single spec if one argument,
+        or Sequential containing all specs if multiple arguments
 
     Examples
     --------
-    >>> # Ensemble of different configurations
-    >>> ensemble = parallel(
-    ...     ETSpec(steps=4, alpha=0.1),
-    ...     ETSpec(steps=8, alpha=0.2),
-    ...     join_mode="add"
-    ... )
+    >>> # Empty sequence
+    >>> empty = seq()
+    >>> assert isinstance(empty, Sequential)
+    >>> assert len(empty) == 0
 
-    >>> # Multi-head parallel processing
-    >>> multi_head = parallel(
-    ...     MHEASpec(num_heads=8, head_dim=64),
-    ...     MHEASpec(num_heads=16, head_dim=32),
-    ...     join_mode="concat"
+    >>> # Single spec pass-through
+    >>> single = seq(LayerNormSpec())
+    >>> assert isinstance(single, LayerNormSpec)
+
+    >>> # Multiple specs composed
+    >>> pipeline = seq(
+    ...     PatchEmbedSpec(img_size=224, patch_size=16, embed_dim=768),
+    ...     CLSTokenSpec(),
+    ...     ETSpec(steps=4)
     ... )
+    >>> assert len(pipeline) == 3
+    """
+    if not specs:
+        return Sequential()
+
+    if len(specs) == 1:
+        return specs[0]
+
+    # Flatten nested Sequential specs
+    parts: list[Spec] = []
+    for spec in specs:
+        if isinstance(spec, Sequential):
+            parts.extend(spec.parts)
+        else:
+            parts.append(spec)
+
+    return Sequential(parts=tuple(parts))
+
+
+def parallel(
+    *branches: Spec,
+    merge: Literal["concat", "add", "multiply", "mean", "max"] = "concat",
+    merge_dim: str | None = None,
+    weights: Sequence[float] | None = None,
+) -> Parallel:
+    """Create parallel composition of specifications.
+
+    Executes multiple specifications in parallel and combines their
+    outputs according to the merge strategy.
+
+    Parameters
+    ----------
+    *branches : Spec
+        Specifications to execute in parallel
+    merge : str
+        Output merge strategy
+    merge_dim : str, optional
+        Dimension name for merge validation
+    weights : Sequence[float], optional
+        Weights for weighted merge strategies
+
+    Returns
+    -------
+    Parallel
+        Parallel composition specification
+
+    Raises
+    ------
+    ValueError
+        If no branches provided
     """
     if not branches:
-        raise ValidationError(
-            "parallel() requires at least one branch",
-            suggestion="Add at least one Spec to the branches",
-        )
+        raise ValueError("Parallel requires at least one branch")
 
-    processed_branches: list[Spec] = []
-    for i, branch in enumerate(branches):
-        if isinstance(branch, Spec):
-            processed_branches.append(branch)
+    # Flatten nested Parallel specs with same merge
+    flat_branches: list[Spec] = []
+    for branch in branches:
+        if isinstance(branch, Parallel) and branch.merge == merge:
+            flat_branches.extend(branch.branches)
         else:
-            raise TypeError(
-                f"Branch {i} is not a Spec: {type(branch).__name__}. "
-                f"Expected Spec instance."
-            )
-    branches = tuple(processed_branches)
-    return ParallelSpec(branches=branches, join_mode=join_mode)
+            flat_branches.append(branch)
+
+    return Parallel(
+        branches=tuple(flat_branches),
+        merge=merge,
+        merge_dim=merge_dim,
+        weights=tuple(weights) if weights else None,
+    )
 
 
-def repeat(spec: Any, times: int) -> SequentialSpec:
-    """Repeat a specification multiple times in sequence.
-
-    Creates a sequential specification where the given spec is
-    repeated the specified number of times. Commonly used for
-    creating stacks of transformer blocks.
+def residual(
+    inner: Spec,
+    *,
+    merge: Literal["add", "concat", "gate"] = "add",
+    gate_dim: str | None = None,
+    scale: float = 1.0,
+) -> Residual:
+    """Create residual connection around a specification.
 
     Parameters
     ----------
-    spec : Any
-        The specification to repeat.
-    times : int
-        Number of times to repeat the specification.
+    inner : Spec
+        Specification to wrap with residual
+    merge : str
+        How to merge residual with output
+    gate_dim : str, optional
+        Dimension for gating (required for gate merge)
+    scale : float
+        Scale factor for residual branch
 
     Returns
     -------
-    SequentialSpec
-        A sequential specification with the spec repeated.
-
-    Raises
-    ------
-    TypeError
-        If spec is not a valid specification.
-    ValueError
-        If times is negative.
-
-    Examples
-    --------
-    >>> # 12 transformer blocks
-    >>> transformer_stack = repeat(ETSpec(steps=4), 12)
-
-    >>> # Can be combined with other specs
-    >>> model = seq(
-    ...     PatchEmbedSpec(...),
-    ...     repeat(ETSpec(), 6),
-    ...     LayerNormSpec()
-    ... )
-
-    >>> # Repeating complex sequences
-    >>> complex_block = seq(ETSpec(), LayerNormSpec())
-    >>> repeated = repeat(complex_block, 3)
+    Residual
+        Residual connection specification
     """
-    if times < 0:
-        raise ValueError(f"times must be non-negative, got {times}")
+    return Residual(inner=inner, merge=merge, gate_dim=gate_dim, scale=scale)
 
-    if times == 0:
-        return SequentialSpec()
 
-    if isinstance(spec, SequentialSpec):
-        # Flatten repeated sequential specs
-        repeated_parts: list[Spec] = []
-        for _ in range(times):
-            repeated_parts.extend(spec.parts)
-        return SequentialSpec(parts=tuple(repeated_parts))
-    elif isinstance(spec, Spec):
-        return SequentialSpec(parts=(spec,) * times)
-    else:
-        raise TypeError(
-            f"Cannot repeat {type(spec).__name__}. Expected Spec instance."
+def cond(
+    condition: Callable[[Context], bool] | str,
+    if_true: Spec,
+    if_false: Spec | None = None,
+) -> Conditional:
+    """Create conditional specification.
+
+    Parameters
+    ----------
+    condition : Callable[[Context], bool] | str
+        Condition function or dimension name to check
+    if_true : Spec
+        Specification for true condition
+    if_false : Spec, optional
+        Specification for false condition
+
+    Returns
+    -------
+    Conditional
+        Conditional specification
+    """
+    if isinstance(condition, str):
+        # Simple dimension existence check
+        dim_name = condition
+
+        def condition_fn(ctx: Context) -> bool:
+            return ctx.get_dim(dim_name) is not None
+
+        return Conditional(
+            condition=condition_fn, if_true=if_true, if_false=if_false
         )
 
+    return Conditional(condition=condition, if_true=if_true, if_false=if_false)
 
-# Aliases for more intuitive API
-Seq = seq
-Parallel = parallel
-Repeat = repeat
+
+def loop(
+    body: Spec,
+    times: int | str,
+    *,
+    unroll: bool = False,
+    share_weights: bool = True,
+) -> Loop:
+    """Create loop specification.
+
+    Parameters
+    ----------
+    body : Spec
+        Specification to repeat
+    times : int | str
+        Number of iterations or dimension name
+    unroll : bool
+        Whether to unroll at compile time
+    share_weights : bool
+        Whether to share weights across iterations
+
+    Returns
+    -------
+    Loop
+        Loop specification
+    """
+    return Loop(
+        body=body, times=times, unroll=unroll, share_weights=share_weights
+    )
+
+
+def switch(
+    key: str | Callable[[Context], Any],
+    cases: dict[Any, Spec],
+    default: Spec | None = None,
+) -> Switch:
+    """Create switch specification.
+
+    Parameters
+    ----------
+    key : str | Callable[[Context], Any]
+        Key name or function to compute key
+    cases : dict[Any, Spec]
+        Mapping from key values to specifications
+    default : Spec, optional
+        Default specification
+
+    Returns
+    -------
+    Switch
+        Switch specification
+    """
+    return Switch(key=key, cases=cases, default=default)
+
+
+def graph() -> Graph:
+    """Create empty graph specification.
+
+    Returns
+    -------
+    Graph
+        Empty graph specification
+    """
+    return Graph()
+
+
+# Architecture patterns
+
+
+def transformer_block(
+    *,
+    norm_first: bool = True,
+    attention: Spec,
+    mlp: Spec,
+    drop_path: float = 0.0,
+) -> Spec:
+    """Create standard transformer block pattern.
+
+    Parameters
+    ----------
+    norm_first : bool
+        Whether to use pre-normalization
+    attention : Spec
+        Attention specification
+    mlp : Spec
+        MLP specification
+    drop_path : float
+        Drop path rate for stochastic depth
+
+    Returns
+    -------
+    Spec
+        Transformer block specification
+    """
+    if norm_first:
+        # Pre-norm architecture
+        attn_block = seq(Identity(), residual(seq(Identity(), attention)))
+        mlp_block = seq(Identity(), residual(seq(Identity(), mlp)))
+    else:
+        # Post-norm architecture
+        attn_block = seq(residual(attention), Identity())
+        mlp_block = seq(residual(mlp), Identity())
+
+    return seq(attn_block, mlp_block)
+
+
+def multi_scale(
+    spec_fn: Callable[[int], Spec],
+    scales: list[int],
+    merge: Literal["concat", "add", "multiply", "mean", "max"] = "concat",
+) -> Parallel:
+    """Create multi-scale processing pattern.
+
+    Parameters
+    ----------
+    spec_fn : Callable[[int], Spec]
+        Function to create spec for each scale
+    scales : list[int]
+        Scale values to use
+    merge : str
+        How to merge multi-scale outputs
+
+    Returns
+    -------
+    Parallel
+        Multi-scale specification
+    """
+    branches = [spec_fn(scale) for scale in scales]
+    return parallel(*branches, merge=merge)
+
+
+def mixture_of_experts(
+    experts: list[Spec],
+    router: Spec,
+    top_k: int = 2,
+) -> Graph:
+    """Create mixture of experts pattern.
+
+    Parameters
+    ----------
+    experts : list[Spec]
+        Expert specifications
+    router : Spec
+        Router specification
+    top_k : int
+        Number of experts to activate
+
+    Returns
+    -------
+    Graph
+        Mixture of experts specification
+    """
+    g = graph()
+
+    # Add router
+    g = g.add_node("router", router)
+    g = g.add_edge("input", "router")
+
+    # Add experts
+    for i, expert in enumerate(experts):
+        g = g.add_node(f"expert_{i}", expert)
+        g = g.add_edge("router", f"expert_{i}", f"gate_{i}")
+
+    # Combine outputs
+    g = g.add_node("combine", Identity())
+    for i in range(len(experts)):
+        g = g.add_edge(f"expert_{i}", "combine")
+
+    g = Graph(
+        nodes=g.nodes,
+        edges=g.edges,
+        inputs=["input"],
+        outputs=["combine"],
+    )
+
+    return g
