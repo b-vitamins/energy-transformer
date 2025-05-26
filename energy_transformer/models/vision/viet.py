@@ -4,11 +4,6 @@ This module implements the Vision Energy Transformer, which replaces standard
 transformer components with energy-based alternatives as described in
 "Energy Transformer" (Hoover et al., 2023).
 
-The ViET architecture maintains the overall structure of Vision Transformers
-while fundamentally changing the computational mechanism from direct feedforward
-processing to iterative energy minimization. This provides better theoretical
-grounding and improved interpretability through energy landscapes.
-
 Key Differences from Standard ViT
 ---------------------------------
 - Multi-Head Energy Attention instead of standard self-attention
@@ -71,7 +66,7 @@ from ...layers.tokens import CLSToken
 from ...models.base import EnergyTransformer
 
 
-class VisionEnergyTransformer(nn.Module):  # type: ignore
+class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
     """Vision Energy Transformer (ViET).
 
     A Vision Transformer that replaces standard components with energy-based
@@ -265,10 +260,11 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore
                 x = et_block(x, **et_kwargs)
 
         if return_energy_info:
+            total_energy = sum(block_energies) if block_energies else None
             energy_info = {
                 "block_energies": block_energies,
                 "block_trajectories": block_trajectories,
-                "total_energy": sum(block_energies) if block_energies else None,
+                "total_energy": total_energy,
             }
 
         # 5. Final layer normalization
@@ -276,12 +272,14 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore
 
         # 6. Extract features or classify
         if return_features:
+            # Type assertion to help mypy understand x is a Tensor
+            assert isinstance(x, Tensor)
             features = x[:, 0]  # CLS token features
             if return_energy_info:
                 return {"features": features, "energy_info": energy_info}
             return features
         else:
-            logits = self.head(x)  # (B, num_classes)
+            logits: Tensor = self.head(x)  # (B, num_classes)
             if return_energy_info:
                 return {"logits": logits, "energy_info": energy_info}
             return logits
