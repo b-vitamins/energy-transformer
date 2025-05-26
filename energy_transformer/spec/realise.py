@@ -626,25 +626,13 @@ def _realise_hn(spec: HNSpec, info: SpecInfo) -> nn.Module:
 
     try:
         from energy_transformer.layers.hopfield import (
-            ActivationFunction,
             HopfieldNetwork,
         )
-
-        # Convert string to enum
-        activation_map = {
-            "relu": ActivationFunction.RELU,
-            "softmax": ActivationFunction.SOFTMAX,
-            "power": ActivationFunction.POWER,
-            "tanh": ActivationFunction.TANH,
-        }
-        activation = activation_map[spec.activation]
 
         return HopfieldNetwork(
             in_dim=info.embedding_dim,
             hidden_dim=spec.hidden_dim,
             multiplier=spec.multiplier,
-            bias=spec.bias,
-            activation=activation,
         )
     except ImportError as e:
         raise RealisationError(
@@ -710,7 +698,7 @@ def _realise_et(spec: ETSpec, info: SpecInfo) -> nn.Module:
             attention=cast(Any, attention),
             hopfield=cast(Any, hopfield),
             steps=spec.steps,
-            α=spec.alpha,
+            alpha=spec.alpha,
         )
     except ImportError as e:
         raise RealisationError(
