@@ -10,10 +10,6 @@ from typing import Any, TypedDict
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.amp import (
-    GradScaler,
-    autocast,
-)
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
 
@@ -124,7 +120,7 @@ def train_epoch(
     loader: DataLoader[Any],
     optimizer: optim.Optimizer,
     criterion: nn.Module,
-    scaler: GradScaler | None,
+    scaler: torch.amp.GradScaler | None,
     device: torch.device,
     epoch: int,
     total_epochs: int,
@@ -138,8 +134,8 @@ def train_epoch(
     for batch_idx, (data, target) in enumerate(loader):
         data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
-
-        with autocast(device_type=device.type, enabled=scaler is not None):
+        device_type, enabled = device.type, scaler is not None
+        with torch.amp.autocast(device_type=device_type, enabled=enabled):
             output = (
                 model(data, et_kwargs={"detach": False})
                 if is_et
@@ -235,7 +231,10 @@ def train_model(
         weight_decay=config.weight_decay,
     )
     criterion = nn.CrossEntropyLoss()
-    scaler = GradScaler(device.type) if device.type == "cuda" else None
+    if device.type == "cuda":
+        scaler = torch.amp.GradScaler(device.type)
+    else:
+        scaler = None
 
     # Cosine schedule
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, config.epochs)
