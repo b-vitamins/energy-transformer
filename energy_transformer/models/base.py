@@ -20,10 +20,10 @@ REALISER_REGISTRY: dict[str, type[nn.Module]] = {}
 
 Track = Literal["none", "energy", "trajectory", "both"]
 DescentMode = Literal["sgd", "bb"]
-GradContextManager = AbstractContextManager[None, bool | None]
+GCtx = AbstractContextManager[None, bool | None]
 
 
-def force_enable_grad() -> GradContextManager:
+def force_enable_grad() -> GCtx:
     """Use torch.enable_grad() to temporarily enable gradient computation.
 
     This context manager allows internal gradient computation for optimization
@@ -31,8 +31,8 @@ def force_enable_grad() -> GradContextManager:
     Does not work with torch.inference_mode(), which fundamentally prevents
     gradient tracking.
     """
-    gctx = cast(GradContextManager, torch.enable_grad())
-    return gctx  # type: ignore[no-untyped-call]
+    gctx = cast(GCtx, torch.enable_grad())  # type: ignore[no-untyped-call]
+    return gctx
 
 
 class ETOutput(NamedTuple):
