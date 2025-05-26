@@ -1,9 +1,9 @@
-#!/usr/bin/env python3
 """Visualize ablation results."""
 
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -13,7 +13,7 @@ DATA_HOME = (
 )
 
 
-def load_latest_results():
+def load_latest_results() -> tuple[list[dict[str, Any]], Path]:
     """Load most recent results."""
     if not DATA_HOME.exists():
         print("No experiments found. Run ablation.py first.")
@@ -24,7 +24,7 @@ def load_latest_results():
         return json.load(f), latest
 
 
-def plot_results(results, save_dir):
+def plot_results(results: list[dict[str, Any]], save_dir: Path) -> None:
     """Create minimal comparison plots."""
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
 
@@ -115,7 +115,7 @@ def plot_results(results, save_dir):
             plt.close()
 
 
-def main():
+def main() -> None:
     """Generate visualizations."""
     results, exp_dir = load_latest_results()
     plot_results(results, exp_dir)
