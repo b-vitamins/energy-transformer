@@ -1,890 +1,1041 @@
-"""Realisation of model specs into actual PyTorch modules.
+"""Specification realisation system for creating PyTorch modules.
 
-This module converts specification objects into concrete PyTorch modules.
-It handles dimension propagation, validation, and provides a registry
-system for mapping spec types to their corresponding module constructors.
+This module converts abstract specifications into concrete PyTorch modules
+through a plugin-based architecture. The realisation system supports caching,
+automatic module discovery, and extensibility through plugins.
 
-Design Principles:
-- Type-safe realisation with comprehensive error handling
-- Dimension and context propagation through spec pipelines
-- Registry-based extensibility for custom specs
-- Immutable context objects for safe parallel processing
-- Clear separation between specification and implementation
-
-Example
--------
->>> from energy_transformer.spec import seq, ETSpec, LayerNormSpec
->>> from energy_transformer.spec import PatchEmbedSpec, CLSTokenSpec
->>>
->>> # Define a model specification
->>> model_spec = seq(
-...     PatchEmbedSpec(img_size=224, patch_size=16, embed_dim=768),
-...     CLSTokenSpec(),
-...     ETSpec(steps=4, alpha=0.125),
-...     LayerNormSpec()
-... )
->>>
->>> # Realise into PyTorch module
->>> model = realise(model_spec)
->>>
->>> # Use the model
->>> import torch
->>> x = torch.randn(2, 3, 224, 224)
->>> output = model(x)  # Shape: [2, 197, 768]
+The system maintains a clear separation between specification (what to build)
+and realisation (how to build it), enabling multiple implementations of the
+same specification.
 """
 
 from __future__ import annotations
 
+import importlib
+import warnings
 from collections.abc import Callable
-from typing import Any, cast
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar, get_type_hints
 
 import torch
 import torch.nn as nn
 
-from .combinators import ParallelSpec, SequentialSpec
-from .primitives import (
-    CLSTokenSpec,
-    EmbeddingDim,
-    ETSpec,
-    HNSpec,
-    LayerNormSpec,
-    MHEASpec,
-    PatchEmbedSpec,
-    PosEmbedSpec,
-    Spec,
-    TokenCount,
-    ValidationError,
+from .combinators import (
+    Conditional,
+    Graph,
+    Identity,
+    Lambda,
+    Loop,
+    Parallel,
+    Residual,
+    Sequential,
+    Switch,
 )
+from .primitives import Context, Spec, SpecMeta, ValidationError
+
+if TYPE_CHECKING:
+    pass
 
 __all__ = [
     "realise",
-    "Realise",
-    "register_realiser",
-    "SpecInfo",
+    "Realiser",
+    "register",
     "RealisationError",
+    "ModuleCache",
+    "RealiserPlugin",
+    "configure_realisation",
+    "visualize",
+    "optimize_spec",
+    "to_yaml",
+    "from_yaml",
 ]
 
-# Type alias for realiser functions
-RealiserFunc = Callable[[Any, "SpecInfo"], nn.Module]
-
-# Registry for realiser functions
-_REALISERS: dict[type, RealiserFunc] = {}
-
-Output = list[torch.Tensor]
+T = TypeVar("T", bound=nn.Module)
 
 
 class RealisationError(Exception):
-    """Raised when a specification cannot be realised into a module.
+    """Realisation error with debugging information.
+
+    Provides detailed error context including the specification,
+    context state, and suggestions for resolution.
 
     Parameters
     ----------
     message : str
-        The error message.
-    spec_type : str, optional
-        The type of spec that failed realisation.
+        Primary error message
+    spec : Spec, optional
+        Specification that failed realisation
+    context : Context, optional
+        Context during realisation
+    cause : Exception, optional
+        Underlying exception
     suggestion : str, optional
-        A helpful suggestion for fixing the error.
+        Helpful suggestion for resolution
     """
 
     def __init__(
         self,
         message: str,
-        spec_type: str | None = None,
+        spec: Spec | None = None,
+        context: Context | None = None,
+        cause: Exception | None = None,
         suggestion: str | None = None,
-    ) -> None:
-        """Initialize RealisationError with enhanced messaging."""
-        self.spec_type = spec_type
+    ):
+        """Initialize RealisationError with debugging information.
+
+        Parameters
+        ----------
+        message : str
+            Primary error message
+        spec : Spec | None
+            Specification that failed realisation
+        context : Context | None
+            Context during realisation
+        cause : Exception | None
+            Underlying exception
+        suggestion : str | None
+            Helpful suggestion for resolution
+        """
+        self.spec = spec
+        self.context = context
+        self.cause = cause
         self.suggestion = suggestion
 
-        full_message = message
-        if spec_type:
-            full_message = f"{spec_type}: {message}"
+        parts = [message]
+        if spec:
+            parts.append(f"\nSpec: {spec}")
+        if context:
+            parts.append(f"\nContext: {context}")
+        if cause:
+            parts.append(f"\nCause: {type(cause).__name__}: {cause}")
         if suggestion:
-            full_message += f"\nSuggestion: {suggestion}"
+            parts.append(f"\nSuggestion: {suggestion}")
 
-        super().__init__(full_message)
+        super().__init__("\n".join(parts))
 
 
-class SpecInfo:
-    """Context information for specification realisation.
+class ModuleCache:
+    """Cache for realised modules with LRU eviction.
 
-    Tracks embedding dimensions, token counts, and other contextual
-    information as it flows through the specification pipeline.
-    Provides safe copying for parallel branches.
+    Caches realised modules to avoid redundant construction,
+    with configurable size limits and eviction policies.
 
     Parameters
     ----------
-    embedding_dim : EmbeddingDim, optional
-        The current embedding dimension.
-    token_count : TokenCount, optional
-        The current token count.
+    max_size : int
+        Maximum number of cached modules
+    enabled : bool
+        Whether caching is enabled
+    """
 
-    Attributes
+    def __init__(self, max_size: int = 128, enabled: bool = True):
+        """Initialize module cache with LRU eviction.
+
+        Parameters
+        ----------
+        max_size : int
+            Maximum number of cached modules
+        enabled : bool
+            Whether caching is enabled
+        """
+        self.max_size = max_size
+        self.enabled = enabled
+        self._cache: dict[tuple[Any, ...], nn.Module] = {}
+        self._access_order: list[tuple[Any, ...]] = []
+        self._hit_count = 0
+        self._miss_count = 0
+
+    def _make_key(self, spec: Spec, context: Context) -> tuple[Any, ...]:
+        """Create cache key from spec and context."""
+
+        # Convert spec to a hashable representation
+        def make_hashable(obj: Any) -> Any:
+            if isinstance(obj, dict):
+                return tuple(
+                    sorted((k, make_hashable(v)) for k, v in obj.items())
+                )
+            elif isinstance(obj, list):
+                return tuple(make_hashable(item) for item in obj)
+            elif isinstance(obj, set):
+                return tuple(sorted(make_hashable(item) for item in obj))
+            else:
+                return obj
+
+        spec_dict = spec.to_dict()
+        spec_key = (spec.__class__.__name__, make_hashable(spec_dict))
+        ctx_key = tuple(sorted(context.dimensions.items()))
+        return (spec_key, ctx_key)
+
+    def get(self, spec: Spec, context: Context) -> nn.Module | None:
+        """Get cached module if available.
+
+        Parameters
+        ----------
+        spec : Spec
+            Specification to look up
+        context : Context
+            Realisation context
+
+        Returns
+        -------
+        nn.Module | None
+            Cached module or None
+        """
+        if not self.enabled:
+            return None
+
+        key = self._make_key(spec, context)
+        if key in self._cache:
+            self._hit_count += 1
+            # Update access order for LRU
+            self._access_order.remove(key)
+            self._access_order.append(key)
+            return self._cache[key]
+
+        self._miss_count += 1
+        return None
+
+    def put(self, spec: Spec, context: Context, module: nn.Module) -> None:
+        """Cache a realised module.
+
+        Parameters
+        ----------
+        spec : Spec
+            Specification that was realised
+        context : Context
+            Realisation context
+        module : nn.Module
+            Realised module
+        """
+        if not self.enabled:
+            return
+
+        key = self._make_key(spec, context)
+
+        # Evict oldest if at capacity
+        if len(self._cache) >= self.max_size:
+            oldest = self._access_order.pop(0)
+            del self._cache[oldest]
+
+        self._cache[key] = module
+        self._access_order.append(key)
+
+    def clear(self) -> None:
+        """Clear the cache."""
+        self._cache.clear()
+        self._access_order.clear()
+        self._hit_count = 0
+        self._miss_count = 0
+
+    @property
+    def hit_rate(self) -> float:
+        """Get cache hit rate."""
+        total = self._hit_count + self._miss_count
+        return self._hit_count / total if total > 0 else 0.0
+
+
+class RealiserPlugin(Protocol):
+    """Protocol for realiser plugins.
+
+    Plugins extend the realisation system to support custom
+    specifications without modifying core code.
+    """
+
+    def can_realise(self, spec: Spec) -> bool:
+        """Check if this plugin can realise the given spec.
+
+        Parameters
+        ----------
+        spec : Spec
+            Specification to check
+
+        Returns
+        -------
+        bool
+            True if plugin can handle this spec
+        """
+        ...
+
+    def realise(self, spec: Spec, context: Context) -> nn.Module:
+        """Realise the spec into a module.
+
+        Parameters
+        ----------
+        spec : Spec
+            Specification to realise
+        context : Context
+            Realisation context
+
+        Returns
+        -------
+        nn.Module
+            Realised module
+        """
+        ...
+
+
+@dataclass
+class RealiserConfig:
+    """Configuration for the realisation system.
+
+    Controls caching, validation, plugin loading, and other
+    realisation behaviors.
+    """
+
+    cache: ModuleCache = field(default_factory=ModuleCache)
+    plugins: list[RealiserPlugin] = field(default_factory=list)
+    strict: bool = True
+    warnings: bool = True
+    auto_import: bool = True
+    optimizations: bool = True
+    max_recursion: int = 100
+
+
+# Global configuration
+_config = RealiserConfig()
+
+
+def configure_realisation(**kwargs: Any) -> None:
+    """Configure the realisation system.
+
+    Parameters
     ----------
-    embedding_dim : EmbeddingDim | None
-        The current embedding dimension.
-    token_count : TokenCount | None
-        The current token count.
+    **kwargs : Any
+        Configuration options to set
 
-    Examples
-    --------
-    >>> info = SpecInfo()
-    >>> info.embedding_dim = 768
-    >>> info.token_count = 196
-    >>>
-    >>> # Safe copying for parallel branches
-    >>> branch_info = info.copy()
-    >>> branch_info.embedding_dim = 512  # Doesn't affect original
+    Raises
+    ------
+    ValueError
+        If unknown configuration option
+    """
+    for key, value in kwargs.items():
+        if hasattr(_config, key):
+            setattr(_config, key, value)
+        else:
+            raise ValueError(f"Unknown configuration option: {key}")
+
+
+class Realiser:
+    """Main realiser with plugin and optimization support.
+
+    Converts specifications into PyTorch modules, handling
+    dimension propagation, caching, and plugin dispatch.
+
+    Parameters
+    ----------
+    context : Context, optional
+        Initial realisation context
+    """
+
+    def __init__(self, context: Context | None = None):
+        """Initialize realiser with optional context.
+
+        Parameters
+        ----------
+        context : Context | None
+            Initial realisation context
+        """
+        self.context = context or Context()
+        self._realiser_stack: list[Spec] = []
+
+        # Dispatch table for built-in combinators
+        self._builtin_realisers: dict[type, Callable[[Any], nn.Module]] = {
+            Sequential: self._realise_sequential,
+            Parallel: self._realise_parallel,
+            Conditional: self._realise_conditional,
+            Residual: self._realise_residual,
+            Graph: self._realise_graph,
+            Loop: self._realise_loop,
+            Switch: self._realise_switch,
+            Identity: lambda _: nn.Identity(),
+            Lambda: lambda spec: LambdaModule(spec.fn, spec.name),
+        }
+
+    def realise(self, spec: Spec) -> nn.Module:
+        """Realise a spec into a PyTorch module.
+
+        Parameters
+        ----------
+        spec : Spec
+            Specification to realise
+
+        Returns
+        -------
+        nn.Module
+            Realised module
+
+        Raises
+        ------
+        RealisationError
+            If realisation fails
+        """
+        # Apply optimizations if enabled
+        if _config.optimizations:
+            spec = self._optimize_spec(spec)
+
+        # Check cache
+        if cached := _config.cache.get(spec, self.context):
+            return cached
+
+        # Prevent infinite recursion
+        if len(self._realiser_stack) >= _config.max_recursion:
+            raise RealisationError(
+                "Maximum recursion depth exceeded",
+                spec=spec,
+                context=self.context,
+                suggestion="Check for circular dependencies in specifications",
+            )
+
+        if spec in self._realiser_stack:
+            raise RealisationError(
+                "Circular dependency detected",
+                spec=spec,
+                context=self.context,
+            )
+
+        self._realiser_stack.append(spec)
+        try:
+            module = self._realise_impl(spec)
+            _config.cache.put(spec, self.context, module)
+            return module
+        finally:
+            self._realiser_stack.pop()
+
+    def _realise_impl(self, spec: Spec) -> nn.Module:
+        """Implement realisation logic."""
+        # Try registered realisers first
+        if module := self._try_registered_realiser(spec):
+            return module
+
+        # Handle built-in combinators
+        if module := self._try_builtin_realiser(spec):
+            return module
+
+        # Try plugins
+        if module := self._try_plugin_realiser(spec):
+            return module
+
+        # Try auto-import if enabled
+        if _config.auto_import:
+            if module := self._try_auto_import(spec):
+                return module
+
+        # No realiser found
+        raise RealisationError(
+            f"No realiser registered for {spec.__class__.__name__}",
+            spec=spec,
+            context=self.context,
+            suggestion=f"Use @register({spec.__class__.__name__}) to "
+            f"register a realiser function",
+        )
+
+    def _optimize_spec(self, spec: Spec) -> Spec:
+        """Apply optimization passes to specification."""
+        # Simple optimizations
+        # 1. Remove identity nodes in sequential
+        if isinstance(spec, Sequential):
+            parts = [p for p in spec.parts if not isinstance(p, Identity)]
+            if len(parts) != len(spec.parts):
+                spec = Sequential(parts=tuple(parts))
+
+        # 2. Flatten nested sequentials
+        if isinstance(spec, Sequential):
+            parts = []
+            for part in spec.parts:
+                if isinstance(part, Sequential):
+                    parts.extend(part.parts)
+                else:
+                    parts.append(part)
+            spec = Sequential(parts=tuple(parts))
+
+        return spec
+
+    def _try_registered_realiser(self, spec: Spec) -> nn.Module | None:
+        """Try to realise using registered realiser."""
+        if realiser_fn := SpecMeta.get_realiser(spec.__class__):
+            try:
+                return realiser_fn(spec, self.context)
+            except Exception as e:
+                raise RealisationError(
+                    f"Realiser failed for {spec.__class__.__name__}",
+                    spec=spec,
+                    context=self.context,
+                    cause=e,
+                ) from e
+        return None
+
+    def _try_builtin_realiser(self, spec: Spec) -> nn.Module | None:
+        """Try to realise using built-in combinator realisers."""
+        spec_type = type(spec)
+        if realiser_fn := self._builtin_realisers.get(spec_type):
+            return realiser_fn(spec)
+        return None
+
+    def _try_plugin_realiser(self, spec: Spec) -> nn.Module | None:
+        """Try to realise using plugins."""
+        for plugin in _config.plugins:
+            if plugin.can_realise(spec):
+                try:
+                    return plugin.realise(spec, self.context)
+                except Exception as e:
+                    if _config.warnings:
+                        warnings.warn(
+                            f"Plugin {plugin} failed for {spec}: {e}",
+                            stacklevel=2,
+                        )
+        return None
+
+    def _try_auto_import(self, spec: Spec) -> nn.Module | None:
+        """Try to automatically import and create module."""
+        # Map spec names to module paths
+        spec_name = spec.__class__.__name__
+
+        # Common mappings
+        module_mappings = {
+            "LayerNormSpec": ("energy_transformer.layers", "LayerNorm"),
+            "PatchEmbedSpec": (
+                "energy_transformer.layers.embeddings",
+                "PatchEmbedding",
+            ),
+            "CLSTokenSpec": ("energy_transformer.layers.tokens", "CLSToken"),
+            "MHEASpec": (
+                "energy_transformer.layers.attention",
+                "MultiHeadEnergyAttention",
+            ),
+            "HNSpec": (
+                "energy_transformer.layers.hopfield",
+                "HopfieldNetwork",
+            ),
+        }
+
+        mapping = module_mappings.get(spec_name)
+        if mapping:
+            module_path, class_name = mapping
+            try:
+                module = importlib.import_module(module_path)
+                cls = getattr(module, class_name)
+
+                # Extract constructor args from spec
+                kwargs = {}
+                for field_info in spec.__dataclass_fields__.values():
+                    value = getattr(spec, field_info.name)
+                    kwargs[field_info.name] = value
+
+                return cls(**kwargs)
+            except Exception:
+                pass
+
+        return None
+
+    def _realise_sequential(self, spec: Sequential) -> nn.Module:
+        """Realise sequential composition."""
+        modules = []
+        current_context = self.context
+
+        for i, part in enumerate(spec.parts):
+            # Create child realiser with updated context
+            child_realiser = Realiser(current_context)
+            try:
+                module = child_realiser.realise(part)
+                modules.append(module)
+                # Update context for next part
+                current_context = part.apply_context(current_context)
+            except RealisationError as e:
+                raise RealisationError(
+                    f"Failed to realise part {i} of sequential",
+                    spec=spec,
+                    context=self.context,
+                    cause=e,
+                ) from e
+
+        return nn.Sequential(*modules)
+
+    def _realise_parallel(self, spec: Parallel) -> nn.Module:
+        """Realise parallel composition."""
+        branches = []
+        for i, branch in enumerate(spec.branches):
+            # Each branch gets independent context
+            child_realiser = Realiser(self.context.child())
+            try:
+                module = child_realiser.realise(branch)
+                branches.append(module)
+            except RealisationError as e:
+                raise RealisationError(
+                    f"Failed to realise branch {i} of parallel",
+                    spec=spec,
+                    context=self.context,
+                    cause=e,
+                ) from e
+
+        return ParallelModule(branches, spec.merge, spec.weights)
+
+    def _realise_conditional(self, spec: Conditional) -> nn.Module:
+        """Realise conditional execution."""
+        # Evaluate condition at realisation time
+        if spec.condition(self.context):
+            return self.realise(spec.if_true)
+        elif spec.if_false:
+            return self.realise(spec.if_false)
+        else:
+            return nn.Identity()
+
+    def _realise_residual(self, spec: Residual) -> nn.Module:
+        """Realise residual connection."""
+        inner = self.realise(spec.inner)
+        return ResidualModule(inner, spec.merge, spec.scale)
+
+    def _realise_graph(self, spec: Graph) -> nn.Module:
+        """Realise graph structure."""
+        nodes = {}
+        for name, node_spec in spec.nodes.items():
+            nodes[name] = self.realise(node_spec)
+
+        return GraphModule(nodes, spec.edges, spec.inputs, spec.outputs)
+
+    def _realise_loop(self, spec: Loop) -> nn.Module:
+        """Realise loop structure."""
+        # Resolve loop count
+        if isinstance(spec.times, str):
+            times = self.context.get_dim(spec.times)
+            if times is None:
+                raise RealisationError(
+                    f"Unknown dimension for loop count: {spec.times}",
+                    spec=spec,
+                    context=self.context,
+                )
+        else:
+            times = spec.times
+
+        if spec.unroll:
+            # Unrolled loop
+            if spec.share_weights:
+                # Share weights across iterations
+                body = self.realise(spec.body)
+                return nn.Sequential(*[body for _ in range(times)])
+            else:
+                # Independent weights
+                bodies = [self.realise(spec.body) for _ in range(times)]
+                return nn.Sequential(*bodies)
+        else:
+            # Dynamic loop
+            body = self.realise(spec.body)
+            return LoopModule(body, times)
+
+    def _realise_switch(self, spec: Switch) -> nn.Module:
+        """Realise switch structure."""
+        # Evaluate switch at realisation time
+        if callable(spec.key):
+            key_value = spec.key(self.context)
+        else:
+            key_value = self.context.metadata.get(spec.key)
+
+        if key_value in spec.cases:
+            return self.realise(spec.cases[key_value])
+        elif spec.default:
+            return self.realise(spec.default)
+        else:
+            return nn.Identity()
+
+
+# Module implementations
+
+
+class ParallelModule(nn.Module):  # type: ignore[misc]
+    """Module for parallel execution with merging.
+
+    Executes multiple branches in parallel and combines outputs
+    according to the specified merge strategy.
     """
 
     def __init__(
         self,
-        embedding_dim: EmbeddingDim | None = None,
-        token_count: TokenCount | None = None,
-    ) -> None:
-        """Initialize SpecInfo with optional context.
+        branches: list[nn.Module],
+        merge: str = "concat",
+        weights: tuple[float, ...] | None = None,
+    ):
+        super().__init__()
+        self.branches = nn.ModuleList(branches)
+        self.merge = merge
+        self.weights = weights
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Execute branches and merge outputs."""
+        outputs = [branch(x) for branch in self.branches]
+
+        if self.merge == "concat":
+            return torch.cat(outputs, dim=-1)
+        elif self.merge == "add":
+            if self.weights:
+                result = self.weights[0] * outputs[0]
+                for w, out in zip(self.weights[1:], outputs[1:], strict=False):
+                    result = result + w * out
+                return result
+            else:
+                result = outputs[0]
+                for out in outputs[1:]:
+                    result = result + out
+                return result
+        elif self.merge == "multiply":
+            result = outputs[0]
+            for out in outputs[1:]:
+                result = result * out
+            return result
+        elif self.merge == "mean":
+            return torch.stack(outputs).mean(dim=0)
+        elif self.merge == "max":
+            return torch.stack(outputs).max(dim=0)[0]
+        else:
+            raise ValueError(f"Unknown merge mode: {self.merge}")
+
+
+class ResidualModule(nn.Module):  # type: ignore[misc]
+    """Module for residual connections.
+
+    Wraps a module with residual connection and flexible merging.
+    """
+
+    def __init__(
+        self, inner: nn.Module, merge: str = "add", scale: float = 1.0
+    ):
+        super().__init__()
+        self.inner = inner
+        self.merge = merge
+        self.scale = scale
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply inner module with residual connection."""
+        residual = x
+        out = self.inner(x)
+
+        if self.merge == "add":
+            return residual + self.scale * out
+        elif self.merge == "concat":
+            return torch.cat([residual, out], dim=-1)
+        elif self.merge == "gate":
+            # Learned gating would require parameters
+            # For now, use simple average gating
+            gate = torch.sigmoid(out.mean(dim=-1, keepdim=True))
+            return residual * (1 - gate) + out * gate
+        else:
+            raise ValueError(f"Unknown merge mode: {self.merge}")
+
+
+class GraphModule(nn.Module):  # type: ignore[misc]
+    """Module for graph execution.
+
+    Executes a computation graph with named nodes and edges.
+    """
+
+    def __init__(
+        self,
+        nodes: dict[str, nn.Module],
+        edges: list[tuple[str, str, str | None]],
+        inputs: list[str],
+        outputs: list[str],
+    ):
+        super().__init__()
+        self.nodes = nn.ModuleDict(nodes)
+        self.edges = edges
+        self.inputs = inputs
+        self.outputs = outputs
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Execute graph computation."""
+        # Build adjacency for topological sort
+        in_degree: dict[str, int] = {name: 0 for name in self.nodes}
+        adjacency: dict[str, list[tuple[str, str | None]]] = {
+            name: [] for name in self.nodes
+        }
+
+        for from_node, to_node, _ in self.edges:
+            if to_node in self.nodes:
+                in_degree[to_node] += 1
+                if from_node in self.nodes:
+                    adjacency[from_node].append((to_node, None))
+
+        # Topological sort
+        queue = [node for node, degree in in_degree.items() if degree == 0]
+        topo_order = []
+
+        while queue:
+            node = queue.pop(0)
+            topo_order.append(node)
+            for next_node, _ in adjacency[node]:
+                in_degree[next_node] -= 1
+                if in_degree[next_node] == 0:
+                    queue.append(next_node)
+
+        # Execute in topological order
+        values = {"input": x}
+        for node in topo_order:
+            # For simplicity, assume single input
+            node_input = x
+            values[node] = self.nodes[node](node_input)
+
+        # Return first output
+        return values.get(self.outputs[0], x) if self.outputs else x
+
+
+class LoopModule(nn.Module):  # type: ignore[misc]
+    """Module for dynamic loops.
+
+    Applies a module multiple times in sequence.
+    """
+
+    def __init__(self, body: nn.Module, times: int):
+        super().__init__()
+        self.body = body
+        self.times = times
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply body module multiple times."""
+        for _ in range(self.times):
+            x = self.body(x)
+        return x
+
+
+class LambdaModule(nn.Module):  # type: ignore[misc]
+    """Module for lambda functions.
+
+    Wraps a custom function as a module.
+    """
+
+    Fn = Callable[[Any, Context], Any]
+
+    def __init__(self, fn: Fn, name: str = "lambda"):
+        """Initialize lambda module with function and name.
 
         Parameters
         ----------
-        embedding_dim : EmbeddingDim, optional
-            Initial embedding dimension.
-        token_count : TokenCount, optional
-            Initial token count.
+        fn : Callable[[Any, Context], Any]
+            Function to wrap
+        name : str
+            Name for the lambda module
         """
-        self.embedding_dim = embedding_dim
-        self.token_count = token_count
+        super().__init__()
+        self.fn = fn
+        self._name = name
 
-    def update_from_spec(self, spec: Spec) -> None:
-        """Update context information from a specification.
-
-        Parameters
-        ----------
-        spec : Spec
-            The specification to update from.
-
-        Notes
-        -----
-        This method updates the context by:
-        1. Getting new embedding dimension if spec defines one
-        2. Getting new token count if spec defines one
-        3. Adding any tokens the spec contributes
-        """
-        # Update embedding dimension
-        dim = spec.get_embedding_dim()
-        if dim is not None:
-            self.embedding_dim = dim
-
-        # Update base token count
-        count = spec.get_token_count()
-        if count is not None:
-            self.token_count = count
-
-        # Add any tokens this spec contributes
-        if self.token_count is not None:
-            self.token_count += spec.adds_tokens()
-
-    def copy(self) -> SpecInfo:
-        """Create a copy of this SpecInfo.
-
-        Returns
-        -------
-        SpecInfo
-            A new SpecInfo with the same state as this one.
-
-        Examples
-        --------
-        >>> original = SpecInfo(embedding_dim=768, token_count=196)
-        >>> copy = original.copy()
-        >>> copy.embedding_dim = 512
-        >>> original.embedding_dim  # Still 768
-        """
-        return SpecInfo(self.embedding_dim, self.token_count)
-
-    def validate_spec(self, spec: Spec) -> None:
-        """Validate a specification against this context.
-
-        Parameters
-        ----------
-        spec : Spec
-            The specification to validate.
-
-        Raises
-        ------
-        ValidationError
-            If the spec cannot be validated against this context.
-
-        Examples
-        --------
-        >>> info = SpecInfo(embedding_dim=768)
-        >>> layer_norm = LayerNormSpec()
-        >>> info.validate_spec(layer_norm)  # OK - LayerNorm needs embed_dim
-        >>>
-        >>> empty_info = SpecInfo()
-        >>> empty_info.validate_spec(layer_norm)  # Raises ValidationError
-        """
-        try:
-            spec.validate(self.embedding_dim, self.token_count)
-        except ValidationError as e:
-            raise RealisationError(
-                f"Spec validation failed: {e}",
-                spec_type=spec.__class__.__name__,
-                suggestion="Ensure upstream specs provide required context",
-            ) from e
-
-    def __str__(self) -> str:
-        """Return string representation of SpecInfo.
-
-        Returns
-        -------
-        str
-            Human-readable representation of the SpecInfo state.
-        """
-        return (
-            f"SpecInfo(embed_dim={self.embedding_dim}, "
-            f"token_count={self.token_count})"
-        )
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply lambda function."""
+        # For simplicity, create empty context
+        return self.fn(x, Context())
 
     def __repr__(self) -> str:
-        """Return detailed string representation."""
-        return (
-            f"SpecInfo(embedding_dim={self.embedding_dim!r}, "
-            f"token_count={self.token_count!r})"
-        )
+        return f"LambdaModule({self._name})"
 
 
-def register_realiser(
-    spec_type: type,
-) -> Callable[[RealiserFunc], RealiserFunc]:
-    """Register a realiser function for a specification type.
+# Public API
+
+
+def realise(
+    spec: Spec,
+    context: Context | None = None,
+    **context_updates: Any,
+) -> nn.Module:
+    """Realise a specification into a PyTorch module.
 
     Parameters
     ----------
-    spec_type : type
-        The specification type to register a realiser for.
+    spec : Spec
+        The specification to realise
+    context : Context, optional
+        Initial context for realisation
+    **context_updates : Any
+        Additional context dimensions to set
+
+    Returns
+    -------
+    nn.Module
+        The realised PyTorch module
+
+    Raises
+    ------
+    ValidationError
+        If specification validation fails
+    RealisationError
+        If realisation fails
+
+    Examples
+    --------
+    >>> spec = seq(PatchEmbedSpec(...), CLSTokenSpec(), ETSpec())
+    >>> model = realise(spec, embed_dim=768, num_heads=12)
+    """
+    if context is None:
+        context = Context()
+
+    # Apply context updates
+    for key, value in context_updates.items():
+        context.set_dim(key, value)
+
+    # Validate spec first
+    if _config.strict:
+        issues = spec.validate(context)
+        if issues:
+            raise ValidationError(
+                "Spec validation failed",
+                spec=spec,
+                context=context,
+                suggestion="\n".join(issues),
+            )
+
+    # Realise
+    realiser = Realiser(context)
+    return realiser.realise(spec)
+
+
+def register(spec_cls: type[Spec]) -> Callable[[Any], Any]:
+    """Register a realiser function for a spec class.
+
+    Parameters
+    ----------
+    spec_cls : type[Spec]
+        Specification class to register for
 
     Returns
     -------
     Callable
-        Decorator function that registers the realiser.
+        Decorator function
 
     Examples
     --------
-    >>> @register_realiser(MyCustomSpec)
-    ... def realise_my_spec(spec: MyCustomSpec, info: SpecInfo) -> nn.Module:
-    ...     return MyCustomModule(spec.param1, spec.param2)
+    >>> @register(MySpec)
+    ... def realise_my_spec(spec: MySpec, context: Context) -> nn.Module:
+    ...     return MyModule(spec.param1, spec.param2)
     """
-
-    def decorator(fn: RealiserFunc) -> RealiserFunc:
-        _REALISERS[spec_type] = fn
-        return fn
-
-    return decorator
+    return SpecMeta.register_realiser(spec_cls)
 
 
-def realise(spec: Any, info: SpecInfo | None = None) -> nn.Module | None:
-    """Convert a specification to a PyTorch module.
-
-    This is the main entry point for converting specifications into
-    concrete PyTorch modules. It handles validation, dimension propagation,
-    and dispatches to appropriate realiser functions.
+def register_typed(
+    fn: Callable[[Any, Context], nn.Module],
+) -> Callable[[Any, Context], nn.Module]:
+    """Register a realiser using type hints.
 
     Parameters
     ----------
-    spec : Any
-        A specification object to realise.
-    info : SpecInfo, optional
-        Context information from upstream specs. If None, creates empty
-        context.
+    fn : Callable
+        Realiser function with type hints
 
     Returns
     -------
-    nn.Module | None
-        A PyTorch module constructed according to the spec, or None if spec
-        is None.
-
-    Raises
-    ------
-    RealisationError
-        If the spec cannot be realised due to missing realisers, validation
-        failures, or other errors.
-    TypeError
-        If the spec type is not supported.
+    Callable
+        The same function
 
     Examples
     --------
-    >>> # Simple spec realisation
-    >>> layer_norm = LayerNormSpec()
-    >>> context = SpecInfo(embedding_dim=768)
-    >>> module = realise(layer_norm, context)
-    >>> isinstance(module, nn.LayerNorm)  # True
-
-    >>> # Complex model realisation
-    >>> model_spec = seq(
-    ...     PatchEmbedSpec(img_size=224, patch_size=16, embed_dim=768),
-    ...     CLSTokenSpec(),
-    ...     ETSpec()
-    ... )
-    >>> model = realise(model_spec)
-    >>> isinstance(model, nn.Sequential)  # True
+    >>> @register_typed
+    ... def realise_my_spec(spec: MySpec, context: Context) -> nn.Module:
+    ...     return MyModule(spec.param1)
     """
-    # Initialize context if not provided
-    if info is None:
-        info = SpecInfo()
-
-    # Handle None case
-    if spec is None:
-        return None
-
-    # If it's already a module, return as-is
-    if isinstance(spec, nn.Module):
-        return spec
-
-    # Validate spec against current context
-    if isinstance(spec, Spec):
-        info.validate_spec(spec)
-
-    # Handle sequential composition
-    if isinstance(spec, SequentialSpec):
-        return _realise_sequential(spec, info)
-
-    # Handle parallel composition
-    if isinstance(spec, ParallelSpec):
-        return _realise_parallel(spec, info)
-
-    # Handle leaf specs using registered realisers
-    spec_type = type(spec)
-    if spec_type in _REALISERS:
-        try:
-            module = _REALISERS[spec_type](spec, info)
-
-            # Update context with this spec's contributions
-            if isinstance(spec, Spec):
-                info.update_from_spec(spec)
-
-            return module
-        except Exception as e:
-            raise RealisationError(
-                f"Failed to realise spec: {e}",
-                spec_type=spec_type.__name__,
-                suggestion="Check spec parameters and module dependencies",
-            ) from e
-
-    available_types = ", ".join(t.__name__ for t in _REALISERS.keys())
-    raise TypeError(
-        f"No realiser registered for {spec_type.__name__}. "
-        f"Available types: {available_types}"
-    )
+    hints = get_type_hints(fn)
+    spec_type = next(iter(hints.values()))
+    SpecMeta._realisers[spec_type] = fn
+    return fn
 
 
-def _realise_sequential(spec: SequentialSpec, info: SpecInfo) -> nn.Module:
-    """Realise a sequential specification.
+def visualize(spec: Spec, format: str = "svg") -> str:
+    """Generate visual representation of specification.
 
     Parameters
     ----------
-    spec : SequentialSpec
-        The sequential specification to realise.
-    info : SpecInfo
-        Context information from upstream specs.
+    spec : Spec
+        Specification to visualize
+    format : str
+        Output format (svg, png, dot)
 
     Returns
     -------
-    nn.Module
-        The realised sequential module.
-
-    Raises
-    ------
-    RealisationError
-        If any part of the sequence fails to realise.
+    str
+        Visualization in requested format
     """
-    modules: list[nn.Module] = []
+    # Simplified - would use graphviz or similar
+    nodes = []
+    edges = []
 
-    # Process each part in order, propagating context
-    for i, part in enumerate(spec.parts):
-        try:
-            module = realise(part, info)
-            if module is not None:
-                modules.append(module)
-        except (RealisationError, TypeError) as e:
-            raise RealisationError(
-                f"Failed to realise part {i} ({part.__class__.__name__}): {e}",
-                spec_type="SequentialSpec",
-            ) from e
+    def traverse(s: Spec, parent: str | None = None) -> str:
+        node_id = f"{s.__class__.__name__}_{id(s)}"
+        nodes.append(f'{node_id} [label="{s.__class__.__name__}"]')
 
-    return nn.Sequential(*modules)
+        if parent:
+            edges.append(f"{parent} -> {node_id}")
 
+        for child in s.children():
+            traverse(child, node_id)
 
-class ParallelModule(nn.Module):  # type: ignore[misc]
-    """Module that combines parallel branches according to join mode."""
+        return node_id
 
-    def __init__(self, branches: list[nn.Module], join_mode: str) -> None:
-        """Initialize parallel module.
+    traverse(spec)
 
-        Parameters
-        ----------
-        branches : list[nn.Module]
-            List of branch modules to combine.
-        join_mode : str
-            How to combine the branch outputs.
-        """
-        super().__init__()
-        self.branches = nn.ModuleList(branches)
-        self.join_mode = join_mode
+    dot = "digraph {\n"
+    dot += "\n".join(nodes)
+    dot += "\n"
+    dot += "\n".join(edges)
+    dot += "\n}"
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass through all branches.
-
-        Parameters
-        ----------
-        x : torch.Tensor
-            Input tensor.
-
-        Returns
-        -------
-        torch.Tensor
-            Combined output from all branches.
-        """
-        outputs: Output = [branch(x) for branch in self.branches]
-        return self._combine_outputs(outputs)
-
-    def _combine_outputs(self, outputs: Output) -> torch.Tensor:
-        """Combine outputs based on join mode.
-
-        Parameters
-        ----------
-        outputs : Output
-            List of branch outputs.
-
-        Returns
-        -------
-        torch.Tensor
-            Combined output.
-        """
-        if self.join_mode == "concat":
-            return torch.cat(outputs, dim=-1)
-        elif self.join_mode == "add":
-            return torch.stack(outputs).sum(dim=0)
-        elif self.join_mode == "multiply":
-            result: torch.Tensor = outputs[0]
-            for output in outputs[1:]:
-                result = result * output
-            return result
-        else:
-            raise ValueError(f"Unsupported join mode: {self.join_mode}")
+    return dot
 
 
-def _realise_parallel_branches(
-    spec: ParallelSpec, info: SpecInfo
-) -> list[nn.Module]:
-    """Realise all branches of a parallel specification.
+def optimize_spec(spec: Spec) -> Spec:
+    """Apply optimization passes to specification.
 
     Parameters
     ----------
-    spec : ParallelSpec
-        The parallel specification.
-    info : SpecInfo
-        Context information from upstream specs.
+    spec : Spec
+        Specification to optimize
 
     Returns
     -------
-    list[nn.Module]
-        List of realised branch modules.
-
-    Raises
-    ------
-    RealisationError
-        If any branch fails to realise.
+    Spec
+        Optimized specification
     """
-    branches: list[nn.Module] = []
-
-    for i, branch in enumerate(spec.branches):
-        try:
-            branch_info = info.copy()
-            module = realise(branch, branch_info)
-            if module is not None:
-                branches.append(module)
-        except (RealisationError, TypeError) as e:
-            raise RealisationError(
-                f"Failed to realise branch {i} "
-                f"({branch.__class__.__name__}): {e}",
-                spec_type="ParallelSpec",
-            ) from e
-
-    return branches
+    # This would implement various optimization passes
+    # For now, just delegate to realiser's optimization
+    realiser = Realiser()
+    return realiser._optimize_spec(spec)
 
 
-def _realise_parallel(spec: ParallelSpec, info: SpecInfo) -> nn.Module:
-    """Realise a parallel specification.
+def to_yaml(spec: Spec) -> str:
+    """Serialize specification to YAML.
 
-    Parameters
+    Parameters.
     ----------
-    spec : ParallelSpec
-        The parallel specification to realise.
-    info : SpecInfo
-        Context information from upstream specs.
+    spec : Spec
+        Specification to serialize
 
     Returns
     -------
-    nn.Module
-        The realised parallel module.
-
-    Raises
-    ------
-    RealisationError
-        If any branch fails to realise or if no valid branches exist.
+    str
+        YAML representation
     """
-    # Realise all branches
-    branches = _realise_parallel_branches(spec, info)
-
-    if not branches:
-        raise RealisationError(
-            "No valid branches to combine",
-            spec_type="ParallelSpec",
-            suggestion="Ensure at least one branch can be realised",
-        )
-
-    # Update context based on parallel module's output dimension
-    output_dim = spec.get_embedding_dim()
-    if output_dim is not None:
-        info.embedding_dim = output_dim
-
-    return ParallelModule(branches, spec.join_mode)
-
-
-# Register realisers for primitive specs
-
-
-@register_realiser(LayerNormSpec)
-def _realise_layer_norm(spec: LayerNormSpec, info: SpecInfo) -> nn.Module:
-    """Realise a layer normalization specification.
-
-    Parameters
-    ----------
-    spec : LayerNormSpec
-        The layer normalization specification.
-    info : SpecInfo
-        Context information containing embedding dimension.
-
-    Returns
-    -------
-    nn.Module
-        The layer normalization module.
-
-    Raises
-    ------
-    RealisationError
-        If embedding dimension is not available.
-    """
-    if info.embedding_dim is None:
-        raise RealisationError(
-            "LayerNormSpec requires embedding dimension from context",
-            spec_type="LayerNormSpec",
-            suggestion="Place LayerNormSpec after a component that "
-            "defines embed_dim",
-        )
-
     try:
-        from energy_transformer.layers.layer_norm import LayerNorm
-
-        return LayerNorm(in_dim=info.embedding_dim, eps=spec.eps)
-    except ImportError:
-        # Fallback to standard PyTorch LayerNorm
-        return nn.LayerNorm(info.embedding_dim, eps=spec.eps)
-
-
-@register_realiser(MHEASpec)
-def _realise_mhea(spec: MHEASpec, info: SpecInfo) -> nn.Module:
-    """Realise a multi-head energy attention specification.
-
-    Parameters
-    ----------
-    spec : MHEASpec
-        The attention specification.
-    info : SpecInfo
-        Context information containing embedding dimension.
-
-    Returns
-    -------
-    nn.Module
-        The attention module.
-
-    Raises
-    ------
-    RealisationError
-        If embedding dimension is not available or module cannot be imported.
-    """
-    if info.embedding_dim is None:
-        raise RealisationError(
-            "MHEASpec requires embedding dimension from context",
-            spec_type="MHEASpec",
-            suggestion="Place MHEASpec after a component that "
-            "defines embed_dim",
-        )
-
-    try:
-        from energy_transformer.layers import MultiHeadEnergyAttention
-
-        return MultiHeadEnergyAttention(
-            in_dim=info.embedding_dim,
-            num_heads=spec.num_heads,
-            head_dim=spec.head_dim,
-            beta=spec.get_effective_beta(),
-            bias=spec.bias,
-        )
+        import yaml
     except ImportError as e:
-        raise RealisationError(
-            f"Cannot import MultiHeadEnergyAttention: {e}",
-            spec_type="MHEASpec",
-            suggestion="Ensure energy_transformer.layers.attention is "
-            "available",
+        raise ImportError(
+            "PyYAML is required for YAML serialization. "
+            "Install with: pip install PyYAML"
         ) from e
+    return str(yaml.dump(spec.to_dict(), default_flow_style=False))
 
 
-@register_realiser(HNSpec)
-def _realise_hn(spec: HNSpec, info: SpecInfo) -> nn.Module:
-    """Realise a Hopfield network specification.
+def from_yaml(yaml_str: str) -> Spec:
+    """Load specification from YAML.
 
-    Parameters
+    Parameters.
     ----------
-    spec : HNSpec
-        The Hopfield network specification.
-    info : SpecInfo
-        Context information containing embedding dimension.
+    yaml_str : str
+        YAML representation
 
     Returns
     -------
-    nn.Module
-        The Hopfield network module.
-
-    Raises
-    ------
-    RealisationError
-        If embedding dimension is not available or module cannot be imported.
-    """
-    if info.embedding_dim is None:
-        raise RealisationError(
-            "HNSpec requires embedding dimension from context",
-            spec_type="HNSpec",
-            suggestion="Place HNSpec after a component that defines embed_dim",
-        )
-
-    try:
-        from energy_transformer.layers.hopfield import (
-            HopfieldNetwork,
-        )
-
-        return HopfieldNetwork(
-            in_dim=info.embedding_dim,
-            hidden_dim=spec.hidden_dim,
-            multiplier=spec.multiplier,
-        )
-    except ImportError as e:
-        raise RealisationError(
-            f"Cannot import HopfieldNetwork: {e}",
-            spec_type="HNSpec",
-            suggestion="Ensure energy_transformer.layers.hopfield exists",
-        ) from e
-    except KeyError as e:
-        raise RealisationError(
-            f"Unknown activation function: {spec.activation}",
-            spec_type="HNSpec",
-            suggestion="Use 'relu', 'softmax', 'power', or 'tanh'",
-        ) from e
-
-
-@register_realiser(ETSpec)
-def _realise_et(spec: ETSpec, info: SpecInfo) -> nn.Module:
-    """Realise an Energy Transformer specification.
-
-    Parameters
-    ----------
-    spec : ETSpec
-        The Energy Transformer specification.
-    info : SpecInfo
-        Context information containing embedding dimension.
-
-    Returns
-    -------
-    nn.Module
-        The Energy Transformer module.
-
-    Raises
-    ------
-    RealisationError
-        If embedding dimension is not available or components cannot be
-        created.
-    """
-    if info.embedding_dim is None:
-        raise RealisationError(
-            "ETSpec requires embedding dimension from context",
-            spec_type="ETSpec",
-            suggestion="Place ETSpec after a component that defines embed_dim",
-        )
-
-    try:
-        from energy_transformer.models.base import EnergyTransformer
-
-        # Create sub-components using their realisers
-        layer_norm = realise(spec.layer_norm, info)
-        attention = realise(spec.attention, info)
-        hopfield = realise(spec.hopfield, info)
-
-        # Ensure we have valid components
-        if layer_norm is None or attention is None or hopfield is None:
-            raise RealisationError(
-                "Failed to create required sub-components",
-                spec_type="ETSpec",
-                suggestion="Check that sub-component specs are valid",
-            )
-
-        return EnergyTransformer(
-            layer_norm=cast(Any, layer_norm),  # Type casting for flexibility
-            attention=cast(Any, attention),
-            hopfield=cast(Any, hopfield),
-            steps=spec.steps,
-            alpha=spec.alpha,
-        )
-    except ImportError as e:
-        raise RealisationError(
-            f"Cannot import EnergyTransformer: {e}",
-            spec_type="ETSpec",
-            suggestion="Ensure energy_transformer.models.base is available",
-        ) from e
-
-
-@register_realiser(CLSTokenSpec)
-def _realise_cls_token(spec: CLSTokenSpec, info: SpecInfo) -> nn.Module:
-    """Realise a CLS token specification.
-
-    Parameters
-    ----------
-    spec : CLSTokenSpec
-        The CLS token specification.
-    info : SpecInfo
-        Context information containing embedding dimension.
-
-    Returns
-    -------
-    nn.Module
-        The CLS token module.
-
-    Raises
-    ------
-    RealisationError
-        If embedding dimension is not available or module cannot be imported.
-    """
-    if info.embedding_dim is None:
-        raise RealisationError(
-            "CLSTokenSpec requires embedding dimension from context",
-            spec_type="CLSTokenSpec",
-            suggestion="Place CLSTokenSpec after a component that "
-            "defines embed_dim",
-        )
-
-    try:
-        from energy_transformer.layers.tokens import CLSToken
-
-        return CLSToken(embed_dim=info.embedding_dim)
-    except ImportError as e:
-        raise RealisationError(
-            f"Cannot import CLSToken: {e}",
-            spec_type="CLSTokenSpec",
-            suggestion="Ensure energy_transformer.layers.tokens is available",
-        ) from e
-
-
-@register_realiser(PatchEmbedSpec)
-def _realise_patch_embed(spec: PatchEmbedSpec, info: SpecInfo) -> nn.Module:
-    """Realise a patch embedding specification.
-
-    Parameters
-    ----------
-    spec : PatchEmbedSpec
-        The patch embedding specification.
-    info : SpecInfo
-        Context information (not used for patch embedding).
-
-    Returns
-    -------
-    nn.Module
-        The patch embedding module.
-
-    Raises
-    ------
-    RealisationError
-        If module cannot be imported.
+    Spec
+        Reconstructed specification
     """
     try:
-        from energy_transformer.layers.embeddings import PatchEmbedding
-
-        return PatchEmbedding(
-            img_size=spec.img_size,
-            patch_size=spec.patch_size,
-            in_chans=spec.in_chans,
-            embed_dim=spec.embed_dim,
-            bias=spec.bias,
-        )
+        import yaml
     except ImportError as e:
-        raise RealisationError(
-            f"Cannot import PatchEmbedding: {e}",
-            spec_type="PatchEmbedSpec",
-            suggestion="Ensure energy_transformer.layers.embeddings is "
-            "available",
+        raise ImportError(
+            "PyYAML is required for YAML deserialization. "
+            "Install with: pip install PyYAML"
         ) from e
-
-
-@register_realiser(PosEmbedSpec)
-def _realise_pos_embed(spec: PosEmbedSpec, info: SpecInfo) -> nn.Module:
-    """Realise a positional embedding specification.
-
-    Parameters
-    ----------
-    spec : PosEmbedSpec
-        The positional embedding specification.
-    info : SpecInfo
-        Context information containing embedding dimension and token count.
-
-    Returns
-    -------
-    nn.Module
-        The positional embedding module.
-
-    Raises
-    ------
-    RealisationError
-        If required context is not available or module cannot be imported.
-    """
-    if info.embedding_dim is None:
-        raise RealisationError(
-            "PosEmbedSpec requires embedding dimension from context",
-            spec_type="PosEmbedSpec",
-            suggestion="Place PosEmbedSpec after a component that "
-            "defines embed_dim",
-        )
-
-    if info.token_count is None:
-        raise RealisationError(
-            "PosEmbedSpec requires token count from context",
-            spec_type="PosEmbedSpec",
-            suggestion="Place PosEmbedSpec after a component that "
-            "defines token count",
-        )
-
-    try:
-        from energy_transformer.layers.embeddings import PositionalEmbedding2D
-
-        return PositionalEmbedding2D(
-            num_patches=info.token_count,
-            embed_dim=info.embedding_dim,
-            include_cls=spec.include_cls,
-            init_std=spec.init_std,
-        )
-    except ImportError as e:
-        raise RealisationError(
-            f"Cannot import PositionalEmbedding2D: {e}",
-            spec_type="PosEmbedSpec",
-            suggestion="Ensure energy_transformer.layers.embeddings is "
-            "available",
-        ) from e
-
-
-Realise = realise
+    data = yaml.safe_load(yaml_str)
+    return Spec.from_dict(data)
