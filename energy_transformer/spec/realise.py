@@ -413,6 +413,105 @@ def _realise_sequential(spec: SequentialSpec, info: SpecInfo) -> nn.Module:
     return nn.Sequential(*modules)
 
 
+class ParallelModule(nn.Module):  # type: ignore[misc]
+    """Module that combines parallel branches according to join mode."""
+
+    def __init__(self, branches: list[nn.Module], join_mode: str) -> None:
+        """Initialize parallel module.
+
+        Parameters
+        ----------
+        branches : list[nn.Module]
+            List of branch modules to combine.
+        join_mode : str
+            How to combine the branch outputs.
+        """
+        super().__init__()
+        self.branches = nn.ModuleList(branches)
+        self.join_mode = join_mode
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass through all branches.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Combined output from all branches.
+        """
+        outputs: Output = [branch(x) for branch in self.branches]
+        return self._combine_outputs(outputs)
+
+    def _combine_outputs(self, outputs: Output) -> torch.Tensor:
+        """Combine outputs based on join mode.
+
+        Parameters
+        ----------
+        outputs : Output
+            List of branch outputs.
+
+        Returns
+        -------
+        torch.Tensor
+            Combined output.
+        """
+        if self.join_mode == "concat":
+            return torch.cat(outputs, dim=-1)
+        elif self.join_mode == "add":
+            return torch.stack(outputs).sum(dim=0)
+        elif self.join_mode == "multiply":
+            result: torch.Tensor = outputs[0]
+            for output in outputs[1:]:
+                result = result * output
+            return result
+        else:
+            raise ValueError(f"Unsupported join mode: {self.join_mode}")
+
+
+def _realise_parallel_branches(
+    spec: ParallelSpec, info: SpecInfo
+) -> list[nn.Module]:
+    """Realise all branches of a parallel specification.
+
+    Parameters
+    ----------
+    spec : ParallelSpec
+        The parallel specification.
+    info : SpecInfo
+        Context information from upstream specs.
+
+    Returns
+    -------
+    list[nn.Module]
+        List of realised branch modules.
+
+    Raises
+    ------
+    RealisationError
+        If any branch fails to realise.
+    """
+    branches: list[nn.Module] = []
+
+    for i, branch in enumerate(spec.branches):
+        try:
+            branch_info = info.copy()
+            module = realise(branch, branch_info)
+            if module is not None:
+                branches.append(module)
+        except (RealisationError, TypeError) as e:
+            raise RealisationError(
+                f"Failed to realise branch {i} "
+                f"({branch.__class__.__name__}): {e}",
+                spec_type="ParallelSpec",
+            ) from e
+
+    return branches
+
+
 def _realise_parallel(spec: ParallelSpec, info: SpecInfo) -> nn.Module:
     """Realise a parallel specification.
 
@@ -433,21 +532,8 @@ def _realise_parallel(spec: ParallelSpec, info: SpecInfo) -> nn.Module:
     RealisationError
         If any branch fails to realise or if no valid branches exist.
     """
-    branches: list[nn.Module] = []
-
-    # Process each branch independently with copied context
-    for i, branch in enumerate(spec.branches):
-        try:
-            branch_info = info.copy()
-            module = realise(branch, branch_info)
-            if module is not None:
-                branches.append(module)
-        except (RealisationError, TypeError) as e:
-            raise RealisationError(
-                f"Failed to realise branch {i} "
-                f"({branch.__class__.__name__}): {e}",
-                spec_type="ParallelSpec",
-            ) from e
+    # Realise all branches
+    branches = _realise_parallel_branches(spec, info)
 
     if not branches:
         raise RealisationError(
@@ -455,51 +541,6 @@ def _realise_parallel(spec: ParallelSpec, info: SpecInfo) -> nn.Module:
             spec_type="ParallelSpec",
             suggestion="Ensure at least one branch can be realised",
         )
-
-    # Create module that combines branches
-    class ParallelModule(nn.Module):  # type: ignore[misc]
-        """Module that combines parallel branches according to join mode."""
-
-        def __init__(self, branches: list[nn.Module], join_mode: str) -> None:
-            """Initialize parallel module.
-
-            Parameters
-            ----------
-            branches : list[nn.Module]
-                List of branch modules to combine.
-            join_mode : str
-                How to combine the branch outputs.
-            """
-            super().__init__()
-            self.branches = nn.ModuleList(branches)
-            self.join_mode = join_mode
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Forward pass through all branches.
-
-            Parameters
-            ----------
-            x : torch.Tensor
-                Input tensor.
-
-            Returns
-            -------
-            torch.Tensor
-                Combined output from all branches.
-            """
-            outputs: Output = [branch(x) for branch in self.branches]
-
-            if self.join_mode == "concat":
-                return torch.cat(outputs, dim=-1)
-            elif self.join_mode == "add":
-                return torch.stack(outputs).sum(dim=0)
-            elif self.join_mode == "multiply":
-                result: torch.Tensor = outputs[0]
-                for output in outputs[1:]:
-                    result = result * output
-                return result
-            else:
-                raise ValueError(f"Unsupported join mode: {self.join_mode}")
 
     # Update context based on parallel module's output dimension
     output_dim = spec.get_embedding_dim()
