@@ -5,7 +5,7 @@
 ![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-green.svg)
 ![AI-Assisted](https://img.shields.io/badge/AI%20Assisted-Claude%20%2B%20GPT-purple.svg)
 ![Status: Under Development](https://img.shields.io/badge/status-under%20development-orange.svg)
-[![CI](https://github.com/b-vitamins/energy-transformer/workflows/CI/badge.svg?branch=master)](https://github.com/b-vitamins/energy-transformer/actions)
+![GitHub Workflow Status](https://github.com/b-vitamins/energy-transformer/actions/workflows/ci.yml/badge.svg)
 
 PyTorch implementation of the **Energy Transformer (ET)**, a neural architecture that replaces traditional transformer components with energy-based alternatives. This implementation includes **Simplicial Energy Transformers (SET)** that extend ET with topology-aware memory through Simplicial Hopfield Networks.
 
