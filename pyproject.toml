@@ -90,10 +90,12 @@ ignore_errors = true
 module = ["energy_transformer.*"]
 strict = true
 ignore_errors = false
+warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
 module = ["tests.*", "examples.*"]
 ignore_errors = true
+warn_unused_ignores = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
