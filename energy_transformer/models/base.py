@@ -1,6 +1,7 @@
-"""Base Energy Transformer model definition with gradient override support."""
+"""Base Energy Transformer."""
 
-from typing import Literal, NamedTuple
+from contextlib import AbstractContextManager
+from typing import Literal, NamedTuple, cast
 
 import torch
 import torch.nn as nn
@@ -19,9 +20,10 @@ REALISER_REGISTRY: dict[str, type[nn.Module]] = {}
 
 Track = Literal["none", "energy", "trajectory", "both"]
 DescentMode = Literal["sgd", "bb"]
+GradContextManager = AbstractContextManager[None, bool | None]
 
 
-def force_enable_grad():
+def force_enable_grad() -> GradContextManager:
     """Use torch.enable_grad() to temporarily enable gradient computation.
 
     This context manager allows internal gradient computation for optimization
@@ -29,7 +31,8 @@ def force_enable_grad():
     Does not work with torch.inference_mode(), which fundamentally prevents
     gradient tracking.
     """
-    return torch.enable_grad()
+    gctx = cast(GradContextManager, torch.enable_grad())
+    return gctx  # type: ignore[no-untyped-call]
 
 
 class ETOutput(NamedTuple):
@@ -50,7 +53,7 @@ class ETOutput(NamedTuple):
     trajectory: Tensor | None = None
 
 
-class EnergyTransformer(nn.Module):  # type: ignore
+class EnergyTransformer(nn.Module):  # type: ignore[misc]
     """Base Energy Transformer with gradient descent optimization.
 
     Defines a composite energy function that combines attention-based and
@@ -113,7 +116,105 @@ class EnergyTransformer(nn.Module):  # type: ignore
         e_hn = self.hopfield(g)
 
         # E^TOTAL = E^ATT + E^HN
-        return e_att + e_hn
+        # Explicitly ensure return type is Tensor
+        total_energy: Tensor = e_att + e_hn
+        return total_energy
+
+    def _compute_gradient(
+        self,
+        x: Tensor,
+        detach_mode: bool,
+        create_graph: bool,
+        track_trajectory: bool,
+        trajectory: list[Tensor],
+    ) -> tuple[Tensor, Tensor]:
+        """Compute energy and gradient at current position.
+
+        Returns
+        -------
+        tuple[Tensor, Tensor]
+            Energy value and gradient
+        """
+        if not detach_mode:
+            with force_enable_grad():
+                x_grad = x.clone().requires_grad_(True)
+                energy = self.energy(x_grad)
+
+                if track_trajectory:
+                    trajectory.append(energy.detach().clone())
+
+                (grad,) = torch.autograd.grad(
+                    energy, x_grad, create_graph=create_graph
+                )
+        else:
+            # In detach mode, compute energy without gradients
+            with torch.no_grad():
+                energy = self.energy(x)
+                if track_trajectory:
+                    trajectory.append(energy.detach().clone())
+
+            # Compute gradient for update
+            with force_enable_grad():
+                x_grad = x.clone().requires_grad_(True)
+                energy_for_grad = self.energy(x_grad)
+                (grad,) = torch.autograd.grad(
+                    energy_for_grad, x_grad, create_graph=False
+                )
+
+        return energy, grad
+
+    def _compute_bb_step_size(
+        self,
+        x: Tensor,
+        grad: Tensor,
+        prev_x: Tensor | None,
+        prev_grad: Tensor | None,
+    ) -> Tensor | float:
+        """Compute Barzilai-Borwein step size."""
+        if prev_x is not None and prev_grad is not None:
+            s = (x - prev_x).flatten()
+            y = (grad - prev_grad).flatten()
+            denom = torch.dot(s, y)
+            return torch.dot(s, s) / denom.clamp_min(1e-8)
+        else:
+            return self.alpha
+
+    def _armijo_line_search(
+        self,
+        x: Tensor,
+        grad: Tensor,
+        energy: Tensor,
+        lr: Tensor | float,
+        detach_mode: bool,
+        armijo_gamma: float,
+        armijo_max_iter: int,
+    ) -> Tensor:
+        """Perform Armijo backtracking line search.
+
+        Returns
+        -------
+        Tensor
+            Step to take
+        """
+        for _ in range(armijo_max_iter):
+            new_x = x - lr * grad
+
+            # Evaluate new energy
+            if not detach_mode:
+                with force_enable_grad():
+                    new_x_grad = new_x.clone().requires_grad_(True)
+                    new_energy = self.energy(new_x_grad)
+            else:
+                with torch.no_grad():
+                    new_energy = self.energy(new_x.detach())
+
+            if new_energy < energy:  # sufficient decrease
+                return lr * grad
+
+            lr *= armijo_gamma
+
+        # If all backtracking fails, use minimal step
+        return lr * grad
 
     def _energy_descent(
         self,
@@ -150,110 +251,54 @@ class EnergyTransformer(nn.Module):  # type: ignore
         -------
         tuple[Tensor, list[Tensor]]
             Optimized tokens and energy trajectory (empty if not tracking)
-
-        Notes
-        -----
-        This method can work even within torch.no_grad() contexts by temporarily
-        re-enabling gradients. However, it cannot work within torch.inference_mode()
-        which fundamentally prevents gradient tracking.
         """
-        trajectory = []
+        trajectory: list[Tensor] = []
         create_graph = not detach_mode
 
         # Check for inference_mode early - we cannot override this
         if torch.is_inference_mode_enabled() and not detach_mode:
             raise RuntimeError(
-                "EnergyTransformer optimization requires gradient computation, "
+                "EnergyTransformer requires gradient computation, "
                 "which is not possible within torch.inference_mode(). "
-                "Either call the model outside inference_mode() or use detach=True."
+                "Use detach=True or call the model outside inference_mode()."
             )
 
         # Initialize BB buffers
-        prev_x, prev_grad = None, None
+        prev_x: Tensor | None = None
+        prev_grad: Tensor | None = None
 
         for t in range(steps):
-            # In detach mode with inference_mode, we cannot compute gradients
+            # Skip optimization in inference mode with detach
             if detach_mode and torch.is_inference_mode_enabled():
-                # Skip optimization in inference mode with detach
-                # Just track energy if requested
                 if track_trajectory:
                     with torch.no_grad():
                         energy = self.energy(x)
                         trajectory.append(energy.detach().clone())
                 continue
 
-            # Use force_enable_grad to ensure gradients work even in no_grad context
-            # This is only needed when we're actually computing gradients
-            if not detach_mode:
-                with force_enable_grad():
-                    # Clone x inside enable_grad to ensure proper gradient tracking
-                    # This is necessary when the original x was created in a no_grad context
-                    x_grad = x.clone().requires_grad_(True)
+            # Compute energy and gradient
+            energy, grad = self._compute_gradient(
+                x, detach_mode, create_graph, track_trajectory, trajectory
+            )
 
-                    # Compute energy at current position
-                    energy = self.energy(x_grad)
-
-                    # Track energy if requested
-                    if track_trajectory:
-                        trajectory.append(energy.detach().clone())
-
-                    # Compute gradient ∇ₓ E^TOTAL(x)
-                    (grad,) = torch.autograd.grad(
-                        energy, x_grad, create_graph=create_graph
-                    )
-            else:
-                # In detach mode, we don't need gradients
-                with torch.no_grad():
-                    energy = self.energy(x)
-                    if track_trajectory:
-                        trajectory.append(energy.detach().clone())
-
-                # Still compute gradient for the update, but detached
-                with force_enable_grad():
-                    # Clone x inside enable_grad for proper gradient tracking
-                    x_grad = x.clone().requires_grad_(True)
-                    energy_for_grad = self.energy(x_grad)
-                    (grad,) = torch.autograd.grad(
-                        energy_for_grad, x_grad, create_graph=False
-                    )
-
-            # Skip update if we didn't compute gradients
+            # Skip update if we couldn't compute gradients
             if detach_mode and torch.is_inference_mode_enabled():
                 continue
 
+            # Compute step based on optimization mode
             if mode == "bb":
-                # Compute BB step size if we have history
-                if prev_x is not None and prev_grad is not None:
-                    s = (x - prev_x).flatten()
-                    y = (grad - prev_grad).flatten()
-                    denom = torch.dot(s, y)
-                    lr = torch.dot(s, s) / denom.clamp_min(1e-8)
-                else:
-                    # First step uses default alpha
-                    lr = self.alpha
-
-                # Armijo backtracking line search for safety
-                for _ in range(armijo_max_iter):
-                    new_x = x - lr * grad
-
-                    # Evaluate new energy with appropriate gradient context
-                    if not detach_mode:
-                        with force_enable_grad():
-                            # Clone new_x inside enable_grad for proper gradient tracking
-                            new_x_grad = new_x.clone().requires_grad_(True)
-                            new_energy = self.energy(new_x_grad)
-                    else:
-                        with torch.no_grad():
-                            new_energy = self.energy(new_x.detach())
-
-                    if new_energy < energy:  # sufficient decrease
-                        step = lr * grad
-                        break
-                    lr *= armijo_gamma
-                else:
-                    # If all backtracking fails, use minimal step
-                    step = lr * grad
-
+                lr: Tensor | float = self._compute_bb_step_size(
+                    x, grad, prev_x, prev_grad
+                )
+                step = self._armijo_line_search(
+                    x,
+                    grad,
+                    energy,
+                    lr,
+                    detach_mode,
+                    armijo_gamma,
+                    armijo_max_iter,
+                )
             else:  # "sgd"
                 step = self.alpha * grad
 
@@ -265,7 +310,6 @@ class EnergyTransformer(nn.Module):  # type: ignore
                 if t < steps - 1:
                     x.requires_grad_(True)
             else:
-                # In non-detach mode, x already has gradient tracking from above
                 x = x - step
 
             # Store for BB
@@ -302,7 +346,7 @@ class EnergyTransformer(nn.Module):  # type: ignore
         armijo_gamma: float = 0.5,
         armijo_max_iter: int = 4,
     ) -> Tensor | ETOutput:
-        """Optimize token configuration via gradient descent on energy landscape.
+        """Optimize token configuration via descent on energy landscape.
 
         Parameters
         ----------
