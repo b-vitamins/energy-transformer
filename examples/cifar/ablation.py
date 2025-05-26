@@ -5,13 +5,16 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TypedDict
+from typing import Any, TypedDict
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.amp import GradScaler, autocast
-from torch.utils.data import DataLoader
+from torch.amp import (
+    GradScaler,  # type: ignore[attr-defined]
+    autocast,  # type: ignore[attr-defined]
+)
+from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
 
 from energy_transformer.models.vision import (
@@ -50,7 +53,9 @@ class Config:
     seed: int = 42
 
 
-def setup_data(config: Config) -> tuple[DataLoader, DataLoader, DataLoader]:
+def setup_data(
+    config: Config,
+) -> tuple[DataLoader[Any], DataLoader[Any], DataLoader[Any]]:
     """Minimal data setup."""
     transform_train = transforms.Compose(
         [
@@ -82,22 +87,30 @@ def setup_data(config: Config) -> tuple[DataLoader, DataLoader, DataLoader]:
     # 90/10 train/val split
     train_size = int(0.9 * len(train_dataset))
     val_size = len(train_dataset) - train_size
-    train_dataset, val_dataset = torch.utils.data.random_split(
+    train_subset, val_subset = torch.utils.data.random_split(
         train_dataset,
         [train_size, val_size],
         generator=torch.Generator().manual_seed(config.seed),
     )
-    val_dataset.dataset.transform = transform_test
+
+    val_dataset = datasets.CIFAR100(
+        DATA_HOME, train=True, download=False, transform=transform_test
+    )
+
+    val_subset_with_test_transform = Subset(val_dataset, val_subset.indices)
 
     train_loader = DataLoader(
-        train_dataset,
+        train_subset,
         config.batch_size,
         shuffle=True,
         num_workers=4,
         pin_memory=True,
     )
     val_loader = DataLoader(
-        val_dataset, config.batch_size * 2, num_workers=4, pin_memory=True
+        val_subset_with_test_transform,
+        config.batch_size * 2,
+        num_workers=4,
+        pin_memory=True,
     )
     test_loader = DataLoader(
         test_dataset, config.batch_size * 2, num_workers=4, pin_memory=True
@@ -108,7 +121,7 @@ def setup_data(config: Config) -> tuple[DataLoader, DataLoader, DataLoader]:
 
 def train_epoch(
     model: nn.Module,
-    loader: DataLoader,
+    loader: DataLoader[Any],
     optimizer: optim.Optimizer,
     criterion: nn.Module,
     scaler: GradScaler | None,
@@ -173,7 +186,7 @@ def train_epoch(
 
 def evaluate(
     model: nn.Module,
-    loader: DataLoader,
+    loader: DataLoader[Any],
     criterion: nn.Module,
     device: torch.device,
     is_et: bool = False,
