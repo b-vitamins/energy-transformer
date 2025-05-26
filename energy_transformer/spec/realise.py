@@ -70,6 +70,8 @@ RealiserFunc = Callable[[Any, "SpecInfo"], nn.Module]
 # Registry for realiser functions
 _REALISERS: dict[type, RealiserFunc] = {}
 
+Output = list[torch.Tensor]
+
 
 class RealisationError(Exception):
     """Raised when a specification cannot be realised into a module.
@@ -485,14 +487,14 @@ def _realise_parallel(spec: ParallelSpec, info: SpecInfo) -> nn.Module:
             torch.Tensor
                 Combined output from all branches.
             """
-            outputs = [branch(x) for branch in self.branches]
+            outputs: Output = [branch(x) for branch in self.branches]
 
             if self.join_mode == "concat":
                 return torch.cat(outputs, dim=-1)
             elif self.join_mode == "add":
-                return sum(outputs)
+                return torch.stack(outputs).sum(dim=0)
             elif self.join_mode == "multiply":
-                result = outputs[0]
+                result: torch.Tensor = outputs[0]
                 for output in outputs[1:]:
                     result = result * output
                 return result
