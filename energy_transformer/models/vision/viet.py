@@ -191,6 +191,59 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
         nn.init.trunc_normal_(self.cls_token.cls_token, std=0.02)
         nn.init.trunc_normal_(self.pos_embed.pos_embed, std=0.02)
 
+    def _process_et_blocks(
+        self,
+        x: Tensor,
+        return_energy_info: bool,
+        et_kwargs: dict[str, Any],
+    ) -> tuple[Tensor, dict[str, Any]]:
+        """Process input through Energy Transformer blocks.
+
+        Parameters
+        ----------
+        x : Tensor
+            Input tensor.
+        return_energy_info : bool
+            Whether to collect energy information.
+        et_kwargs : dict
+            Additional ET block arguments.
+
+        Returns
+        -------
+        tuple[Tensor, dict]
+            Processed tensor and energy information.
+        """
+        energy_info: dict[str, Any] = {}
+        if not return_energy_info:
+            for et_block in self.et_blocks:
+                x = et_block(x, **et_kwargs)
+            return x, energy_info
+
+        # Collect energy information
+        block_energies = []
+        block_trajectories = []
+
+        for et_block in self.et_blocks:
+            result = et_block(
+                x, return_energy=True, return_trajectory=True, **et_kwargs
+            )
+            if hasattr(result, "tokens"):
+                x = result.tokens
+                if result.final_energy is not None:
+                    block_energies.append(result.final_energy.item())
+                if result.trajectory is not None:
+                    block_trajectories.append(result.trajectory.cpu().numpy())
+            else:
+                x = result
+
+        total_energy = sum(block_energies) if block_energies else None
+        energy_info = {
+            "block_energies": block_energies,
+            "block_trajectories": block_trajectories,
+            "total_energy": total_energy,
+        }
+        return x, energy_info
+
     def forward(
         self,
         x: Tensor,
@@ -236,36 +289,9 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
         x = self.pos_drop(x)
 
         # 4. Energy Transformer blocks
-        energy_info: dict[str, Any] = {}
-        if return_energy_info:
-            block_energies = []
-            block_trajectories = []
-
-        for _i, et_block in enumerate(self.et_blocks):
-            if return_energy_info:
-                result = et_block(
-                    x, return_energy=True, return_trajectory=True, **et_kwargs
-                )
-                if hasattr(result, "tokens"):
-                    x = result.tokens
-                    if result.final_energy is not None:
-                        block_energies.append(result.final_energy.item())
-                    if result.trajectory is not None:
-                        block_trajectories.append(
-                            result.trajectory.cpu().numpy()
-                        )
-                else:
-                    x = result
-            else:
-                x = et_block(x, **et_kwargs)
-
-        if return_energy_info:
-            total_energy = sum(block_energies) if block_energies else None
-            energy_info = {
-                "block_energies": block_energies,
-                "block_trajectories": block_trajectories,
-                "total_energy": total_energy,
-            }
+        x, energy_info = self._process_et_blocks(
+            x, return_energy_info, et_kwargs
+        )
 
         # 5. Final layer normalization
         x = self.norm(x)  # (B, N+1, D)
