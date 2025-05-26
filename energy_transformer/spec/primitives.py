@@ -1,1039 +1,974 @@
-"""Primitive specification types for Energy Transformer models.
+"""Specification primitives for declarative model construction.
 
-This module provides the foundational building blocks for describing Energy
-Transformer architectures. Each primitive spec represents a single component
-that can be composed into larger architectures.
+This module provides the foundational specification system for defining
+machine learning models declaratively. Specifications are immutable
+descriptions of model components that can be validated, composed, and
+transformed into executable modules.
 
-Design Principles:
-- Immutable data structures (frozen dataclasses)
-- Early validation with helpful error messages
-- Clear dependency declarations
-- Composable by design
-- Type-safe interfaces
-
-Example
--------
->>> patch_embed = PatchEmbedSpec(
-...     img_size=224, patch_size=16, in_chans=3, embed_dim=768
-... )
->>> cls_token = CLSTokenSpec()
->>> et_block = ETSpec(steps=12, alpha=0.125)
+The system uses Python's type system and metaclasses to provide automatic
+validation, registration, and introspection capabilities.
 """
 
 from __future__ import annotations
 
-import math
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from typing import Any, ClassVar, Literal
+import inspect
+from abc import ABC, ABCMeta
+from collections.abc import Callable
+from dataclasses import dataclass, field, fields
+from typing import (
+    Any,
+    ClassVar,
+    TypeAlias,
+    TypeVar,
+    get_args,
+    get_type_hints,
+)
+
+import torch.nn as nn
 
 __all__ = [
-    # Types
-    "EmbeddingDim",
-    "TokenCount",
-    "ImageSize",
-    "PatchSize",
-    # Base classes
     "Spec",
+    "SpecMeta",
+    "AsyncSpec",
+    "spec",
+    "param",
+    "Context",
+    "Dimension",
+    "DimensionDef",
+    "DimensionLike",
     "ValidationError",
-    # Primitive specs
-    "LayerNormSpec",
-    "MHEASpec",
-    "HNSpec",
-    "ETSpec",
-    "CLSTokenSpec",
-    "PatchEmbedSpec",
-    "PosEmbedSpec",
-    # Utilities
-    "validate_positive",
-    "validate_probability",
-    "to_pair",
+    "requires",
+    "provides",
+    "modifies",
+    "validate_field",
+    "REQUIRED",
 ]
 
-# Type aliases for semantic clarity
-EmbeddingDim = int
-TokenCount = int
-ImageSize = int | tuple[int, int]
-PatchSize = int | tuple[int, int]
+# Type aliases
+T = TypeVar("T")
+DimensionLike: TypeAlias = int | str | None
+ModuleFactory = Callable[[Any, "Context"], nn.Module]
+
+
+# Sentinel for required dimensions
+class _Required:
+    def __repr__(self) -> str:
+        return "REQUIRED"
+
+
+REQUIRED = _Required()
+
+
+@dataclass
+class DimensionDef:
+    """Definition of a dimension with type information and validation.
+
+    Parameters
+    ----------
+    name : str
+        Name of the dimension
+    type : type[int] | type[float], optional
+        Expected type of the dimension value, default is int
+    validator : Callable[[Any], bool], optional
+        Validation function for dimension values
+    description : str, optional
+        Human-readable description of the dimension
+    """
+
+    name: str
+    type: type[int] | type[float] = int
+    validator: Callable[[Any], bool] | None = None
+    description: str | None = None
+
+
+class Dimension:
+    """Symbolic dimension that can be resolved from context.
+
+    Dimensions represent values that may not be known at specification time
+    but can be resolved from context during realization. They support
+    formulas for computed dimensions and validation constraints.
+
+    Parameters
+    ----------
+    name : str
+        Name of the dimension
+    value : DimensionLike, optional
+        Static value or reference to another dimension
+    formula : str, optional
+        Formula to compute dimension value (e.g., "embed_dim * 4")
+    constraints : list[Callable[[int], bool]], optional
+        Validation constraints for the dimension
+    """
+
+    def __init__(
+        self,
+        name: str,
+        value: DimensionLike = None,
+        formula: str | None = None,
+        constraints: list[Callable[[int], bool]] | None = None,
+    ):
+        """Initialize Dimension with name, value, formula, and constraints.
+
+        Parameters
+        ----------
+        name : str
+            Name of the dimension
+        value : DimensionLike, optional
+            Static value or reference to another dimension
+        formula : str, optional
+            Formula to compute dimension value
+        constraints : list[Callable[[int], bool]], optional
+            Validation constraints for the dimension
+        """
+        self.name = name
+        self.value = value
+        self.formula = formula
+        self.constraints = constraints or []
+
+    def resolve(self, context: Context) -> int | None:
+        """Resolve dimension value from context.
+
+        Parameters
+        ----------
+        context : Context
+            Context containing dimension values
+
+        Returns
+        -------
+        int | None
+            Resolved dimension value or None if unresolvable
+        """
+        if self.value is not None:
+            if isinstance(self.value, str):
+                return context.get_dim(self.value)
+            return self.value
+
+        if self.formula:
+            # Safe formula evaluation with restricted namespace
+            local_vars = {
+                name: context.get_dim(name) for name in context.dimensions
+            }
+            try:
+                result = eval(self.formula, {"__builtins__": {}}, local_vars)
+                return int(result) if result is not None else None
+            except Exception:
+                return None
+
+        return context.get_dim(self.name)
+
+    def validate(self, value: int) -> None:
+        """Validate resolved dimension value against constraints.
+
+        Parameters
+        ----------
+        value : int
+            Dimension value to validate
+
+        Raises
+        ------
+        ValidationError
+            If value fails any constraint
+        """
+        for constraint in self.constraints:
+            if not constraint(value):
+                raise ValidationError(
+                    f"Dimension {self.name}={value} failed constraint"
+                )
+
+
+class Context:
+    """Execution context containing dimensions and metadata.
+
+    Contexts form a hierarchy allowing scoped dimension resolution
+    and metadata storage. They support caching for performance and
+    provide a clean interface for dimension management.
+
+    Parameters
+    ----------
+    dimensions : dict[str, int | None], optional
+        Dimension name to value mappings
+    metadata : dict[str, Any], optional
+        Additional metadata storage
+    parent : Context, optional
+        Parent context for hierarchical lookup
+    """
+
+    def __init__(
+        self,
+        dimensions: dict[str, int | None] | None = None,
+        metadata: dict[str, Any] | None = None,
+        parent: Context | None = None,
+    ):
+        """Initialize Context with dimensions, metadata, and parent.
+
+        Parameters
+        ----------
+        dimensions : dict[str, int | None], optional
+            Dimension name to value mappings
+        metadata : dict[str, Any], optional
+            Additional metadata storage
+        parent : Context, optional
+            Parent context for hierarchical lookup
+        """
+        self.dimensions = dimensions or {}
+        self.metadata = metadata or {}
+        self.parent = parent
+        self._cache: dict[str, Any] = {}
+
+    def get_dim(self, name: str) -> int | None:
+        """Get dimension value by name with hierarchical lookup.
+
+        Parameters
+        ----------
+        name : str
+            Dimension name to look up
+
+        Returns
+        -------
+        int | None
+            Dimension value or None if not found
+        """
+        if name in self.dimensions:
+            return self.dimensions[name]
+        if self.parent:
+            return self.parent.get_dim(name)
+        return None
+
+    def set_dim(self, name: str, value: int) -> None:
+        """Set dimension value in this context.
+
+        Parameters
+        ----------
+        name : str
+            Dimension name
+        value : int
+            Dimension value
+        """
+        self.dimensions[name] = value
+        # Invalidate cache entries that might depend on this
+        self._cache.clear()
+
+    def update(self, **kwargs: int) -> None:
+        """Update multiple dimensions at once.
+
+        Parameters
+        ----------
+        **kwargs : int
+            Dimension name to value mappings
+        """
+        self.dimensions.update(kwargs)
+        self._cache.clear()
+
+    def child(self, **updates: Any) -> Context:
+        """Create child context with updates.
+
+        Parameters
+        ----------
+        **updates : Any
+            Dimension updates for child context
+
+        Returns
+        -------
+        Context
+            New child context
+        """
+        child = Context(
+            dimensions=self.dimensions.copy(),
+            metadata=self.metadata.copy(),
+            parent=self,
+        )
+        child.update(**updates)
+        return child
+
+    def cache_get(self, key: str) -> Any | None:
+        """Get cached value by key.
+
+        Parameters
+        ----------
+        key : str
+            Cache key
+
+        Returns
+        -------
+        Any | None
+            Cached value or None
+        """
+        return self._cache.get(key)
+
+    def cache_set(self, key: str, value: Any) -> None:
+        """Set cached value.
+
+        Parameters
+        ----------
+        key : str
+            Cache key
+        value : Any
+            Value to cache
+        """
+        self._cache[key] = value
+
+    def __repr__(self) -> str:
+        """Return detailed string representation of the context.
+
+        Returns
+        -------
+        str
+            Detailed representation including dimensions and metadata
+        """
+        return (
+            f"Context(dimensions={self.dimensions!r}, "
+            f"metadata={self.metadata!r})"
+        )
 
 
 class ValidationError(ValueError):
-    """Raised when a spec fails validation.
-
-    Provides enhanced error messages with context and suggestions.
+    """Validation error with structured debugging information.
 
     Parameters
     ----------
     message : str
-        The error message.
-    spec_type : str, optional
-        The name of the spec type that failed validation.
+        Primary error message
+    spec : Spec, optional
+        Specification that failed validation
+    field_name : str, optional
+        Field that caused the error
     suggestion : str, optional
-        A helpful suggestion for fixing the error.
+        Helpful suggestion for fixing the error
+    context : Context, optional
+        Context during validation
     """
 
     def __init__(
         self,
         message: str,
-        spec_type: str | None = None,
+        spec: Spec | None = None,
+        field_name: str | None = None,
         suggestion: str | None = None,
-    ) -> None:
-        """Initialize ValidationError with enhanced messaging."""
-        self.spec_type = spec_type
+        context: Context | None = None,
+    ):
+        """Initialize ValidationError with debugging information.
+
+        Parameters
+        ----------
+        message : str
+            Primary error message
+        spec : Spec, optional
+            Specification that failed validation
+        field_name : str, optional
+            Field that caused the error
+        suggestion : str, optional
+            Helpful suggestion for fixing the error
+        context : Context, optional
+            Context during validation
+        """
+        self.spec = spec
+        self.field_name = field_name
         self.suggestion = suggestion
+        self.context = context
 
-        full_message = message
-        if spec_type:
-            full_message = f"{spec_type}: {message}"
+        parts = [message]
+        if spec:
+            parts.append(f"in {spec.__class__.__name__}")
+        if field_name:
+            parts.append(f"field '{field_name}'")
+        if context:
+            parts.append(f"with context {context}")
         if suggestion:
-            full_message += f"\nSuggestion: {suggestion}"
+            parts.append(f"\nSuggestion: {suggestion}")
 
-        super().__init__(full_message)
-
-
-def validate_positive(
-    value: Any, name: str, spec_type: str | None = None
-) -> None:
-    """Validate that a value is a positive number.
-
-    Parameters
-    ----------
-    value : Any
-        The value to validate.
-    name : str
-        The name of the parameter for error messages.
-    spec_type : str, optional
-        The spec type for error context.
-
-    Raises
-    ------
-    ValidationError
-        If the value is not a positive number.
-    """
-    if not isinstance(value, int | float) or value <= 0:
-        raise ValidationError(
-            f"{name} must be a positive number, got {value!r}",
-            spec_type=spec_type,
-            suggestion=f"Try {name}=1 or another positive value",
-        )
+        super().__init__(" ".join(parts))
 
 
-def validate_probability(
-    value: Any, name: str, spec_type: str | None = None
-) -> None:
-    """Validate that a value is a valid probability [0, 1].
+def param(
+    default: Any = REQUIRED,
+    *,
+    default_factory: Callable[[], Any] | None = None,
+    validator: Callable[[Any], bool] | None = None,
+    description: str | None = None,
+    dimension: bool = False,
+    choices: list[Any] | None = None,
+) -> Any:
+    """Define a specification parameter with validation and metadata.
 
     Parameters
     ----------
-    value : Any
-        The value to validate.
-    name : str
-        The name of the parameter for error messages.
-    spec_type : str, optional
-        The spec type for error context.
-
-    Raises
-    ------
-    ValidationError
-        If the value is not between 0 and 1.
-    """
-    if not isinstance(value, int | float) or not (0 <= value <= 1):
-        raise ValidationError(
-            f"{name} must be a number between 0 and 1, got {value!r}",
-            spec_type=spec_type,
-            suggestion=f"Try {name}=0.1 for 10% or {name}=0.0 to disable",
-        )
-
-
-def to_pair(
-    value: int | tuple[int, int], name: str = "value"
-) -> tuple[int, int]:
-    """Convert a value to a pair of integers.
-
-    Parameters
-    ----------
-    value : int or tuple[int, int]
-        Value to convert.
-    name : str, default="value"
-        Name of the parameter for error messages.
+    default : Any
+        Default value or REQUIRED for required parameters
+    default_factory : Callable[[], Any], optional
+        Factory function for default value (for mutable defaults)
+    validator : Callable[[Any], bool], optional
+        Validation function returning True if valid
+    description : str, optional
+        Parameter description for documentation
+    dimension : bool, optional
+        Whether this parameter represents a dimension
+    choices : list[Any], optional
+        Allowed values for the parameter
 
     Returns
     -------
-    tuple[int, int]
-        Pair of integers.
+    Field
+        Dataclass field with metadata
 
-    Raises
-    ------
-    ValidationError
-        If value cannot be converted to a valid pair.
+    Examples
+    --------
+    >>> @dataclass(frozen=True)
+    ... class MySpec(Spec):
+    ...     size: int = param(
+    ...         validator=lambda x: x > 0,
+    ...         description="Size must be positive"
+    ...     )
+    ...     mode: str = param(default="auto", choices=["auto", "manual"])
+    ...     items: list = param(default_factory=list)
     """
-    if isinstance(value, int):
-        if value <= 0:
-            raise ValidationError(f"{name} must be positive, got {value}")
-        return (value, value)
-    elif isinstance(value, tuple):
-        if len(value) != 2:
-            raise ValidationError(
-                f"{name} tuple must have exactly 2 elements, got {len(value)}",
-                suggestion="Use (height, width) format",
-            )
-        h, w = value
-        if not isinstance(h, int) or not isinstance(w, int):
-            raise ValidationError(
-                f"{name} tuple elements must be integers, got {value}"
-            )
-        if h <= 0 or w <= 0:
-            raise ValidationError(
-                f"{name} tuple elements must be positive, got {value}"
-            )
-        return (h, w)
+    metadata = {
+        "validator": validator,
+        "description": description,
+        "dimension": dimension,
+        "choices": choices,
+        "required": default is REQUIRED and default_factory is None,
+    }
+
+    if default_factory is not None:
+        return field(default_factory=default_factory, metadata=metadata)
+    elif default is REQUIRED:
+        return field(metadata=metadata)
     else:
-        raise ValidationError(
-            f"{name} must be int or tuple[int, int], "
-            f"got {type(value).__name__}",
-            suggestion="Use 224 for square or (224, 256) for rectangular",
-        )
+        return field(default=default, metadata=metadata)
+
+
+class SpecMeta(ABCMeta):
+    """Metaclass for automatic spec registration and validation setup."""
+
+    _registry: dict[str, type[Spec]] = {}
+    _realisers: dict[type[Spec], ModuleFactory] = {}
+
+    def __new__(
+        cls: type[SpecMeta],
+        name: str,
+        bases: tuple[type, ...],
+        namespace: dict[str, Any],
+        **kwargs: Any,
+    ) -> type[Spec]:
+        """Create new spec class with automatic registration."""
+        new_class = super().__new__(cls, name, bases, namespace, **kwargs)
+
+        # Auto-register non-abstract specs
+        if not inspect.isabstract(new_class) and name != "Spec":
+            SpecMeta._registry[name] = new_class  # type: ignore[assignment]
+
+        return new_class  # type: ignore[return-value]
+
+    @classmethod
+    def register_realiser(
+        cls, spec_cls: type[Spec]
+    ) -> Callable[[ModuleFactory], ModuleFactory]:
+        """Register a realiser function for a spec type.
+
+        Parameters
+        ----------
+        spec_cls : type[Spec]
+            Spec class to register realiser for
+
+        Returns
+        -------
+        Callable
+            Decorator function
+        """
+
+        def decorator(fn: ModuleFactory) -> ModuleFactory:
+            cls._realisers[spec_cls] = fn
+            return fn
+
+        return decorator
+
+    @classmethod
+    def get_realiser(cls, spec_cls: type[Spec]) -> ModuleFactory | None:
+        """Get registered realiser for a spec type.
+
+        Parameters
+        ----------
+        spec_cls : type[Spec]
+            Spec class to get realiser for
+
+        Returns
+        -------
+        ModuleFactory | None
+            Realiser function or None
+        """
+        # Check exact match first
+        if spec_cls in cls._realisers:
+            return cls._realisers[spec_cls]
+
+        # Check parent classes
+        for base in spec_cls.__mro__[1:]:
+            if base in cls._realisers:
+                return cls._realisers[base]
+
+        return None
 
 
 @dataclass(frozen=True)
-class Spec(ABC):
-    """Base class for all specifications.
+class Spec(ABC, metaclass=SpecMeta):
+    """Base specification with automatic validation and registration.
 
-    Provides the core interface that all specs must implement for composition,
-    validation, and introspection.
+    Specifications are immutable descriptions of model components that
+    can be validated, composed, and transformed into executable modules.
+    They support automatic parameter validation, dimension tracking,
+    and hierarchical composition.
+
+    Class Attributes
+    ----------------
+    _requires : set[str]
+        Required dimensions from context
+    _provides : set[str]
+        Dimensions provided to context
+    _modifies : set[str]
+        Dimensions modified in context
+    _version : str
+        Specification version for compatibility
+    _compatible_versions : set[str]
+        Compatible specification versions
     """
 
-    # Class-level metadata (not dataclass fields)
-    _spec_type: ClassVar[str] = "base"
+    # Class-level configuration
+    _requires: ClassVar[set[str]] = set()
+    _provides: ClassVar[set[str]] = set()
+    _modifies: ClassVar[set[str]] = set()
     _version: ClassVar[str] = "1.0"
+    _compatible_versions: ClassVar[set[str]] = {"1.0"}
 
     def __post_init__(self) -> None:
-        """Post-initialization hook for validation."""
-        self._validate_parameters()
+        """Validate parameters after initialization."""
+        self._validate_all_fields()
 
-    @abstractmethod
-    def _validate_parameters(self) -> None:
-        """Validate the parameters of this spec.
+    def _validate_all_fields(self) -> None:
+        """Validate all fields using metadata and type hints."""
+        hints = get_type_hints(self.__class__)
 
-        This abstract method must be implemented by all concrete specs
-        to validate their specific parameters during initialization.
+        for field_info in fields(self):
+            value = getattr(self, field_info.name)
+            field_type = hints.get(field_info.name, Any)
 
-        Raises
-        ------
-        ValidationError
-            If any parameters are invalid.
-        """
+            # Skip if None and Optional
+            if value is None and type(None) in get_args(field_type):
+                continue
 
-    def get_embedding_dim(self) -> EmbeddingDim | None:
-        """Get the embedding dimension this spec produces.
+            # Check required fields
+            if field_info.metadata.get("required") and value is REQUIRED:
+                raise ValidationError(
+                    "Required parameter not provided",
+                    spec=self,
+                    field_name=field_info.name,
+                )
 
-        Returns
-        -------
-        EmbeddingDim | None
-            Embedding dimension, or None if this spec doesn't define one.
-        """
-        return None
+            # Run field validator
+            if validator := field_info.metadata.get("validator"):
+                if not validator(value):
+                    raise ValidationError(
+                        f"Validation failed for {value!r}",
+                        spec=self,
+                        field_name=field_info.name,
+                    )
 
-    def get_token_count(self) -> TokenCount | None:
-        """Get the base token count this spec produces.
+            # Check choices
+            if choices := field_info.metadata.get("choices"):
+                if value not in choices:
+                    raise ValidationError(
+                        f"Value {value!r} not in allowed choices {choices}",
+                        spec=self,
+                        field_name=field_info.name,
+                    )
 
-        Returns
-        -------
-        TokenCount | None
-            Number of tokens, or None if this spec doesn't define the base
-            count.
-        """
-        return None
-
-    def requires_embedding_dim(self) -> bool:
-        """Check whether this spec requires an upstream embedding dimension.
-
-        Returns
-        -------
-        bool
-            True if this spec needs embedding_dim from upstream context.
-        """
-        return False
-
-    def requires_token_count(self) -> bool:
-        """Check whether this spec requires an upstream token count.
-
-        Returns
-        -------
-        bool
-            True if this spec needs token_count from upstream context.
-        """
-        return False
-
-    def adds_tokens(self) -> int:
-        """Get the number of tokens this spec adds to the sequence.
-
-        Returns
-        -------
-        int
-            Number of tokens added (0 for most specs, 1 for CLS token, etc.).
-        """
-        return 0
-
-    def modifies_tokens(self) -> bool:
-        """Check whether this spec modifies existing tokens in place.
-
-        Returns
-        -------
-        bool
-            True if this spec transforms existing tokens without
-            adding/removing.
-        """
-        return True
-
-    def validate(
-        self,
-        upstream_embedding_dim: EmbeddingDim | None = None,
-        upstream_token_count: TokenCount | None = None,
-    ) -> None:
-        """Validate this spec against upstream context.
+    def validate(self, context: Context) -> list[str]:
+        """Validate spec against context, returning issues.
 
         Parameters
         ----------
-        upstream_embedding_dim : EmbeddingDim | None, optional
-            Embedding dimension from upstream specs.
-        upstream_token_count : TokenCount | None, optional
-            Token count from upstream specs.
-
-        Raises
-        ------
-        ValidationError
-            If this spec cannot work with the given upstream context.
-        """
-        spec_name = self.__class__.__name__
-
-        if self.requires_embedding_dim() and upstream_embedding_dim is None:
-            raise ValidationError(
-                "requires an upstream component that defines embedding_dim",
-                spec_type=spec_name,
-                suggestion="Place this after PatchEmbedSpec or another "
-                "component that sets embed_dim",
-            )
-
-        if self.requires_token_count() and upstream_token_count is None:
-            raise ValidationError(
-                "requires an upstream component that defines token_count",
-                spec_type=spec_name,
-                suggestion="Place this after PatchEmbedSpec or another "
-                "component that sets token count",
-            )
-
-    def estimate_params(
-        self, context_embedding_dim: EmbeddingDim | None = None
-    ) -> int:
-        """Estimate the number of parameters for this spec.
-
-        Parameters
-        ----------
-        context_embedding_dim : EmbeddingDim | None, optional
-            Embedding dimension for parameter estimation.
+        context : Context
+            Context to validate against
 
         Returns
         -------
-        int
-            Estimated parameter count.
+        list[str]
+            List of validation issues (empty if valid)
         """
-        return 0
+        issues = []
 
-    def get_info(self) -> dict[str, Any]:
-        """Get debugging/introspection information.
+        # Check version compatibility
+        if hasattr(context, "spec_version"):
+            if context.spec_version not in self._compatible_versions:
+                issues.append(
+                    f"Version mismatch: context has {context.spec_version}, "
+                    f"spec supports {self._compatible_versions}"
+                )
+
+        # Check required dimensions
+        for dim in self._requires:
+            if context.get_dim(dim) is None:
+                issues.append(f"Missing required dimension: {dim}")
+
+        # Validate dimension parameters
+        for field_info in fields(self):
+            if field_info.metadata.get("dimension"):
+                value = getattr(self, field_info.name)
+                if isinstance(value, Dimension):
+                    try:
+                        if resolved := value.resolve(context):
+                            value.validate(resolved)
+                    except ValidationError as e:
+                        issues.append(str(e))
+
+        return issues
+
+    def apply_context(self, context: Context) -> Context:
+        """Apply this spec's effects to context.
+
+        Parameters
+        ----------
+        context : Context
+            Context to update
+
+        Returns
+        -------
+        Context
+            Updated context
+        """
+        # Update context with provided dimensions
+        for dim in self._provides:
+            if hasattr(self, dim):
+                value = getattr(self, dim)
+                if isinstance(value, int):
+                    context.set_dim(dim, value)
+                elif isinstance(value, Dimension):
+                    if resolved := value.resolve(context):
+                        context.set_dim(dim, resolved)
+
+        return context
+
+    def children(self) -> list[Spec]:
+        """Return child specs for traversal.
+
+        Returns
+        -------
+        list[Spec]
+            Direct child specifications
+        """
+        children = []
+        for field_info in fields(self):
+            value = getattr(self, field_info.name)
+            if isinstance(value, Spec):
+                children.append(value)
+            elif isinstance(value, list | tuple):
+                children.extend(v for v in value if isinstance(v, Spec))
+        return children
+
+    def map(self, fn: Callable[[Spec], T]) -> list[T]:
+        """Map function over spec tree.
+
+        Parameters
+        ----------
+        fn : Callable[[Spec], T]
+            Function to apply to each spec
+
+        Returns
+        -------
+        list[T]
+            Results from applying function
+        """
+        results = [fn(self)]
+        for child in self.children():
+            results.extend(child.map(fn))
+        return results
+
+    def find(self, predicate: Callable[[Spec], bool]) -> list[Spec]:
+        """Find all specs matching predicate.
+
+        Parameters
+        ----------
+        predicate : Callable[[Spec], bool]
+            Function to test each spec
+
+        Returns
+        -------
+        list[Spec]
+            Specs that match predicate
+        """
+        return [spec for spec in self.map(lambda s: s) if predicate(spec)]
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert spec to dictionary representation.
 
         Returns
         -------
         dict[str, Any]
-            Information about this spec for debugging.
+            Dictionary representation
         """
-        return {
-            "type": self.__class__.__name__,
-            "produces_embedding_dim": self.get_embedding_dim(),
-            "produces_token_count": self.get_token_count(),
-            "requires_embedding_dim": self.requires_embedding_dim(),
-            "requires_token_count": self.requires_token_count(),
-            "adds_tokens": self.adds_tokens(),
-            "modifies_tokens": self.modifies_tokens(),
+        data = {
+            "_type": self.__class__.__name__,
+            "_version": self._version,
         }
 
-    def __str__(self) -> str:
-        """Return human-readable string representation.
+        for field_info in fields(self):
+            value = getattr(self, field_info.name)
+            if isinstance(value, Spec):
+                value = value.to_dict()
+            elif isinstance(value, list | tuple):
+                value = [
+                    v.to_dict() if isinstance(v, Spec) else v for v in value
+                ]
+            data[field_info.name] = value
 
-        Returns
-        -------
-        str
-            String representation of this spec.
-        """
-        return f"{self.__class__.__name__}"
+        return data
 
-
-@dataclass(frozen=True)
-class LayerNormSpec(Spec):
-    """Specification for layer normalization.
-
-    Layer normalization normalizes inputs across the feature dimension,
-    providing stable gradients and improved training dynamics.
-
-    Parameters
-    ----------
-    eps : float, default=1e-5
-        Small value added to denominator for numerical stability.
-
-    Examples
-    --------
-    >>> LayerNormSpec()  # Default settings
-    >>> LayerNormSpec(eps=1e-6)  # Custom settings
-    """
-
-    eps: float = 1e-5
-
-    _spec_type: ClassVar[str] = "normalization"
-
-    def _validate_parameters(self) -> None:
-        """Validate layer normalization parameters."""
-        validate_positive(self.eps, "eps", self.__class__.__name__)
-
-    def requires_embedding_dim(self) -> bool:
-        """Check if embedding dimension is required from upstream.
-
-        Returns
-        -------
-        bool
-            Always True, as layer norm needs to know the feature dimension.
-        """
-        return True
-
-    def estimate_params(
-        self, context_embedding_dim: EmbeddingDim | None = None
-    ) -> int:
-        """Estimate parameter count for layer normalization.
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Spec:
+        """Create spec from dictionary representation.
 
         Parameters
         ----------
-        context_embedding_dim : EmbeddingDim | None, optional
-            The embedding dimension context.
+        data : dict[str, Any]
+            Dictionary representation
 
         Returns
         -------
-        int
-            Estimated parameter count (2 * embed_dim for scale and bias).
+        Spec
+            Reconstructed specification
         """
-        if context_embedding_dim is None:
-            return 0
-        return 2 * context_embedding_dim  # scale and bias parameters
+        spec_type = data.pop("_type")
+        version = data.pop("_version", "1.0")
+        spec_cls = SpecMeta._registry.get(spec_type)
+
+        if not spec_cls:
+            raise ValueError(f"Unknown spec type: {spec_type}")
+
+        # Check version compatibility
+        if version not in spec_cls._compatible_versions:
+            raise ValueError(
+                f"Version {version} not compatible with {spec_cls.__name__}"
+            )
+
+        # Recursively convert nested specs
+        kwargs = {}
+        for key, value in data.items():
+            if isinstance(value, dict) and "_type" in value:
+                value = Spec.from_dict(value)
+            elif isinstance(value, list):
+                value = [
+                    Spec.from_dict(v)
+                    if isinstance(v, dict) and "_type" in v
+                    else v
+                    for v in value
+                ]
+            kwargs[key] = value
+
+        return spec_cls(**kwargs)
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        params = []
+        for field_info in fields(self):
+            value = getattr(self, field_info.name)
+            if value != field_info.default:
+                params.append(f"{field_info.name}={value!r}")
+
+        return f"{self.__class__.__name__}({', '.join(params)})"
+
+    def __rshift__(self, other: Spec) -> Any:
+        """Chain specs using >> operator to create Sequential."""
+        from .combinators import Sequential
+
+        return Sequential(parts=(self, other))
+
+    def __lshift__(self, other: Spec) -> Any:
+        """Prepend spec using << operator to create Sequential."""
+        from .combinators import Sequential
+
+        return Sequential(parts=(other, self))
+
+    def __or__(self, other: Spec) -> Any:
+        """Create parallel composition using | operator."""
+        from .combinators import Parallel
+
+        return Parallel(branches=(self, other))
 
 
 @dataclass(frozen=True)
-class MHEASpec(Spec):
-    """Specification for multi-head energy attention.
+class AsyncSpec(Spec):
+    """Base specification with async support.
 
-    Defines the attention mechanism used in Energy Transformer blocks.
-    Uses energy-based formulation where attention weights are derived
-    from energy function gradients.
+    Extends Spec to support asynchronous context application and
+    validation for streaming or async model components.
+    """
+
+    async def apply_context_async(self, context: Context) -> Context:
+        """Apply spec effects to context asynchronously.
+
+        Parameters
+        ----------
+        context : Context
+            Context to update
+
+        Returns
+        -------
+        Context
+            Updated context
+        """
+        return self.apply_context(context)
+
+    async def validate_async(self, context: Context) -> list[str]:
+        """Validate spec asynchronously.
+
+        Parameters
+        ----------
+        context : Context
+            Context to validate against
+
+        Returns
+        -------
+        list[str]
+            List of validation issues
+        """
+        return self.validate(context)
+
+
+# Decorators for dimension requirements
+def requires(*dims: str) -> Callable[[type[T]], type[T]]:
+    """Declare required dimensions for a spec class.
 
     Parameters
     ----------
-    num_heads : int, default=12
-        Number of parallel attention heads.
-    head_dim : int, default=64
-        Dimension of each attention head.
-    beta : float, optional
-        Temperature parameter for attention. If None, uses 1/sqrt(head_dim).
-    bias : bool, default=False
-        Whether to use bias in key/query projections.
-    dropout : float, default=0.0
-        Dropout probability for attention weights.
+    *dims : str
+        Dimension names required by the spec
+
+    Returns
+    -------
+    Callable
+        Class decorator
 
     Examples
     --------
-    >>> MHEASpec()  # 12 heads, 64 dim each
-    >>> MHEASpec(num_heads=16, head_dim=48)  # Different head config
-    >>> MHEASpec(beta=0.1, dropout=0.1)  # Custom temperature/dropout
+    >>> @requires("embed_dim", "num_heads")
+    ... class AttentionSpec(Spec):
+    ...     pass
     """
 
-    num_heads: int = 12
-    head_dim: int = 64
-    beta: float | None = None
-    bias: bool = False
-    dropout: float = 0.0
+    def decorator(cls: type[T]) -> type[T]:
+        if hasattr(cls, "_requires"):
+            cls._requires = set(dims)  # type: ignore[attr-defined]
+        return cls
 
-    _spec_type: ClassVar[str] = "attention"
+    return decorator
 
-    def _validate_parameters(self) -> None:
-        """Validate attention parameters."""
-        spec_name = self.__class__.__name__
 
-        validate_positive(self.num_heads, "num_heads", spec_name)
-        validate_positive(self.head_dim, "head_dim", spec_name)
-        validate_probability(self.dropout, "dropout", spec_name)
+def provides(*dims: str) -> Callable[[type[T]], type[T]]:
+    """Declare dimensions provided by a spec class.
 
-        if self.beta is not None:
-            validate_positive(self.beta, "beta", spec_name)
+    Parameters
+    ----------
+    *dims : str
+        Dimension names provided by the spec
 
-        # Validate reasonable attention dimensions
-        total_dim = self.num_heads * self.head_dim
-        if total_dim > 4096:
-            raise ValidationError(
-                f"Total attention dimension ({total_dim}) is very large",
-                spec_type=spec_name,
-                suggestion="Consider reducing num_heads or head_dim",
-            )
+    Returns
+    -------
+    Callable
+        Class decorator
+    """
 
-    def requires_embedding_dim(self) -> bool:
-        """Check if embedding dimension is required from upstream.
+    def decorator(cls: type[T]) -> type[T]:
+        if hasattr(cls, "_provides"):
+            cls._provides = set(dims)  # type: ignore[attr-defined]
+        return cls
 
-        Returns
-        -------
-        bool
-            Always True, as attention needs the input embedding dimension.
-        """
-        return True
+    return decorator
 
-    def get_effective_beta(self) -> float:
-        """Get the effective beta value (computed default if not specified).
 
-        Returns
-        -------
-        float
-            The effective beta temperature parameter.
-        """
-        return (
-            self.beta
-            if self.beta is not None
-            else 1.0 / math.sqrt(self.head_dim)
+def modifies(*dims: str) -> Callable[[type[T]], type[T]]:
+    """Declare dimensions modified by a spec class.
+
+    Parameters
+    ----------
+    *dims : str
+        Dimension names modified by the spec
+
+    Returns
+    -------
+    Callable
+        Class decorator
+    """
+
+    def decorator(cls: type[T]) -> type[T]:
+        if hasattr(cls, "_modifies"):
+            cls._modifies = set(dims)  # type: ignore[attr-defined]
+        return cls
+
+    return decorator
+
+
+def spec(
+    *,
+    requires: set[str] | None = None,
+    provides: set[str] | None = None,
+    modifies: set[str] | None = None,
+) -> Callable[[type[T]], type[T]]:
+    """Declare dimension requirements for a spec class.
+
+    Parameters
+    ----------
+    requires : set[str], optional
+        Required dimension names
+    provides : set[str], optional
+        Provided dimension names
+    modifies : set[str], optional
+        Modified dimension names
+
+    Returns
+    -------
+    Callable
+        Class decorator
+    """
+
+    def decorator(cls: type[T]) -> type[T]:
+        if requires and hasattr(cls, "_requires"):
+            cls._requires = requires  # type: ignore[attr-defined]
+        if provides and hasattr(cls, "_provides"):
+            cls._provides = provides  # type: ignore[attr-defined]
+        if modifies and hasattr(cls, "_modifies"):
+            cls._modifies = modifies  # type: ignore[attr-defined]
+        return cls
+
+    return decorator
+
+
+def validate_field(
+    field_name: str,
+    validator: Callable[[Any], bool],
+    message: str | None = None,
+) -> Callable[[type[T]], type[T]]:
+    """Add field validator to spec class.
+
+    Parameters
+    ----------
+    field_name : str
+        Name of field to validate
+    validator : Callable[[Any], bool]
+        Validation function
+    message : str, optional
+        Custom error message
+
+    Returns
+    -------
+    Callable
+        Class decorator
+    """
+
+    def decorator(cls: type[T]) -> type[T]:
+        if not hasattr(cls, "_field_validators"):
+            cls._field_validators = {}  # type: ignore[attr-defined]
+        cls._field_validators[field_name] = (  # type: ignore[attr-defined]
+            validator,
+            message,
         )
+        return cls
 
-    def estimate_params(
-        self, context_embedding_dim: EmbeddingDim | None = None
-    ) -> int:
-        """Estimate parameter count for attention.
-
-        Parameters
-        ----------
-        context_embedding_dim : EmbeddingDim | None, optional
-            The embedding dimension context.
-
-        Returns
-        -------
-        int
-            Estimated parameter count for query/key projections.
-        """
-        if context_embedding_dim is None:
-            return 0
-
-        query_key_params = (
-            2 * self.num_heads * self.head_dim * context_embedding_dim
-        )
-        bias_params = 2 * self.num_heads * self.head_dim if self.bias else 0
-        return query_key_params + bias_params
-
-
-@dataclass(frozen=True)
-class HNSpec(Spec):
-    """Specification for Hopfield network memory component.
-
-    Defines the associative memory component that provides energy-based
-    pattern completion and memory retrieval capabilities.
-
-    Parameters
-    ----------
-    hidden_dim : int, optional
-        Number of memory patterns. If None, computed as in_dim * multiplier.
-    multiplier : float, default=4.0
-        Multiplier for hidden dimension when hidden_dim is None.
-    bias : bool, default=False
-        Whether to include bias terms in memory patterns.
-    activation : {"relu", "softmax", "power", "tanh"}, default="relu"
-        Activation function for energy computation.
-    dropout : float, default=0.0
-        Dropout probability for memory patterns.
-
-    Examples
-    --------
-    >>> HNSpec()  # Default: 4x multiplier, ReLU activation
-    >>> HNSpec(hidden_dim=2048)  # Fixed hidden dimension
-    >>> HNSpec(activation="softmax", dropout=0.1)  # Different config
-    """
-
-    hidden_dim: int | None = None
-    multiplier: float = 4.0
-    bias: bool = False
-    activation: Literal["relu", "softmax", "power", "tanh"] = "relu"
-    dropout: float = 0.0
-
-    _spec_type: ClassVar[str] = "memory"
-
-    def _validate_parameters(self) -> None:
-        """Validate Hopfield network parameters."""
-        spec_name = self.__class__.__name__
-
-        if self.hidden_dim is not None:
-            validate_positive(self.hidden_dim, "hidden_dim", spec_name)
-        validate_positive(self.multiplier, "multiplier", spec_name)
-        validate_probability(self.dropout, "dropout", spec_name)
-
-        # Validate multiplier isn't too large
-        if self.multiplier > 8.0:
-            raise ValidationError(
-                f"Multiplier {self.multiplier} may create very large "
-                "hidden dimensions",
-                spec_type=spec_name,
-                suggestion="Consider multiplier <= 8.0 or set hidden_dim "
-                "explicitly",
-            )
-
-    def requires_embedding_dim(self) -> bool:
-        """Check if embedding dimension is required from upstream.
-
-        Returns
-        -------
-        bool
-            Always True, as Hopfield network needs input embedding dimension.
-        """
-        return True
-
-    def get_effective_hidden_dim(self, embedding_dim: EmbeddingDim) -> int:
-        """Get the effective hidden dimension given an embedding dimension.
-
-        Parameters
-        ----------
-        embedding_dim : EmbeddingDim
-            The input embedding dimension.
-
-        Returns
-        -------
-        int
-            The effective hidden dimension.
-        """
-        if self.hidden_dim is not None:
-            return self.hidden_dim
-        return int(embedding_dim * self.multiplier)
-
-    def estimate_params(
-        self, context_embedding_dim: EmbeddingDim | None = None
-    ) -> int:
-        """Estimate parameter count for Hopfield network.
-
-        Parameters
-        ----------
-        context_embedding_dim : EmbeddingDim | None, optional
-            The embedding dimension context.
-
-        Returns
-        -------
-        int
-            Estimated parameter count for memory patterns.
-        """
-        if context_embedding_dim is None:
-            return 0
-
-        hidden_dim = self.get_effective_hidden_dim(context_embedding_dim)
-        memory_params = hidden_dim * context_embedding_dim
-        bias_params = hidden_dim if self.bias else 0
-        return memory_params + bias_params
-
-
-@dataclass(frozen=True)
-class ETSpec(Spec):
-    """Specification for an Energy Transformer block.
-
-    Represents a complete Energy Transformer block that combines layer
-    normalization, attention, and Hopfield network components with
-    energy-based optimization.
-
-    Parameters
-    ----------
-    steps : int, default=12
-        Number of gradient descent steps for energy optimization.
-    alpha : float, default=0.125
-        Step size for energy optimization.
-    layer_norm : LayerNormSpec, default=LayerNormSpec()
-        Specification for layer normalization component.
-    attention : MHEASpec, default=MHEASpec()
-        Specification for attention component.
-    hopfield : HNSpec, default=HNSpec()
-        Specification for Hopfield network component.
-
-    Examples
-    --------
-    >>> ETSpec()  # Default configuration
-    >>> ETSpec(steps=8, alpha=0.2)  # Faster optimization
-    >>> ETSpec(
-    ...     attention=MHEASpec(num_heads=16),
-    ...     hopfield=HNSpec(activation="softmax")
-    ... )  # Custom components
-    """
-
-    steps: int = 12
-    alpha: float = 0.125
-    layer_norm: LayerNormSpec = field(default_factory=LayerNormSpec)
-    attention: MHEASpec = field(default_factory=MHEASpec)
-    hopfield: HNSpec = field(default_factory=HNSpec)
-
-    _spec_type: ClassVar[str] = "transformer_block"
-
-    def _validate_parameters(self) -> None:
-        """Validate Energy Transformer block parameters."""
-        spec_name = self.__class__.__name__
-
-        validate_positive(self.steps, "steps", spec_name)
-        validate_positive(self.alpha, "alpha", spec_name)
-
-        # Validate reasonable optimization parameters
-        if self.steps > 50:
-            raise ValidationError(
-                f"Very high step count ({self.steps}) may be slow",
-                spec_type=spec_name,
-                suggestion="Consider steps <= 50 for reasonable speed",
-            )
-
-        if self.alpha > 1.0:
-            raise ValidationError(
-                f"Large step size ({self.alpha}) may cause instability",
-                spec_type=spec_name,
-                suggestion="Consider alpha <= 1.0 for stable optimization",
-            )
-
-    def requires_embedding_dim(self) -> bool:
-        """Check if embedding dimension is required from upstream.
-
-        Returns
-        -------
-        bool
-            Always True, as all components need embedding dimension.
-        """
-        return True
-
-    def estimate_params(
-        self, context_embedding_dim: EmbeddingDim | None = None
-    ) -> int:
-        """Estimate parameter count for Energy Transformer block.
-
-        Parameters
-        ----------
-        context_embedding_dim : EmbeddingDim | None, optional
-            The embedding dimension context.
-
-        Returns
-        -------
-        int
-            Estimated parameter count for all components.
-        """
-        if context_embedding_dim is None:
-            return 0
-
-        return (
-            self.layer_norm.estimate_params(context_embedding_dim)
-            + self.attention.estimate_params(context_embedding_dim)
-            + self.hopfield.estimate_params(context_embedding_dim)
-        )
-
-
-@dataclass(frozen=True)
-class CLSTokenSpec(Spec):
-    """Specification for learnable classification token.
-
-    Adds a special classification token at the beginning of the sequence
-    that can aggregate information from all other tokens through attention.
-
-    Examples
-    --------
-    >>> CLSTokenSpec()
-    """
-
-    _spec_type: ClassVar[str] = "special_token"
-
-    def _validate_parameters(self) -> None:
-        """Validate CLS token parameters.
-
-        CLS token has no parameters to validate.
-        """
-
-    def requires_embedding_dim(self) -> bool:
-        """Check if embedding dimension is required from upstream.
-
-        Returns
-        -------
-        bool
-            Always True, as CLS token needs to know embedding dimension.
-        """
-        return True
-
-    def adds_tokens(self) -> int:
-        """Get the number of tokens this spec adds.
-
-        Returns
-        -------
-        int
-            Always 1, as CLS token adds exactly one token.
-        """
-        return 1
-
-    def modifies_tokens(self) -> bool:
-        """Check if this spec modifies existing tokens.
-
-        Returns
-        -------
-        bool
-            Always False, as CLS token adds rather than modifies.
-        """
-        return False  # Adds token, doesn't modify existing ones
-
-    def estimate_params(
-        self, context_embedding_dim: EmbeddingDim | None = None
-    ) -> int:
-        """Estimate parameter count for CLS token.
-
-        Parameters
-        ----------
-        context_embedding_dim : EmbeddingDim | None, optional
-            The embedding dimension context.
-
-        Returns
-        -------
-        int
-            Estimated parameter count (one token vector).
-        """
-        if context_embedding_dim is None:
-            return 0
-        return context_embedding_dim  # One learnable token vector
-
-
-@dataclass(frozen=True)
-class PatchEmbedSpec(Spec):
-    """Specification for patch embedding layer.
-
-    Converts input images into sequences of patch embeddings by dividing
-    the image into non-overlapping patches and projecting each patch
-    to the embedding dimension.
-
-    Parameters
-    ----------
-    img_size : int or tuple[int, int]
-        Input image size. If int, assumes square images.
-    patch_size : int or tuple[int, int]
-        Size of each patch. If int, assumes square patches.
-    embed_dim : int
-        Output embedding dimension.
-    in_chans : int, default=3
-        Number of input image channels.
-    bias : bool, default=True
-        Whether to include bias in the projection layer.
-    flatten : bool, default=True
-        Whether to flatten spatial dimensions of patches.
-
-    Examples
-    --------
-    >>> PatchEmbedSpec(img_size=224, patch_size=16, embed_dim=768)
-    >>> PatchEmbedSpec(
-    ...     img_size=(224, 256), patch_size=(16, 16), embed_dim=512
-    ... )
-    >>> PatchEmbedSpec(
-    ...     img_size=384, patch_size=32, in_chans=1, embed_dim=1024
-    ... )
-    """
-
-    img_size: ImageSize = field()
-    patch_size: PatchSize = field()
-    embed_dim: EmbeddingDim = field()
-    in_chans: int = 3
-    bias: bool = True
-    flatten: bool = True
-
-    _spec_type: ClassVar[str] = "embedding"
-
-    def _validate_parameters(self) -> None:
-        """Validate patch embedding parameters."""
-        spec_name = self.__class__.__name__
-
-        # Validate and normalize sizes
-        try:
-            img_h, img_w = to_pair(self.img_size, "img_size")
-            patch_h, patch_w = to_pair(self.patch_size, "patch_size")
-        except ValidationError as e:
-            e.spec_type = spec_name
-            raise
-
-        validate_positive(self.in_chans, "in_chans", spec_name)
-        validate_positive(self.embed_dim, "embed_dim", spec_name)
-
-        # Validate patch size divides image size evenly
-        if img_h % patch_h != 0:
-            raise ValidationError(
-                f"Image height ({img_h}) must be divisible by patch height "
-                f"({patch_h})",
-                spec_type=spec_name,
-                suggestion=f"Try img_size={img_h - (img_h % patch_h)} or "
-                f"patch_size that divides {img_h}",
-            )
-        if img_w % patch_w != 0:
-            raise ValidationError(
-                f"Image width ({img_w}) must be divisible by patch width "
-                f"({patch_w})",
-                spec_type=spec_name,
-                suggestion=f"Try img_size={img_w - (img_w % patch_w)} or "
-                f"patch_size that divides {img_w}",
-            )
-
-        # Validate reasonable sizes
-        num_patches = (img_h // patch_h) * (img_w // patch_w)
-        if num_patches > 10000:
-            raise ValidationError(
-                f"Very large number of patches ({num_patches})",
-                spec_type=spec_name,
-                suggestion="Consider larger patch_size or smaller img_size",
-            )
-
-    def get_embedding_dim(self) -> EmbeddingDim:
-        """Get the embedding dimension this spec produces.
-
-        Returns
-        -------
-        EmbeddingDim
-            The output embedding dimension.
-        """
-        return self.embed_dim
-
-    def get_token_count(self) -> TokenCount:
-        """Get the number of patch tokens produced.
-
-        Returns
-        -------
-        TokenCount
-            Number of patch tokens.
-        """
-        img_h, img_w = to_pair(self.img_size)
-        patch_h, patch_w = to_pair(self.patch_size)
-        return (img_h // patch_h) * (img_w // patch_w)
-
-    def modifies_tokens(self) -> bool:
-        """Check if this spec modifies existing tokens.
-
-        Returns
-        -------
-        bool
-            Always False, as patch embedding creates initial tokens.
-        """
-        return False  # Creates initial tokens
-
-    def estimate_params(
-        self, context_embedding_dim: EmbeddingDim | None = None
-    ) -> int:
-        """Estimate parameter count for patch embedding.
-
-        Parameters
-        ----------
-        context_embedding_dim : EmbeddingDim | None, optional
-            Not used for patch embedding.
-
-        Returns
-        -------
-        int
-            Estimated parameter count for convolutional projection.
-        """
-        patch_h, patch_w = to_pair(self.patch_size)
-        conv_params = self.in_chans * (patch_h * patch_w) * self.embed_dim
-        bias_params = self.embed_dim if self.bias else 0
-        return conv_params + bias_params
-
-
-@dataclass(frozen=True)
-class PosEmbedSpec(Spec):
-    """Specification for positional embeddings.
-
-    Adds learnable positional information to patch embeddings so the model
-    can understand spatial relationships between patches.
-
-    Parameters
-    ----------
-    include_cls : bool, default=False
-        Whether to include a position for the CLS token.
-    init_std : float, default=0.02
-        Standard deviation for parameter initialization.
-
-    Examples
-    --------
-    >>> PosEmbedSpec()  # Basic positional embeddings
-    >>> PosEmbedSpec(include_cls=True)  # Include CLS token position
-    >>> PosEmbedSpec(init_std=0.01)  # Custom initialization
-    """
-
-    include_cls: bool = False
-    init_std: float = 0.02
-
-    _spec_type: ClassVar[str] = "embedding"
-
-    def _validate_parameters(self) -> None:
-        """Validate positional embedding parameters."""
-        validate_positive(self.init_std, "init_std", self.__class__.__name__)
-
-    def requires_embedding_dim(self) -> bool:
-        """Check if embedding dimension is required from upstream.
-
-        Returns
-        -------
-        bool
-            Always True, as positional embeddings need embedding dimension.
-        """
-        return True
-
-    def requires_token_count(self) -> bool:
-        """Check if token count is required from upstream.
-
-        Returns
-        -------
-        bool
-            Always True, as positional embeddings need to know sequence
-            length.
-        """
-        return True
-
-    def modifies_tokens(self) -> bool:
-        """Check if this spec modifies existing tokens.
-
-        Returns
-        -------
-        bool
-            Always True, as positional embeddings add to existing tokens.
-        """
-        return True  # Adds positional info to existing tokens
-
-    def estimate_params(
-        self, context_embedding_dim: EmbeddingDim | None = None
-    ) -> int:
-        """Estimate parameter count for positional embeddings.
-
-        Parameters
-        ----------
-        context_embedding_dim : EmbeddingDim | None, optional
-            The embedding dimension context.
-
-        Returns
-        -------
-        int
-            Cannot estimate without token count, returns 0.
-        """
-        # Cannot estimate without knowing token count
-        return 0
-
-    def estimate_params_with_context(
-        self, embedding_dim: EmbeddingDim, token_count: TokenCount
-    ) -> int:
-        """Estimate parameters with full context information.
-
-        Parameters
-        ----------
-        embedding_dim : EmbeddingDim
-            The embedding dimension.
-        token_count : TokenCount
-            The number of tokens in the sequence.
-
-        Returns
-        -------
-        int
-            Estimated parameter count for positional embeddings.
-        """
-        seq_len = token_count + (1 if self.include_cls else 0)
-        return seq_len * embedding_dim
+    return decorator
