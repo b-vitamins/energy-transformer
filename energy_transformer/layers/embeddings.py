@@ -30,7 +30,7 @@ def _to_pair(x: int | tuple[int, int]) -> tuple[int, int]:
     return (x, x)
 
 
-class PatchEmbedding(nn.Module):  # type: ignore
+class PatchEmbedding(nn.Module):  # type: ignore[misc]
     """Convert images to patch token sequences.
 
     Implements the standard Vision Transformer patch embedding using a
@@ -139,7 +139,7 @@ class PatchEmbedding(nn.Module):  # type: ignore
         return x
 
 
-class PositionalEmbedding2D(nn.Module):  # type: ignore
+class PositionalEmbedding2D(nn.Module):  # type: ignore[misc]
     """Learnable 2D positional embeddings for image patches.
 
     Implements learnable positional embeddings that are added to patch
