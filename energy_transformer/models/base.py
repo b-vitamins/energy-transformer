@@ -1,6 +1,6 @@
-"""Base Energy Transformer model definition."""
+"""Base Energy Transformer model definition with gradient override support."""
 
-from typing import NamedTuple
+from typing import Literal, NamedTuple
 
 import torch
 import torch.nn as nn
@@ -12,8 +12,24 @@ from energy_transformer.layers.base import (
     BaseLayerNorm,
 )
 
+__all__ = ["EnergyTransformer", "Track", "ETOutput", "DescentMode"]
+
 # Registry for model classes to enable lookups from realiser
 REALISER_REGISTRY: dict[str, type[nn.Module]] = {}
+
+Track = Literal["none", "energy", "trajectory", "both"]
+DescentMode = Literal["sgd", "bb"]
+
+
+def force_enable_grad():
+    """Use torch.enable_grad() to temporarily enable gradient computation.
+
+    This context manager allows internal gradient computation for optimization
+    even when the outer scope has disabled gradients via torch.no_grad().
+    Does not work with torch.inference_mode(), which fundamentally prevents
+    gradient tracking.
+    """
+    return torch.enable_grad()
 
 
 class ETOutput(NamedTuple):
@@ -44,39 +60,15 @@ class EnergyTransformer(nn.Module):  # type: ignore
     Parameters
     ----------
     layer_norm : BaseLayerNorm
-        Layer normalization component that transforms input tokens x ∈ ℝᴺˣᴰ
-        into normalized representation g ∈ ℝᴺˣᴰ
+        Layer normalization component that transforms input tokens
     attention : BaseEnergyAttention
-        Energy-based attention component that computes E^ATT from normalized tokens
+        Energy-based attention component
     hopfield : BaseHopfieldNetwork
-        Hopfield network component that computes E^HN from normalized tokens
+        Hopfield network component for memory-based associations
     steps : int, optional
-        Number of gradient descent steps T for energy optimization, by default 12
-    α : float, optional
-        Step size for gradient descent optimization, by default 0.125
-
-    Notes
-    -----
-    The Energy Transformer defines a composite energy function:
-
-    E^TOTAL(x) = E^ATT(g) + E^HN(g)
-
-    where:
-    - x ∈ ℝᴺˣᴰ are the input token representations
-    - g = LayerNorm(x) ∈ ℝᴺˣᴰ are normalized tokens
-    - E^ATT(g) is the attention energy from multi-head attention
-    - E^HN(g) is the memory energy from the Hopfield network
-
-    The model performs iterative optimization via gradient descent:
-
-    x^(t+1) = x^(t) - α · ∇ₓ E^TOTAL(x^(t))
-
-    for t = 0, 1, ..., T-1 steps, where α is the learning rate and
-    ∇ₓ denotes the gradient with respect to token positions x.
-
-    This optimization process allows tokens to settle into configurations
-    that minimize the combined energy, effectively performing associative
-    memory retrieval and attention-based reasoning simultaneously.
+        Number of gradient descent steps T, by default 12
+    alpha : float, optional
+        Step size for gradient descent optimization, by default 1.0
     """
 
     def __init__(
@@ -85,222 +77,320 @@ class EnergyTransformer(nn.Module):  # type: ignore
         attention: BaseEnergyAttention,
         hopfield: BaseHopfieldNetwork,
         steps: int = 12,
-        α: float = 0.125,
+        alpha: float = 1.0,
     ) -> None:
-        """Initialize the Energy Transformer with its energy components.
-
-        Parameters
-        ----------
-        layer_norm : BaseLayerNorm
-            Layer normalization component for token preprocessing
-        attention : BaseEnergyAttention
-            Energy-based attention component for relational reasoning
-        hopfield : BaseHopfieldNetwork
-            Hopfield network component for memory-based associations
-        steps : int, optional
-            Number of gradient descent steps T, by default 12
-        α : float, optional
-            Step size for gradient descent, by default 0.125
-        """
+        """Initialize the Energy Transformer with its energy components."""
         super().__init__()
         self.layer_norm = layer_norm
         self.attention = attention
         self.hopfield = hopfield
         self.steps = steps
-        self.α = α
+        self.alpha = alpha
 
     def energy(
         self,
         x: Tensor,
-        energy_mask: Tensor | None = None,
     ) -> Tensor:
         """Compute the composite energy of the input token configuration.
 
         Parameters
         ----------
         x : Tensor
-            Input tensor of shape [..., N, D] where N is the number
-            of tokens and D is the feature dimension of each token
-        energy_mask : Tensor, optional
-            Energy mask for attention computation of shape [..., H, N, N]
-            or broadcastable. Uses additive masking: 0 for allowed positions,
-            -∞ for masked positions.
+            Input tensor of shape [..., N, D]
 
         Returns
         -------
         Tensor
-            Scalar energy value E^TOTAL representing the combined energy.
-            Lower energy corresponds to more favorable token configurations.
+            Scalar energy value E^TOTAL
+        """
+        # g = LayerNorm(x): x ∈ ℝᴺˣᴰ → g ∈ ℝᴺˣᴷ
+        g = self.layer_norm(x)
+
+        # E^ATT = attention(g, mask)
+        e_att = self.attention(g)
+
+        # E^HN = hopfield(g)
+        e_hn = self.hopfield(g)
+
+        # E^TOTAL = E^ATT + E^HN
+        return e_att + e_hn
+
+    def _energy_descent(
+        self,
+        x: Tensor,
+        steps: int,
+        mode: DescentMode = "bb",
+        detach_mode: bool = False,
+        track_trajectory: bool = False,
+        armijo_gamma: float = 0.5,
+        armijo_max_iter: int = 4,
+    ) -> tuple[Tensor, list[Tensor]]:
+        """Perform gradient descent optimization on the energy landscape.
+
+        Parameters
+        ----------
+        x : Tensor
+            Initial token configuration. Must have requires_grad=True.
+        steps : int
+            Number of gradient descent steps
+        mode : DescentMode, optional
+            Descent method to use:
+            - "sgd": Fixed step size (classic)
+            - "bb": Barzilai-Borwein with Armijo backtracking (default)
+        detach_mode : bool, optional
+            If True, performs detached updates (no gradient flow)
+        track_trajectory : bool, optional
+            If True, records energy values at each step
+        armijo_gamma : float, optional
+            Armijo backtracking factor, by default 0.5
+        armijo_max_iter : int, optional
+            Maximum Armijo iterations, by default 4
+
+        Returns
+        -------
+        tuple[Tensor, list[Tensor]]
+            Optimized tokens and energy trajectory (empty if not tracking)
 
         Notes
         -----
-        The energy computation follows these steps:
-        1. g = LayerNorm(x) - normalize input tokens to ℝᴺˣᴷ
-        2. E^ATT = attention(g, mask) - compute attention energy
-        3. E^HN = hopfield(g) - compute Hopfield memory energy
-        4. E^TOTAL = E^ATT + E^HN - return combined energy
-
-        For mixed-precision training, components handle dtype casting
-        internally when torch.cuda.amp.autocast() is active.
+        This method can work even within torch.no_grad() contexts by temporarily
+        re-enabling gradients. However, it cannot work within torch.inference_mode()
+        which fundamentally prevents gradient tracking.
         """
-        # g = LayerNorm(x): x ∈ ℝᴺˣᴰ → g ∈ ℝᴺˣᴷ
-        g = self.layer_norm(x)  # shape: [..., N, K]
+        trajectory = []
+        create_graph = not detach_mode
 
-        # E^ATT = attention(g, mask)
-        try:
-            e_att = self.attention(g, attn_mask=energy_mask)  # scalar
-        except TypeError:
-            e_att = self.attention(g)  # scalar
+        # Check for inference_mode early - we cannot override this
+        if torch.is_inference_mode_enabled() and not detach_mode:
+            raise RuntimeError(
+                "EnergyTransformer optimization requires gradient computation, "
+                "which is not possible within torch.inference_mode(). "
+                "Either call the model outside inference_mode() or use detach=True."
+            )
 
-        # E^HN = hopfield(g)
-        e_hn = self.hopfield(g)  # scalar
+        # Initialize BB buffers
+        prev_x, prev_grad = None, None
 
-        # E^TOTAL = E^ATT + E^HN
-        return e_att + e_hn  # scalar
+        for t in range(steps):
+            # In detach mode with inference_mode, we cannot compute gradients
+            if detach_mode and torch.is_inference_mode_enabled():
+                # Skip optimization in inference mode with detach
+                # Just track energy if requested
+                if track_trajectory:
+                    with torch.no_grad():
+                        energy = self.energy(x)
+                        trajectory.append(energy.detach().clone())
+                continue
+
+            # Use force_enable_grad to ensure gradients work even in no_grad context
+            # This is only needed when we're actually computing gradients
+            if not detach_mode:
+                with force_enable_grad():
+                    # Clone x inside enable_grad to ensure proper gradient tracking
+                    # This is necessary when the original x was created in a no_grad context
+                    x_grad = x.clone().requires_grad_(True)
+
+                    # Compute energy at current position
+                    energy = self.energy(x_grad)
+
+                    # Track energy if requested
+                    if track_trajectory:
+                        trajectory.append(energy.detach().clone())
+
+                    # Compute gradient ∇ₓ E^TOTAL(x)
+                    (grad,) = torch.autograd.grad(
+                        energy, x_grad, create_graph=create_graph
+                    )
+            else:
+                # In detach mode, we don't need gradients
+                with torch.no_grad():
+                    energy = self.energy(x)
+                    if track_trajectory:
+                        trajectory.append(energy.detach().clone())
+
+                # Still compute gradient for the update, but detached
+                with force_enable_grad():
+                    # Clone x inside enable_grad for proper gradient tracking
+                    x_grad = x.clone().requires_grad_(True)
+                    energy_for_grad = self.energy(x_grad)
+                    (grad,) = torch.autograd.grad(
+                        energy_for_grad, x_grad, create_graph=False
+                    )
+
+            # Skip update if we didn't compute gradients
+            if detach_mode and torch.is_inference_mode_enabled():
+                continue
+
+            if mode == "bb":
+                # Compute BB step size if we have history
+                if prev_x is not None and prev_grad is not None:
+                    s = (x - prev_x).flatten()
+                    y = (grad - prev_grad).flatten()
+                    denom = torch.dot(s, y)
+                    lr = torch.dot(s, s) / denom.clamp_min(1e-8)
+                else:
+                    # First step uses default alpha
+                    lr = self.alpha
+
+                # Armijo backtracking line search for safety
+                for _ in range(armijo_max_iter):
+                    new_x = x - lr * grad
+
+                    # Evaluate new energy with appropriate gradient context
+                    if not detach_mode:
+                        with force_enable_grad():
+                            # Clone new_x inside enable_grad for proper gradient tracking
+                            new_x_grad = new_x.clone().requires_grad_(True)
+                            new_energy = self.energy(new_x_grad)
+                    else:
+                        with torch.no_grad():
+                            new_energy = self.energy(new_x.detach())
+
+                    if new_energy < energy:  # sufficient decrease
+                        step = lr * grad
+                        break
+                    lr *= armijo_gamma
+                else:
+                    # If all backtracking fails, use minimal step
+                    step = lr * grad
+
+            else:  # "sgd"
+                step = self.alpha * grad
+
+            # Apply update
+            if detach_mode:
+                with torch.no_grad():
+                    x = x - step
+                # Re-enable gradients for next iteration (except last step)
+                if t < steps - 1:
+                    x.requires_grad_(True)
+            else:
+                # In non-detach mode, x already has gradient tracking from above
+                x = x - step
+
+            # Store for BB
+            if mode == "bb":
+                prev_x = x.detach() if detach_mode else x.clone().detach()
+                prev_grad = grad.detach()
+
+        return x, trajectory
+
+    def _should_clone(
+        self,
+        training: bool,
+        detach: bool,
+        force_clone: bool | None,
+    ) -> bool:
+        """Determine whether to clone input tokens.
+
+        Cloning is needed to:
+        - Preserve original inputs during training (for gradient safety)
+        - Isolate computations when detaching (frozen backbone scenarios)
+        - Unless explicitly overridden by force_clone
+        """
+        if force_clone is not None:
+            return force_clone
+        return training or detach
 
     def forward(
         self,
         x: Tensor,
         detach: bool = False,
-        return_energy: bool = False,
-        return_trajectory: bool = False,
-        α: float | None = None,
-        energy_mask: Tensor | None = None,
+        track: Track = "none",
+        mode: DescentMode = "bb",
         force_clone: bool | None = None,
+        armijo_gamma: float = 0.5,
+        armijo_max_iter: int = 4,
     ) -> Tensor | ETOutput:
         """Optimize token configuration via gradient descent on energy landscape.
 
         Parameters
         ----------
         x : Tensor
-            Input tensor of shape [..., N, D] where N is the number
-            of tokens and D is the feature dimension of each token
+            Input tensor of shape [..., N, D]
         detach : bool, optional
-            If True, detaches gradients after optimization. Useful for
-            frozen-backbone scenarios, inference-only modes, and preventing
-            gradient flow through optimization trajectory, by default False
-        return_energy : bool, optional
-            If True, returns the final energy value E^TOTAL(x^(T)) alongside
-            optimized tokens, by default False
-        return_trajectory : bool, optional
-            If True, returns energy trajectory [E^TOTAL(x^(0)), ..., E^TOTAL(x^(T-1))]
-            during optimization for visualization and analysis, by default False
-        α : float, optional
-            Step size for gradient descent. If provided, overrides self.α
-            for this forward pass. Useful for inference-time tuning
-        energy_mask : Tensor, optional
-            Energy mask for attention computation of shape [..., H, N, N].
-            Supports domain-specific masking like padding, causal attention,
-            or span-drop. Uses additive masking: 0 for allowed, -∞ for masked
+            If True, detaches gradients after optimization
+        track : Track, optional
+            Controls what to track during optimization:
+            - "none": Return only optimized tokens (default)
+            - "energy": Return tokens and final energy
+            - "trajectory": Return tokens and energy trajectory
+            - "both": Return tokens, final energy, and trajectory
+        mode : DescentMode, optional
+            Descent method to use:
+            - "sgd": Fixed step size
+            - "bb": Barzilai-Borwein with Armijo backtracking (default)
         force_clone : bool, optional
-            If provided, overrides default cloning heuristic. Use False for
-            test-time energy descent with learnable prompts that should
-            mutate in-place
+            Overrides default cloning heuristic if provided
+        armijo_gamma : float, optional
+            Backtracking factor for BB mode, by default 0.5
+        armijo_max_iter : int, optional
+            Maximum backtracking iterations for BB mode, by default 4
 
         Returns
         -------
         Union[Tensor, ETOutput]
-            If no additional outputs requested: optimized tokens x^(T) of shape [..., N, D]
-            Otherwise: ETOutput namedtuple containing (tokens, final_energy, trajectory)
+            Optimized tokens or ETOutput with additional tracked values
 
         Notes
         -----
-        The optimization procedure implements iterative gradient descent:
-
-        for t = 0, 1, ..., T-1:
-            E^(t) = E^TOTAL(x^(t))                    # Forward: compute energy
-            ∇E^(t) = ∇ₓ E^TOTAL(x^(t))                # Backward: compute gradient
-            x^(t+1) = x^(t) - α · ∇E^(t)             # Update: gradient descent step
-
-        The final optimized configuration x^(T) represents tokens that have
-        settled into a local minimum of the energy landscape, balancing
-        attention-based relational constraints and memory-based associations.
-
-        Gradient computation uses autograd.grad with create_graph=True to
-        maintain differentiability for higher-order derivatives and
-        end-to-end training through the optimization process.
+        This method can operate within torch.no_grad() contexts by temporarily
+        enabling gradients for internal optimization. However, it cannot work
+        within torch.inference_mode() unless detach=True is used.
         """
         # Conditional cloning: preserve original input when needed
-        should_clone = (
-            force_clone
-            if force_clone is not None
-            else (self.training or detach)
-        )
-        if should_clone:
-            x = x.clone()  # shape: [..., N, D]
+        if self._should_clone(self.training, detach, force_clone):
+            x = x.clone()
 
         # Gradient isolation for frozen-backbone scenarios
         if detach:
-            x = x.detach()  # shape: [..., N, D]
+            x = x.detach()
 
         # Ensure x requires gradients for optimization
         x.requires_grad_(True)
 
-        # α - step size selection: override or use default
-        step_size = α if α is not None else self.α
+        # Determine tracking requirements
+        track_trajectory = track in ("trajectory", "both")
+        return_energy = track in ("energy", "both")
 
-        # Initialize trajectory tracking for energy visualization
-        energy_trajectory: list[Tensor] | None = (
-            [] if return_trajectory else None
+        # Perform energy descent optimization
+        x, trajectory = self._energy_descent(
+            x=x,
+            steps=self.steps,
+            mode=mode,
+            detach_mode=detach,
+            track_trajectory=track_trajectory,
+            armijo_gamma=armijo_gamma,
+            armijo_max_iter=armijo_max_iter,
         )
+
+        # Compute final energy if needed
         final_energy = None
-
-        # Iterative gradient descent optimization: x^(t+1) = x^(t) - α · ∇ₓ E^TOTAL(x^(t))
-        for _i in range(self.steps):
-            # Forward pass: E^(t) = E^TOTAL(x^(t))
-            energy = self.energy(x, energy_mask=energy_mask)  # scalar
-
-            # Record energy for trajectory visualization
-            if return_trajectory and energy_trajectory is not None:
-                energy_trajectory.append(energy.detach().clone())  # scalar
-
-            # Backward pass: ∇E^(t) = ∇ₓ E^TOTAL(x^(t))
-            (grad,) = torch.autograd.grad(
-                energy,  # scalar energy to differentiate
-                x,  # [..., N, D] - differentiate w.r.t. tokens
-                create_graph=True,  # Essential for higher-order derivatives
-            )  # grad shape: [..., N, D]
-
-            # Gradient descent step: x^(t+1) = x^(t) - α · ∇E^(t)
-            if detach:
-                # Detached mode: use no_grad for efficiency, break computation graph
-                with torch.no_grad():
-                    x = x - step_size * grad  # shape: [..., N, D]
-                # Re-enable gradients for next iteration (except final step)
-                if _i < self.steps - 1:
-                    x.requires_grad_(True)
-            else:
-                # Training mode: preserve computational graph for end-to-end training
-                x = x - step_size * grad  # shape: [..., N, D]
-
-        # Compute final energy: E^TOTAL(x^(T))
-        if return_energy or return_trajectory:
+        if return_energy:
             with torch.no_grad():
-                final_energy = self.energy(x, energy_mask=energy_mask)  # scalar
+                final_energy = self.energy(x)
 
-        # Gradient isolation for inference scenarios
+        # Final detach if needed
         if detach:
-            x = x.detach()  # shape: [..., N, D]
+            x = x.detach()
             if final_energy is not None:
-                final_energy = final_energy.detach()  # scalar
-            if energy_trajectory is not None:
-                energy_trajectory = [
-                    e.detach() for e in energy_trajectory
-                ]  # [scalar, ...]
+                final_energy = final_energy.detach()
 
-        # Return format selection based on requested outputs
-        if return_energy or return_trajectory:
-            # Stack trajectory: [E^(0), E^(1), ..., E^(T-1)] → tensor of shape [T]
+        # Return appropriate output format
+        if track != "none":
+            # Only create trajectory tensor if we tracked it
             trajectory_tensor = (
-                torch.stack(energy_trajectory) if energy_trajectory else None
-            )  # shape: [steps] or None
+                torch.stack(trajectory, dim=0)
+                if track_trajectory and trajectory
+                else None
+            )
             return ETOutput(
-                tokens=x,  # shape: [..., N, D]
-                final_energy=final_energy,  # scalar or None
-                trajectory=trajectory_tensor,  # shape: [steps] or None
+                tokens=x,
+                final_energy=final_energy,
+                trajectory=trajectory_tensor,
             )
         else:
-            return x  # shape: [..., N, D]
+            return x
 
 
 # Register the EnergyTransformer class in the registry
