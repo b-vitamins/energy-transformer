@@ -11,7 +11,7 @@ __all__ = [
 ]
 
 
-class ClassificationHead(nn.Module):  # type: ignore
+class ClassificationHead(nn.Module):  # type: ignore[misc]
     """Classification head for vision models.
 
     Implements a standard classification head that processes the CLS token
@@ -46,6 +46,8 @@ class ClassificationHead(nn.Module):  # type: ignore
     head : nn.Linear
         Final classification layer.
     """
+
+    pre_logits: nn.Module
 
     def __init__(
         self,
@@ -134,12 +136,12 @@ class ClassificationHead(nn.Module):  # type: ignore
 
         # Apply dropout and classification
         x = self.drop(x)
-        logits = self.head(x)  # (B, num_classes)
+        logits: Tensor = self.head(x)  # (B, num_classes)
 
         return logits
 
 
-class FeatureHead(nn.Module):  # type: ignore
+class FeatureHead(nn.Module):  # type: ignore[misc]
     """Feature extraction head for vision models.
 
     Extracts feature representations from token sequences without applying
