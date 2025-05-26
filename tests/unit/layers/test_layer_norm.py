@@ -58,6 +58,7 @@ def test_reset_parameters_initializes_values() -> None:
 
 @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
 def test_mixed_precision_matches_float32(dtype: torch.dtype) -> None:
+    torch.manual_seed(42)
     ln = LayerNorm(in_dim=3)
     x = torch.randn(2, 3)
     out_fp32 = ln(x)
@@ -65,7 +66,10 @@ def test_mixed_precision_matches_float32(dtype: torch.dtype) -> None:
     x_mp = x.to(dtype)
     out_mp = ln(x_mp)
     assert out_mp.dtype == dtype
-    assert torch.allclose(out_mp.to(torch.float32), out_fp32, atol=5e-3)
+
+    # bfloat16 has lower precision (8-bit mantissa) than float16 (10-bit)
+    atol = 1e-2 if dtype == torch.bfloat16 else 5e-3
+    assert torch.allclose(out_mp.to(torch.float32), out_fp32, atol=atol)
 
 
 def test_functional_layernorm_energy_equivalence() -> None:
@@ -123,6 +127,7 @@ def test_layernorm_additional_dims_matches_torch() -> None:
 
 @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
 def test_energy_lagrangian_mixed_precision(dtype: torch.dtype) -> None:
+    torch.manual_seed(42)
     ln = LayerNorm(in_dim=2)
     x = torch.randn(4, 2)
     energy_fp32 = ln.get_energy_lagrangian(x)
@@ -130,4 +135,6 @@ def test_energy_lagrangian_mixed_precision(dtype: torch.dtype) -> None:
     x_mp = x.to(dtype)
     energy_mp = ln.get_energy_lagrangian(x_mp)
     assert energy_mp.dtype == dtype
-    assert torch.allclose(energy_mp.to(torch.float32), energy_fp32, atol=1e-2)
+
+    atol = 1e-2 if dtype == torch.bfloat16 else 5e-3
+    assert torch.allclose(energy_mp.to(torch.float32), energy_fp32, atol=atol)
