@@ -226,14 +226,14 @@ If you use this code, please cite:
 
 ## Contributors
 
-- **Idea**: Ayan Das and Suresh Meena
-- **Human in the Loop**: [Ayan Das](https://github.com/b-vitamins)
+- **Idea**: Suresh Meena and [Ayan Das](https://github.com/b-vitamins)
 - **AI Contributors**:
   - Claude Opus 4 (Anthropic)
   - Claude Sonnet 4 (Anthropic)
   - Claude Sonnet 3.7 (Anthropic)
   - ChatGPT o3 (OpenAI)
   - ChatGPT Codex (OpenAI)
+- **Human in the Loop**: Ayan
 
 ## License
 
