@@ -113,6 +113,7 @@ def test_attention_default_beta_matches_manual() -> None:
 
 @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
 def test_attention_mixed_precision(dtype: torch.dtype) -> None:
+    torch.manual_seed(42)
     attn = MultiHeadEnergyAttention(
         in_dim=1, num_heads=1, head_dim=1, beta=1.0, bias=False
     )
@@ -123,7 +124,10 @@ def test_attention_mixed_precision(dtype: torch.dtype) -> None:
     energy = attn(g)
     expected = _manual_energy(g, attn.w_k.to(dtype), attn.w_q.to(dtype))
     assert energy.dtype == dtype
-    assert torch.allclose(energy, expected, atol=1e-3)
+
+    # bfloat16 has lower precision than float16
+    atol = 5e-3 if dtype == torch.bfloat16 else 1e-3
+    assert torch.allclose(energy, expected, atol=atol)
 
 
 def test_attention_mask_broadcast() -> None:
