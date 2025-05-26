@@ -3,21 +3,42 @@ name = "energy-transformer"
 version = "0.1.0"
 description = "PyTorch implementation of Energy Transformer"
 authors = ["Ayan Das <bvits@riseup.net>"]
-maintainers = ["Claude 3.7 Sonnet (Anthropic)"]
+maintainers = [
+    "Ayan Das <bvits@riseup.net>",
+    "Claude Opus 4 (Anthropic)",
+    "Claude Sonnet 4 (Anthropic)",
+    "Claude Sonnet 3.7 (Anthropic)",
+    "ChatGPT o3 (OpenAI)",
+    "ChatGPT Codex (OpenAI)"
+]
 readme = "README.md"
 license = "Apache-2.0"
+repository = "https://github.com/bvitsadze-riseup/energy-transformer"
+keywords = ["deep-learning", "transformers", "energy-based-models", "hopfield-networks", "simplicial-complexes"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: Apache Software License",
+]
 
 [tool.poetry.dependencies]
-python = "^3.11.11"
+python = "^3.11"
 torch = "^2.0"
 einops = "^0.6"
 numpy = "^2.2.5"
+scipy = "^1.10"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.0"
 pytest-cov = "^4.0"
+pytest-xdist = "^3.0"
 mypy = "^1.10"
 ruff = "^0.4.0"
+
+[tool.poetry.group.examples]
+optional = true
 
 [tool.poetry.group.examples.dependencies]
 torchvision = "^0.20"
@@ -31,17 +52,18 @@ build-backend = "poetry.core.masonry.api"
 [tool.ruff]
 line-length = 80
 target-version = "py311"
-exclude = [".venv", "build", "dist"]
+exclude = [".venv", "build", "dist", "__pycache__"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "N", "D"]
-ignore = ["E203", "E501"]
+select = ["E", "F", "I", "UP", "B", "N", "D", "C90", "W"]
+ignore = ["E203", "E501", "D100", "D104"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*.py" = ["D", "ANN"]
+"examples/*.py" = ["D"]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 10
@@ -61,11 +83,7 @@ warn_unused_ignores = false
 no_implicit_reexport = false
 
 [[tool.mypy.overrides]]
-module = ["torch", "torch.*"]
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = ["torchvision", "torchvision.*"]
+module = ["torch", "torch.*", "torchvision", "torchvision.*", "scipy", "scipy.*"]
 ignore_errors = true
 
 [[tool.mypy.overrides]]
@@ -74,7 +92,7 @@ strict = true
 ignore_errors = false
 
 [[tool.mypy.overrides]]
-module = ["tests.*"]
+module = ["tests.*", "examples.*"]
 ignore_errors = true
 
 [tool.pytest.ini_options]
@@ -82,3 +100,19 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.coverage.run]
+source = ["energy_transformer"]
+omit = ["*/tests/*", "*/examples/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "pass",
+    "except ImportError:",
+]
