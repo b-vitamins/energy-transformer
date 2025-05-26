@@ -54,7 +54,7 @@ import torch.nn as nn
 from torch import Tensor
 
 
-class PatchEmbedding(nn.Module):  # type: ignore
+class PatchEmbedding(nn.Module):  # type: ignore[misc]
     """Convert image into patch embeddings."""
 
     def __init__(
@@ -92,7 +92,7 @@ class PatchEmbedding(nn.Module):  # type: ignore
         return x
 
 
-class VisionTransformer(nn.Module):  # type: ignore
+class VisionTransformer(nn.Module):  # type: ignore[misc]
     """Vision Transformer (ViT).
 
     Parameters
@@ -217,7 +217,7 @@ class VisionTransformer(nn.Module):  # type: ignore
         return x
 
 
-class TransformerBlock(nn.Module):  # type: ignore
+class TransformerBlock(nn.Module):  # type: ignore[misc]
     """Transformer block with attention and MLP."""
 
     def __init__(
@@ -264,7 +264,7 @@ class TransformerBlock(nn.Module):  # type: ignore
         return x
 
 
-class Attention(nn.Module):  # type: ignore
+class Attention(nn.Module):  # type: ignore[misc]
     """Multi-head self-attention."""
 
     def __init__(
@@ -321,7 +321,7 @@ class Attention(nn.Module):  # type: ignore
         return x
 
 
-class MLP(nn.Module):  # type: ignore
+class MLP(nn.Module):  # type: ignore[misc]
     """MLP block with GELU activation."""
 
     def __init__(
