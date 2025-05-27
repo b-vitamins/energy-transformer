@@ -215,24 +215,26 @@ class Context:
         self.parent = parent
         self._cache: dict[str, Any] = {}
 
-    def get_dim(self, name: str) -> int | None:
+    def get_dim(self, name: str, default: int | None = None) -> int | None:
         """Get dimension value by name with hierarchical lookup.
 
         Parameters
         ----------
         name : str
             Dimension name to look up
+        default : int | None, optional
+            Default value if dimension not found
 
         Returns
         -------
         int | None
-            Dimension value or None if not found
+            Dimension value, default, or None if not found
         """
         if name in self.dimensions:
             return self.dimensions[name]
         if self.parent:
-            return self.parent.get_dim(name)
-        return None
+            return self.parent.get_dim(name, default)
+        return default
 
     def set_dim(self, name: str, value: int) -> None:
         """Set dimension value in this context.
@@ -596,19 +598,73 @@ class Spec(ABC, metaclass=SpecMeta):
         issues = []
 
         # Check version compatibility
-        if hasattr(context, "spec_version"):
-            if context.spec_version not in self._compatible_versions:
-                issues.append(
-                    f"Version mismatch: context has {context.spec_version}, "
-                    f"spec supports {self._compatible_versions}"
-                )
+        issues.extend(self._validate_version(context))
 
         # Check required dimensions
+        issues.extend(self._validate_required_dimensions(context))
+
+        # Validate dimension parameters
+        issues.extend(self._validate_dimension_parameters(context))
+
+        # Validate nested specs
+        issues.extend(self._validate_children(context))
+
+        return issues
+
+    def _validate_version(self, context: Context) -> list[str]:
+        """Validate version compatibility.
+
+        Parameters
+        ----------
+        context : Context
+            Context to validate against
+
+        Returns
+        -------
+        list[str]
+            Version-related validation issues
+        """
+        if hasattr(context, "spec_version"):
+            if context.spec_version not in self._compatible_versions:
+                return [
+                    f"Version mismatch: context has {context.spec_version}, "
+                    f"spec supports {self._compatible_versions}"
+                ]
+        return []
+
+    def _validate_required_dimensions(self, context: Context) -> list[str]:
+        """Validate required dimensions are present.
+
+        Parameters
+        ----------
+        context : Context
+            Context to validate against
+
+        Returns
+        -------
+        list[str]
+            Missing dimension issues
+        """
+        issues = []
         for dim in self._requires:
             if context.get_dim(dim) is None:
                 issues.append(f"Missing required dimension: {dim}")
+        return issues
 
-        # Validate dimension parameters
+    def _validate_dimension_parameters(self, context: Context) -> list[str]:
+        """Validate dimension parameters.
+
+        Parameters
+        ----------
+        context : Context
+            Context to validate against
+
+        Returns
+        -------
+        list[str]
+            Dimension parameter validation issues
+        """
+        issues = []
         for field_info in fields(self):
             if field_info.metadata.get("dimension"):
                 value = getattr(self, field_info.name)
@@ -618,7 +674,25 @@ class Spec(ABC, metaclass=SpecMeta):
                             value.validate(resolved)
                     except ValidationError as e:
                         issues.append(str(e))
+        return issues
 
+    def _validate_children(self, context: Context) -> list[str]:
+        """Validate child specifications.
+
+        Parameters
+        ----------
+        context : Context
+            Context to validate against
+
+        Returns
+        -------
+        list[str]
+            Child validation issues
+        """
+        issues = []
+        for child in self.children():
+            child_issues = child.validate(context)
+            issues.extend(child_issues)
         return issues
 
     def apply_context(self, context: Context) -> Context:
