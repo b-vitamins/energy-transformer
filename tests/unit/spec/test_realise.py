@@ -12,6 +12,12 @@ from energy_transformer.spec.combinators import (
     parallel,
     seq,
 )
+from energy_transformer.spec.library import (
+    CLSTokenSpec,
+    ETSpec,
+    LayerNormSpec,
+    PatchEmbedSpec,
+)
 from energy_transformer.spec.primitives import Context, SpecMeta
 from energy_transformer.spec.realise import (
     ModuleCache,
@@ -25,13 +31,6 @@ from energy_transformer.spec.realise import (
     register_typed,
     to_yaml,
     visualize,
-)
-
-from .test_primitives import (
-    CLSTokenSpec,
-    ETSpec,
-    LayerNormSpec,
-    PatchEmbedSpec,
 )
 
 
