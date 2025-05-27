@@ -5,6 +5,7 @@ transformer architectures, particularly vision transformers.
 """
 
 from dataclasses import dataclass
+from typing import Literal
 
 from .primitives import (
     Context,
@@ -17,18 +18,31 @@ from .primitives import (
 )
 
 __all__ = [
-    # Layer specs
-    "LayerNormSpec",
+    # Core layer specs
     "PatchEmbedSpec",
     "CLSTokenSpec",
     "PosEmbedSpec",
+    "LayerNormSpec",
+    "MHASpec",
     "MHEASpec",
+    "MLPSpec",
     "HNSpec",
-    "ETSpec",
+    "SHNSpec",
+    # Head specs
+    "ClassificationHeadSpec",
+    "FeatureHeadSpec",
+    # Utility specs
+    "DropoutSpec",
+    "IdentitySpec",
+    # Composite specs
+    "VisionEmbeddingSpec",
+    "TransformerBlockSpec",
+    "ETBlockSpec",
     # Utility functions
     "to_pair",
     "validate_positive",
     "validate_probability",
+    "validate_dimension",
 ]
 
 
@@ -38,9 +52,11 @@ def to_pair(x: int | tuple[int, int]) -> tuple[int, int]:
     return (x, x) if isinstance(x, int) else x
 
 
-def validate_positive(x: int | float) -> bool:
+def validate_positive(x: int | float | tuple[int | float, ...]) -> bool:
     """Validate that a value is positive."""
-    return x > 0
+    if isinstance(x, tuple):
+        return all(isinstance(v, int | float) and v > 0 for v in x)
+    return isinstance(x, int | float) and x > 0
 
 
 def validate_probability(x: float) -> bool:
@@ -48,7 +64,14 @@ def validate_probability(x: float) -> bool:
     return 0 <= x <= 1
 
 
-# Layer specifications
+def validate_dimension(x: int) -> bool:
+    """Validate dimension is positive and reasonable."""
+    return 0 < x <= 65536  # Reasonable upper bound
+
+
+# Core Energy Transformer layer specifications
+
+
 @dataclass(frozen=True)
 @requires("embed_dim")
 class LayerNormSpec(Spec):
@@ -64,56 +87,64 @@ class LayerNormSpec(Spec):
 
 
 @dataclass(frozen=True)
-@provides("embed_dim", "token_count")
+@provides("embed_dim", "num_patches")
 class PatchEmbedSpec(Spec):
     """Patch embedding specification for vision transformers.
 
     Parameters
     ----------
-    img_size : int
-        Input image size (assumes square images)
-    patch_size : int
-        Size of each patch
+    img_size : int | tuple[int, int]
+        Input image size (height, width) or single int for square
+    patch_size : int | tuple[int, int]
+        Size of each patch (height, width) or single int for square
     embed_dim : int
         Output embedding dimension
     in_chans : int
         Number of input channels
+    bias : bool
+        Whether to include bias in projection
     """
 
-    img_size: int = param(validator=validate_positive)
-    patch_size: int = param(validator=validate_positive)
-    embed_dim: int = param(validator=validate_positive)
+    img_size: int | tuple[int, int] = param(validator=validate_positive)
+    patch_size: int | tuple[int, int] = param(validator=validate_positive)
+    embed_dim: int = param(validator=validate_dimension)
     in_chans: int = param(default=3, validator=validate_positive)
+    bias: bool = param(default=True)
 
     def apply_context(self, context: Context) -> Context:
-        """Apply patch embedding specification to context.
-
-        Updates the context with the embedding dimension and calculated
-        token count based on image and patch sizes.
-
-        Parameters
-        ----------
-        context : Context
-            Context to update
-
-        Returns
-        -------
-        Context
-            Updated context with embed_dim and token_count dimensions
-        """
+        """Apply patch embedding specification to context."""
         context = super().apply_context(context)
 
-        # Calculate and provide token count
-        num_patches = (self.img_size // self.patch_size) ** 2
-        context.set_dim("token_count", num_patches)
+        # Calculate and provide patch count
+        img_h, img_w = to_pair(self.img_size)
+        patch_h, patch_w = to_pair(self.patch_size)
+        num_patches = (img_h // patch_h) * (img_w // patch_w)
+
+        context.set_dim("num_patches", num_patches)
         context.set_dim("embed_dim", self.embed_dim)
 
         return context
 
+    def validate(self, context: Context) -> list[str]:
+        """Validate patch embedding spec."""
+        issues = super().validate(context)
+
+        # Check patch size vs image size
+        img_h, img_w = to_pair(self.img_size)
+        patch_h, patch_w = to_pair(self.patch_size)
+
+        if patch_h > img_h or patch_w > img_w:
+            issues.append(
+                f"Patch size ({patch_h}, {patch_w}) cannot be larger than "
+                f"image size ({img_h}, {img_w})"
+            )
+
+        return issues
+
 
 @dataclass(frozen=True)
-@requires("embed_dim", "token_count")
-@modifies("token_count")
+@requires("embed_dim")
+@modifies("num_patches")
 class CLSTokenSpec(Spec):
     """Classification token specification.
 
@@ -121,32 +152,18 @@ class CLSTokenSpec(Spec):
     """
 
     def apply_context(self, context: Context) -> Context:
-        """Apply CLS token specification to context.
-
-        Increments the token count in the context to account for the
-        additional classification token.
-
-        Parameters
-        ----------
-        context : Context
-            Context to update
-
-        Returns
-        -------
-        Context
-            Updated context with incremented token_count
-        """
+        """Apply CLS token specification to context."""
         context = super().apply_context(context)
 
-        # Increment token count for CLS token
-        if token_count := context.get_dim("token_count"):
-            context.set_dim("token_count", token_count + 1)
+        # Increment patch count for CLS token
+        if num_patches := context.get_dim("num_patches"):
+            context.set_dim("num_patches", num_patches + 1)
 
         return context
 
 
 @dataclass(frozen=True)
-@requires("embed_dim", "token_count")
+@requires("embed_dim", "num_patches")
 class PosEmbedSpec(Spec):
     """Positional embedding specification.
 
@@ -173,13 +190,19 @@ class MHEASpec(Spec):
         Number of attention heads
     head_dim : int
         Dimension of each attention head
-    dropout : float
-        Dropout probability
+    beta : float | None
+        Temperature parameter (None for 1/sqrt(head_dim))
+    bias : bool
+        Whether to include bias in key/query projections
+    init_std : float
+        Standard deviation for weight initialization
     """
 
     num_heads: int = param(default=12, validator=validate_positive)
-    head_dim: int = param(default=64, validator=validate_positive)
-    dropout: float = param(default=0.0, validator=validate_probability)
+    head_dim: int = param(default=64, validator=validate_dimension)
+    beta: float | None = param(default=None)
+    bias: bool = param(default=False)
+    init_std: float = param(default=0.002, validator=validate_positive)
 
 
 @dataclass(frozen=True)
@@ -189,24 +212,101 @@ class HNSpec(Spec):
 
     Parameters
     ----------
-    hidden_dim : Dimension
-        Hidden dimension (computed as embed_dim * 4 by default)
+    hidden_dim : Dimension | None
+        Hidden dimension (computed as embed_dim * multiplier by default)
     multiplier : float
         Multiplier for hidden dimension
+    energy_fn : str
+        Energy function type (could be extended to support custom functions)
     """
 
-    hidden_dim: Dimension = param(
-        default_factory=lambda: Dimension(
-            "hidden_dim", formula="embed_dim * 4"
-        ),
-        dimension=True,
-    )
+    hidden_dim: Dimension | None = param(default=None, dimension=True)
     multiplier: float = param(default=4.0, validator=lambda x: 0 < x <= 8)
+    energy_fn: str = param(
+        default="relu_squared", choices=["relu_squared", "softmax", "tanh"]
+    )
+
+    def apply_context(self, context: Context) -> Context:
+        """Apply Hopfield network specification to context."""
+        context = super().apply_context(context)
+
+        # Set hidden_dim if not explicitly provided
+        if self.hidden_dim is None and (
+            embed_dim := context.get_dim("embed_dim")
+        ):
+            context.set_dim(
+                "hopfield_hidden_dim", int(embed_dim * self.multiplier)
+            )
+
+        return context
 
 
 @dataclass(frozen=True)
 @requires("embed_dim")
-class ETSpec(Spec):
+class SHNSpec(Spec):
+    """Simplicial Hopfield network specification.
+
+    Parameters
+    ----------
+    simplices : list[list[int]] | None
+        Manual specification of simplicial complex
+    num_vertices : int | None
+        Number of vertices (defaults to num_patches from context)
+    max_dim : int
+        Maximum simplex dimension (1=edges, 2=triangles, 3=tetrahedra)
+    budget : float
+        Fraction of full edge budget to use
+    dim_weights : dict[int, float] | None
+        Weight distribution across simplex dimensions
+    coordinates : list[tuple[float, float]] | None
+        Spatial coordinates for topology-aware generation
+    hidden_dim : Dimension | None
+        Hidden dimension (computed as embed_dim * multiplier by default)
+    multiplier : float
+        Multiplier for hidden dimension
+    temperature : float
+        Temperature parameter for softmax
+    """
+
+    # Simplicial complex parameters
+    simplices: list[list[int]] | None = param(default=None)
+    num_vertices: int | None = param(
+        default=None, validator=lambda x: x is None or x > 0
+    )
+    max_dim: int = param(default=1, validator=lambda x: 1 <= x <= 3)
+    budget: float = param(default=0.1, validator=lambda x: 0 < x <= 1)
+    dim_weights: dict[int, float] | None = param(default=None)
+    coordinates: list[tuple[float, float]] | None = param(default=None)
+
+    # Network parameters
+    hidden_dim: Dimension | None = param(default=None, dimension=True)
+    multiplier: float = param(default=4.0, validator=lambda x: 0 < x <= 8)
+    temperature: float = param(default=0.5, validator=validate_positive)
+
+    def apply_context(self, context: Context) -> Context:
+        """Apply simplicial Hopfield specification to context."""
+        context = super().apply_context(context)
+
+        # Set hidden_dim if not explicitly provided
+        if self.hidden_dim is None and (
+            embed_dim := context.get_dim("embed_dim")
+        ):
+            context.set_dim(
+                "simplicial_hidden_dim", int(embed_dim * self.multiplier)
+            )
+
+        # Set num_vertices from context if not provided
+        if self.num_vertices is None and (
+            num_patches := context.get_dim("num_patches")
+        ):
+            context.set_dim("simplicial_vertices", num_patches)
+
+        return context
+
+
+@dataclass(frozen=True)
+@requires("embed_dim")
+class ETBlockSpec(Spec):
     """Energy Transformer block specification.
 
     Parameters
@@ -219,12 +319,217 @@ class ETSpec(Spec):
         Layer normalization specification
     attention : MHEASpec
         Multi-head attention specification
-    hopfield : HNSpec
-        Hopfield network specification
+    hopfield : HNSpec | SHNSpec
+        Hopfield network specification (standard or simplicial)
     """
 
     steps: int = param(default=12, validator=lambda x: 0 < x <= 50)
-    alpha: float = param(default=0.125, validator=lambda x: 0 < x <= 1)
+    alpha: float = param(default=0.125, validator=validate_positive)
     layer_norm: LayerNormSpec = param(default_factory=LayerNormSpec)
     attention: MHEASpec = param(default_factory=MHEASpec)
-    hopfield: HNSpec = param(default_factory=HNSpec)
+    hopfield: HNSpec | SHNSpec = param(default_factory=HNSpec)
+
+
+# Head specifications
+
+
+@dataclass(frozen=True)
+@requires("embed_dim")
+@provides("num_classes")
+class ClassificationHeadSpec(Spec):
+    """Classification head specification.
+
+    Parameters
+    ----------
+    num_classes : int
+        Number of output classes
+    representation_size : int | None
+        Size of intermediate representation layer
+    drop_rate : float
+        Dropout rate before classification
+    use_cls_token : bool
+        Whether to use CLS token or average pooling
+    """
+
+    num_classes: int = param(validator=validate_positive)
+    representation_size: int | None = param(default=None)
+    drop_rate: float = param(default=0.0, validator=validate_probability)
+    use_cls_token: bool = param(default=True)
+
+    def apply_context(self, context: Context) -> Context:
+        """Apply classification head to context."""
+        context = super().apply_context(context)
+        context.set_dim("num_classes", self.num_classes)
+        return context
+
+
+@dataclass(frozen=True)
+@requires("embed_dim")
+class FeatureHeadSpec(Spec):
+    """Feature extraction head specification.
+
+    Parameters
+    ----------
+    use_cls_token : bool
+        Whether to extract CLS token or use average pooling
+    """
+
+    use_cls_token: bool = param(default=True)
+
+
+# Composite specifications
+
+
+@dataclass(frozen=True)
+@provides("embed_dim", "num_patches")
+class VisionEmbeddingSpec(Spec):
+    """Combined patch + positional + CLS token embedding.
+
+    This is a composite spec that represents the complete
+    vision embedding pipeline typically used in ViT models.
+
+    Parameters
+    ----------
+    img_size : int | tuple[int, int]
+        Input image size
+    patch_size : int | tuple[int, int]
+        Patch size
+    embed_dim : int
+        Embedding dimension
+    in_chans : int
+        Number of input channels
+    use_cls_token : bool
+        Whether to add CLS token
+    drop_rate : float
+        Dropout rate after positional embedding
+    """
+
+    img_size: int | tuple[int, int] = param(validator=validate_positive)
+    patch_size: int | tuple[int, int] = param(validator=validate_positive)
+    embed_dim: int = param(validator=validate_dimension)
+    in_chans: int = param(default=3, validator=validate_positive)
+    use_cls_token: bool = param(default=True)
+    drop_rate: float = param(default=0.0, validator=validate_probability)
+
+    def apply_context(self, context: Context) -> Context:
+        """Apply vision embedding to context."""
+        context = super().apply_context(context)
+
+        # Calculate patches
+        img_h, img_w = to_pair(self.img_size)
+        patch_h, patch_w = to_pair(self.patch_size)
+        num_patches = (img_h // patch_h) * (img_w // patch_w)
+
+        # Add CLS token if used
+        if self.use_cls_token:
+            num_patches += 1
+
+        context.set_dim("embed_dim", self.embed_dim)
+        context.set_dim("num_patches", num_patches)
+        return context
+
+
+# Standard transformer components (for comparison/baseline)
+
+
+@dataclass(frozen=True)
+@requires("embed_dim")
+class MHASpec(Spec):
+    """Standard multi-head self-attention specification.
+
+    Parameters
+    ----------
+    num_heads : int
+        Number of attention heads
+    qkv_bias : bool
+        Whether to use bias in QKV projection
+    attn_drop : float
+        Attention dropout rate
+    proj_drop : float
+        Projection dropout rate
+    """
+
+    num_heads: int = param(default=8, validator=validate_positive)
+    qkv_bias: bool = param(default=True)
+    attn_drop: float = param(default=0.0, validator=validate_probability)
+    proj_drop: float = param(default=0.0, validator=validate_probability)
+
+
+@dataclass(frozen=True)
+@requires("embed_dim")
+class MLPSpec(Spec):
+    """Standard MLP/FFN block specification.
+
+    Parameters
+    ----------
+    hidden_features : int | None
+        Hidden dimension (defaults to 4 * embed_dim)
+    out_features : int | None
+        Output dimension (defaults to embed_dim)
+    activation : str
+        Activation function name
+    drop : float
+        Dropout rate
+    """
+
+    Activation = Literal["gelu", "relu", "swish", "silu"]
+    hidden_features: int | None = param(default=None)
+    out_features: int | None = param(default=None)
+    activation: Activation = param(default="gelu")
+    drop: float = param(default=0.0, validator=validate_probability)
+
+
+@dataclass(frozen=True)
+@requires("embed_dim")
+class TransformerBlockSpec(Spec):
+    """Standard transformer block specification.
+
+    Represents a standard pre-norm or post-norm transformer block
+    with attention and MLP, used for baseline comparisons.
+
+    Parameters
+    ----------
+    attention : MHASpec
+        Attention specification
+    mlp : MLPSpec
+        MLP specification
+    drop_path : float
+        Drop path (stochastic depth) rate
+    norm_first : bool
+        Whether to use pre-normalization (True) or post-normalization
+    """
+
+    attention: MHASpec = param(default_factory=MHASpec)
+    mlp: MLPSpec = param(default_factory=MLPSpec)
+    drop_path: float = param(default=0.0, validator=validate_probability)
+    norm_first: bool = param(default=True)
+
+
+# Utility specifications
+
+
+@dataclass(frozen=True)
+class DropoutSpec(Spec):
+    """Dropout layer specification.
+
+    Parameters
+    ----------
+    p : float
+        Dropout probability
+    inplace : bool
+        Whether to perform dropout in-place
+    """
+
+    p: float = param(default=0.5, validator=validate_probability)
+    inplace: bool = param(default=False)
+
+
+@dataclass(frozen=True)
+class IdentitySpec(Spec):
+    """Identity layer specification.
+
+    Passes input through unchanged. Useful for optional layers
+    or as a no-op in conditional architectures.
+    """
+
+    pass
