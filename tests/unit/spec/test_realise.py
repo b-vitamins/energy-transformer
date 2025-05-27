@@ -304,6 +304,9 @@ class TestPublicAPI:
         assert "->" in dot  # Has edges
 
     def test_yaml_serialization(self):
+        # Skip test if PyYAML is not available
+        pytest.importorskip("yaml", reason="PyYAML not installed")
+
         spec = LayerNormSpec(eps=1e-6)
 
         # To YAML
