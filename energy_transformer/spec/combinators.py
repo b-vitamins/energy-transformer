@@ -150,7 +150,7 @@ class Sequential(Spec):
         list[str]
             Validation issues
         """
-        issues = super().validate(context)
+        issues: list[str] = []
         current_context = context
 
         for i, part in enumerate(self.parts):
@@ -318,7 +318,7 @@ class Conditional(Spec):
         list[str]
             Validation issues
         """
-        issues = super().validate(context)
+        issues: list[str] = []
 
         if self.condition(context):
             issues.extend(self.if_true.validate(context))
