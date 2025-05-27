@@ -109,8 +109,7 @@ from .realise import (
     visualize,
 )
 
-# Import concrete specifications if they exist
-# These would be defined in a separate module like spec.library or spec.catalog
+_LIBRARY_AVAILABLE = False
 try:
     from .library import (
         CLSTokenSpec,
@@ -123,8 +122,9 @@ try:
         PatchEmbedSpec,
         PosEmbedSpec,
     )
+
+    _LIBRARY_AVAILABLE = True
 except ImportError:
-    # Library module not available yet
     pass
 
 __all__ = [
@@ -182,15 +182,26 @@ __all__ = [
 ]
 
 # Add library specs to __all__ if available
-try:
-    from .library import __all__ as library_all
-
-    __all__.extend(library_all)
-except (ImportError, NameError):
-    pass
+if _LIBRARY_AVAILABLE:
+    __all__.extend(
+        [
+            # Layer specs
+            "LayerNormSpec",
+            "PatchEmbedSpec",
+            "CLSTokenSpec",
+            "PosEmbedSpec",
+            "MHEASpec",
+            "HNSpec",
+            "ETSpec",
+            # Utility functions
+            "to_pair",
+            "validate_positive",
+            "validate_probability",
+        ]
+    )
 
 # Version information
-__version__ = "2.0.0"
+__version__ = "0.1.0"
 
 # Convenience aliases for common patterns
 Seq = seq
@@ -277,6 +288,9 @@ def export_patterns() -> dict[str, Callable[..., Spec]]:
     dict
         Dictionary of pattern name to spec factory function
     """
+    if not _LIBRARY_AVAILABLE:
+        return {}
+
     return {
         "vit_tiny": lambda **kwargs: seq(
             PatchEmbedSpec(
