@@ -265,12 +265,6 @@ def train_model(
             best_val = val_acc
             best_test = test_acc
 
-        # Print epoch summary
-        print(
-            f"Val Loss: {val_loss:.4f} | Val Acc: {val_acc:6.2f}% | "
-            f"Test Acc: {test_acc:6.2f}% | Best: {best_val:6.2f}%"
-        )
-
     total_time = time.time() - start_time
     print("-" * 90)
     print(
