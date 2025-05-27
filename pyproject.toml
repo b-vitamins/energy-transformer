@@ -58,7 +58,7 @@ exclude = [".venv", "build", "dist", "__pycache__"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "N", "D", "C90", "W"]
-ignore = ["E203", "E501", "D100", "D104"]
+ignore = ["E203", "E501", "D100", "D104", "N999"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
