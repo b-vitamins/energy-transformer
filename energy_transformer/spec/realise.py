@@ -520,7 +520,6 @@ class Realiser:
                     value = getattr(spec, field_info.name)
                     kwargs[field_info.name] = value
 
-                # Fix: Add type assertion
                 instance = cls(**kwargs)
                 assert isinstance(instance, nn.Module)
                 return instance
@@ -662,7 +661,6 @@ class ParallelModule(nn.Module):  # type: ignore[misc]
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Execute branches and merge outputs."""
-        # Fix: Add type annotation
         outputs: list[torch.Tensor] = [branch(x) for branch in self.branches]
 
         if self.merge == "concat":
@@ -708,7 +706,6 @@ class ResidualModule(nn.Module):  # type: ignore[misc]
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Apply inner module with residual connection."""
         residual = x
-        # Fix: Add type annotation
         out: torch.Tensor = self.inner(x)
 
         if self.merge == "add":
@@ -719,7 +716,8 @@ class ResidualModule(nn.Module):  # type: ignore[misc]
             # Learned gating would require parameters
             # For now, use simple average gating
             gate = torch.sigmoid(out.mean(dim=-1, keepdim=True))
-            return residual * (1 - gate) + out * gate
+            result: torch.Tensor = residual * (1 - gate) + out * gate
+            return result
         else:
             raise ValueError(f"Unknown merge mode: {self.merge}")
 
@@ -804,7 +802,6 @@ class LambdaModule(nn.Module):  # type: ignore[misc]
     Wraps a custom function as a module.
     """
 
-    # Fix: Change return type from Any to torch.Tensor
     Fn = Callable[[torch.Tensor, Context], torch.Tensor]
 
     def __init__(self, fn: Fn, name: str = "lambda"):
