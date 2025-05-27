@@ -53,9 +53,9 @@ Core requirements:
 Optional:
 - torchvision, matplotlib (for examples)
 
-## Quick Start
+## Quick start
 
-### Basic Usage
+### Basic usage
 
 ```python
 import torch
@@ -76,27 +76,45 @@ result = viset(images, return_energy_info=True)
 print(f"Final energy: {result['energy_info']['total_energy']:.3f}")
 ```
 
-### Declarative Model Construction
+### Using individual components
+
+```python
+from energy_transformer.models import EnergyTransformer
+from energy_transformer.layers import (
+    LayerNorm, 
+    MultiHeadEnergyAttention, 
+    HopfieldNetwork
+)
+
+et_block = EnergyTransformer(
+    layer_norm=LayerNorm(768),
+    attention=MultiHeadEnergyAttention(768, num_heads=12, head_dim=64),
+    hopfield=HopfieldNetwork(768, hidden_dim=3072),
+    steps=4,
+    alpha=0.125
+)
+
+tokens = torch.randn(4, 100, 768)
+refined_tokens = et_block(tokens)
+```
+
+### Declarative model construction
 
 ```python
 from energy_transformer import seq, realise
-from energy_transformer.spec import (
-    PatchEmbedSpec, CLSTokenSpec, ETSpec, LayerNormSpec
-)
+from energy_transformer.spec.library import *
 
-# Define model specification
 model_spec = seq(
     PatchEmbedSpec(img_size=224, patch_size=16, embed_dim=768),
     CLSTokenSpec(),
-    ETSpec(steps=4, alpha=0.125),
-    LayerNormSpec()
+    loop(ETBlockSpec(), times=12),
+    ClassificationHeadSpec(num_classes=1000)
 )
 
-# Realize into PyTorch module
 model = realise(model_spec)
 ```
 
-### CIFAR-100 Experiments
+### CIFAR-100 experiments
 
 ```bash
 cd examples/cifar
@@ -116,7 +134,7 @@ python demo.py
 
 See [examples/cifar/README.md](examples/cifar/README.md) for detailed experimentation pipeline.
 
-## Model Variants
+## Model variants
 
 ### Vision Energy Transformer (ViET)
 Standard ET with energy-based components:
@@ -141,7 +159,7 @@ from energy_transformer.models.vision import vit_small_cifar
 model = vit_small_cifar(num_classes=100)
 ```
 
-## Key Components
+## Key components
 
 ### Energy Transformer Block
 ```python
@@ -181,7 +199,7 @@ shn = SimplicialHopfieldNetwork(
 )
 ```
 
-## Architecture Details
+## Architecture details
 
 The Energy Transformer operates through iterative energy minimization:
 
