@@ -20,7 +20,7 @@ Example
 ...     CLSTokenSpec(),
 ...     PosEmbedSpec(include_cls=True),
 ...     loop(
-...         ETSpec(
+...         ETBlockSpec(
 ...             attention=MHEASpec(num_heads=12, head_dim=64),
 ...             hopfield=HNSpec()
 ...         ),
@@ -38,7 +38,7 @@ Example
 """
 
 from collections.abc import Callable
-from typing import Any, TypeAlias
+from typing import TypeAlias
 
 # Combinators
 from .combinators import (
@@ -111,16 +111,23 @@ from .realise import (
 
 _LIBRARY_AVAILABLE = False
 try:
-    from .library import (
+    from .library import (  # noqa: F401
+        ClassificationHeadSpec,
         CLSTokenSpec,
-        ETSpec,
+        DropoutSpec,
+        ETBlockSpec,
+        FeatureHeadSpec,
         HNSpec,
-        # Core layer specs
+        IdentitySpec,
         LayerNormSpec,
+        MHASpec,
         MHEASpec,
-        # Vision specs
+        MLPSpec,
         PatchEmbedSpec,
         PosEmbedSpec,
+        SHNSpec,
+        TransformerBlockSpec,
+        VisionEmbeddingSpec,
     )
 
     _LIBRARY_AVAILABLE = True
@@ -185,18 +192,31 @@ __all__ = [
 if _LIBRARY_AVAILABLE:
     __all__.extend(
         [
-            # Layer specs
-            "LayerNormSpec",
+            # Core layer specs
             "PatchEmbedSpec",
             "CLSTokenSpec",
             "PosEmbedSpec",
+            "LayerNormSpec",
+            "MHASpec",
             "MHEASpec",
+            "MLPSpec",
             "HNSpec",
-            "ETSpec",
+            "SHNSpec",
+            # Head specs
+            "ClassificationHeadSpec",
+            "FeatureHeadSpec",
+            # Utility specs
+            "DropoutSpec",
+            "IdentitySpec",
+            # Composite specs
+            "VisionEmbeddingSpec",
+            "TransformerBlockSpec",
+            "ETBlockSpec",
             # Utility functions
             "to_pair",
             "validate_positive",
             "validate_probability",
+            "validate_dimension",
         ]
     )
 
@@ -243,7 +263,7 @@ Energy Transformer Specification System - Quick Start
    model = seq(
        PatchEmbedSpec(img_size=224, patch_size=16, embed_dim=768),
        CLSTokenSpec(),
-       loop(ETSpec(), times=12),
+       loop(ETBlockSpec(), times=12),
        LayerNormSpec()
    )
    ```
@@ -257,7 +277,7 @@ Energy Transformer Specification System - Quick Start
    - Sequential: spec1 >> spec2 >> spec3
    - Parallel: spec1 | spec2 | spec3
    - Conditional: cond("use_cls", CLSTokenSpec())
-   - Loop: loop(ETSpec(), times=12)
+   - Loop: loop(ETBlockSpec(), times=12)
 
 4. Register custom realisers:
    ```python
@@ -299,7 +319,7 @@ def export_patterns() -> dict[str, Callable[..., Spec]]:
             CLSTokenSpec(),
             PosEmbedSpec(include_cls=True),
             loop(
-                ETSpec(
+                ETBlockSpec(
                     attention=MHEASpec(num_heads=3, head_dim=64),
                     hopfield=HNSpec(),
                 ),
@@ -314,7 +334,7 @@ def export_patterns() -> dict[str, Callable[..., Spec]]:
             CLSTokenSpec(),
             PosEmbedSpec(include_cls=True),
             loop(
-                ETSpec(
+                ETBlockSpec(
                     attention=MHEASpec(num_heads=12, head_dim=64),
                     hopfield=HNSpec(),
                 ),
@@ -323,28 +343,6 @@ def export_patterns() -> dict[str, Callable[..., Spec]]:
             LayerNormSpec(),
         ),
     }
-
-
-# Backward compatibility helpers
-def migrate_from_v1(old_spec: Any) -> Spec:
-    """Help migrate specifications from v1 to v2.
-
-    Parameters
-    ----------
-    old_spec : Any
-        Old specification object
-
-    Returns
-    -------
-    Spec
-        New specification object
-
-    Raises
-    ------
-    NotImplementedError
-        If migration is not yet implemented
-    """
-    raise NotImplementedError("Migration guide coming soon")
 
 
 # Development utilities
