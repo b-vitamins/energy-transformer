@@ -18,9 +18,7 @@ from energy_transformer.spec.combinators import (
     switch,
     transformer_block,
 )
-from energy_transformer.spec.primitives import Context
-
-from .test_primitives import (
+from energy_transformer.spec.library import (
     CLSTokenSpec,
     ETSpec,
     HNSpec,
@@ -29,6 +27,7 @@ from .test_primitives import (
     PatchEmbedSpec,
     PosEmbedSpec,
 )
+from energy_transformer.spec.primitives import Context
 
 
 def make_patch(embed_dim: int = 64) -> PatchEmbedSpec:
