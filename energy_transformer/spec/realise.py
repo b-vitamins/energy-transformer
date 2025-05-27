@@ -162,8 +162,9 @@ class ModuleCache:
 
         spec_dict = spec.to_dict()
         spec_key = (spec.__class__.__name__, make_hashable(spec_dict))
-        ctx_key = tuple(sorted(context.dimensions.items()))
-        return (spec_key, ctx_key)
+        ctx_dims_key = tuple(sorted(context.dimensions.items()))
+        ctx_meta_key = make_hashable(context.metadata)
+        return (spec_key, ctx_dims_key, ctx_meta_key)
 
     def get(self, spec: Spec, context: Context) -> nn.Module | None:
         """Get cached module if available.
@@ -324,18 +325,25 @@ class Realiser:
     ----------
     context : Context, optional
         Initial realisation context
+    _recursion_depth : int, optional
+        Current recursion depth (for internal use)
     """
 
-    def __init__(self, context: Context | None = None):
+    def __init__(
+        self, context: Context | None = None, _recursion_depth: int = 0
+    ):
         """Initialize realiser with optional context.
 
         Parameters
         ----------
         context : Context | None
             Initial realisation context
+        _recursion_depth : int
+            Current recursion depth for tracking
         """
         self.context = context or Context()
         self._realiser_stack: list[Spec] = []
+        self._recursion_depth = _recursion_depth
 
         # Dispatch table for built-in combinators
         self._builtin_realisers: dict[type, Callable[[Any], nn.Module]] = {
@@ -368,6 +376,15 @@ class Realiser:
         RealisationError
             If realisation fails
         """
+        # Check recursion limit using depth counter
+        if self._recursion_depth >= _config.max_recursion:
+            raise RealisationError(
+                "Maximum recursion depth exceeded",
+                spec=spec,
+                context=self.context,
+                suggestion="Check for circular dependencies in specifications",
+            )
+
         # Apply optimizations if enabled
         if _config.optimizations:
             spec = self._optimize_spec(spec)
@@ -375,15 +392,6 @@ class Realiser:
         # Check cache
         if cached := _config.cache.get(spec, self.context):
             return cached
-
-        # Prevent infinite recursion
-        if len(self._realiser_stack) >= _config.max_recursion:
-            raise RealisationError(
-                "Maximum recursion depth exceeded",
-                spec=spec,
-                context=self.context,
-                suggestion="Check for circular dependencies in specifications",
-            )
 
         if spec in self._realiser_stack:
             raise RealisationError(
@@ -393,12 +401,15 @@ class Realiser:
             )
 
         self._realiser_stack.append(spec)
+        # Increment depth for this realisation
+        self._recursion_depth += 1
         try:
             module = self._realise_impl(spec)
             _config.cache.put(spec, self.context, module)
             return module
         finally:
             self._realiser_stack.pop()
+            self._recursion_depth -= 1
 
     def _realise_impl(self, spec: Spec) -> nn.Module:
         """Implement realisation logic."""
@@ -534,8 +545,8 @@ class Realiser:
         current_context = self.context
 
         for i, part in enumerate(spec.parts):
-            # Create child realiser with updated context
-            child_realiser = Realiser(current_context)
+            # Create child realiser with updated context and inherited depth
+            child_realiser = Realiser(current_context, self._recursion_depth)
             try:
                 module = child_realiser.realise(part)
                 modules.append(module)
@@ -555,8 +566,10 @@ class Realiser:
         """Realise parallel composition."""
         branches = []
         for i, branch in enumerate(spec.branches):
-            # Each branch gets independent context
-            child_realiser = Realiser(self.context.child())
+            # Each branch gets independent context but inherits depth
+            child_realiser = Realiser(
+                self.context.child(), self._recursion_depth
+            )
             try:
                 module = child_realiser.realise(branch)
                 branches.append(module)
@@ -612,10 +625,23 @@ class Realiser:
             if spec.share_weights:
                 # Share weights across iterations
                 body = self.realise(spec.body)
-                return nn.Sequential(*[body for _ in range(times)])
+                modules = [body for _ in range(times)]  # Same instance
+                return nn.Sequential(*modules)
             else:
-                # Independent weights
-                bodies = [self.realise(spec.body) for _ in range(times)]
+                # Independent weights - don't share module instances
+                bodies = []
+                # Temporarily disable caching to ensure fresh instances
+                original_cache_enabled = _config.cache.enabled
+                _config.cache.enabled = False
+                try:
+                    for _ in range(times):
+                        # Create child realiser with inherited depth
+                        child_realiser = Realiser(
+                            self.context, self._recursion_depth
+                        )
+                        bodies.append(child_realiser.realise(spec.body))
+                finally:
+                    _config.cache.enabled = original_cache_enabled
                 return nn.Sequential(*bodies)
         else:
             # Dynamic loop
@@ -628,7 +654,10 @@ class Realiser:
         if callable(spec.key):
             key_value = spec.key(self.context)
         else:
+            # Look in metadata first, then dimensions
             key_value = self.context.metadata.get(spec.key)
+            if key_value is None:
+                key_value = self.context.get_dim(spec.key)
 
         if key_value in spec.cases:
             return self.realise(spec.cases[key_value])
@@ -749,7 +778,13 @@ class GraphModule(nn.Module):  # type: ignore[misc]
             name: [] for name in self.nodes
         }
 
-        for from_node, to_node, _ in self.edges:
+        for edge in self.edges:
+            # Handle both 2-tuple and 3-tuple edges
+            if len(edge) == 2:
+                from_node, to_node = edge
+                transform = None
+            else:
+                from_node, to_node, transform = edge
             if to_node in self.nodes:
                 in_degree[to_node] += 1
                 if from_node in self.nodes:
