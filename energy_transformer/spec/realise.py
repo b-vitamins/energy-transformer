@@ -148,7 +148,6 @@ class ModuleCache:
     def _make_key(self, spec: Spec, context: Context) -> tuple[Any, ...]:
         """Create cache key from spec and context."""
 
-        # Convert spec to a hashable representation
         def make_hashable(obj: Any) -> Any:
             if isinstance(obj, dict):
                 return tuple(
@@ -521,7 +520,10 @@ class Realiser:
                     value = getattr(spec, field_info.name)
                     kwargs[field_info.name] = value
 
-                return cls(**kwargs)
+                # Fix: Add type assertion
+                instance = cls(**kwargs)
+                assert isinstance(instance, nn.Module)
+                return instance
             except Exception:
                 pass
 
@@ -660,7 +662,8 @@ class ParallelModule(nn.Module):  # type: ignore[misc]
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Execute branches and merge outputs."""
-        outputs = [branch(x) for branch in self.branches]
+        # Fix: Add type annotation
+        outputs: list[torch.Tensor] = [branch(x) for branch in self.branches]
 
         if self.merge == "concat":
             return torch.cat(outputs, dim=-1)
@@ -705,7 +708,8 @@ class ResidualModule(nn.Module):  # type: ignore[misc]
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Apply inner module with residual connection."""
         residual = x
-        out = self.inner(x)
+        # Fix: Add type annotation
+        out: torch.Tensor = self.inner(x)
 
         if self.merge == "add":
             return residual + self.scale * out
@@ -800,14 +804,15 @@ class LambdaModule(nn.Module):  # type: ignore[misc]
     Wraps a custom function as a module.
     """
 
-    Fn = Callable[[Any, Context], Any]
+    # Fix: Change return type from Any to torch.Tensor
+    Fn = Callable[[torch.Tensor, Context], torch.Tensor]
 
     def __init__(self, fn: Fn, name: str = "lambda"):
         """Initialize lambda module with function and name.
 
         Parameters
         ----------
-        fn : Callable[[Any, Context], Any]
+        fn : Callable[[torch.Tensor, Context], torch.Tensor]
             Function to wrap
         name : str
             Name for the lambda module
