@@ -1,10 +1,6 @@
 # Energy Transformer
 
-![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)
-![PyTorch](https://img.shields.io/badge/PyTorch-%23EE4C2C.svg?logo=PyTorch&logoColor=white)
-![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-green.svg)
-![AI-Assisted](https://img.shields.io/badge/AI%20Assisted-Claude%20%2B%20GPT-purple.svg)
-![Status: Under Development](https://img.shields.io/badge/status-under%20development-orange.svg)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 ![GitHub Workflow Status](https://github.com/b-vitamins/energy-transformer/actions/workflows/ci.yml/badge.svg)
 
 PyTorch implementation of the **Energy Transformer (ET)**, a neural architecture that replaces traditional transformer components with energy-based alternatives. This implementation includes **Simplicial Energy Transformers (SET)** that extend ET with topology-aware memory through Simplicial Hopfield Networks.
@@ -41,184 +37,148 @@ poetry install --with examples
 poetry install --with dev
 ```
 
-### Dependencies
-
-Core requirements:
-- Python ≥ 3.11
-- PyTorch ≥ 2.0
-- einops ≥ 0.6
-- numpy ≥ 2.2.5
-- scipy ≥ 1.10
-
-Optional:
-- torchvision, matplotlib (for examples)
-
 ## Quick start
 
-### Basic usage
-
 ```python
-import torch
-from energy_transformer.models.vision import viet_tiny, viset_tiny
+# Using pre-built vision models
+from energy_transformer.models.vision import viet_base
 
-# Energy Transformer
-viet = viet_tiny(img_size=224, patch_size=16, num_classes=1000)
+# Create Vision Energy Transformer
+model = viet_base(num_classes=1000)
 
-# Simplicial Energy Transformer
-viset = viset_tiny(img_size=224, patch_size=16, num_classes=1000)
-
-# Forward pass
-images = torch.randn(2, 3, 224, 224)
-logits = viset(images)
-
-# With energy tracking
-result = viset(images, return_energy_info=True)
-print(f"Final energy: {result['energy_info']['total_energy']:.3f}")
-```
-
-### Using individual components
-
-```python
-from energy_transformer.models import EnergyTransformer
-from energy_transformer.layers import (
-    LayerNorm, 
-    MultiHeadEnergyAttention, 
-    HopfieldNetwork
-)
-
-et_block = EnergyTransformer(
-    layer_norm=LayerNorm(768),
-    attention=MultiHeadEnergyAttention(768, num_heads=12, head_dim=64),
-    hopfield=HopfieldNetwork(768, hidden_dim=3072),
-    steps=4,
-    alpha=0.125
-)
-
-tokens = torch.randn(4, 100, 768)
-refined_tokens = et_block(tokens)
-```
-
-### Declarative model construction
-
-```python
+# Or use the specification system
 from energy_transformer import seq, realise
-from energy_transformer.spec.library import *
+from energy_transformer.spec.library import (
+    PatchEmbedSpec, CLSTokenSpec, PosEmbedSpec,
+    ETBlockSpec, LayerNormSpec, ClassificationHeadSpec
+)
 
 model_spec = seq(
     PatchEmbedSpec(img_size=224, patch_size=16, embed_dim=768),
     CLSTokenSpec(),
-    loop(ETBlockSpec(), times=12),
+    PosEmbedSpec(include_cls=True),
+    ETBlockSpec(),
+    LayerNormSpec(),
     ClassificationHeadSpec(num_classes=1000)
 )
-
 model = realise(model_spec)
 ```
 
-### CIFAR-100 experiments
+## Usage
 
-```bash
-cd examples/cifar
+### Vision models
 
-# Quick test
-python quick.py --model viset --epochs 10 --subset 0.1
-
-# Full ablation study
-python ablation.py
-
-# Visualize results
-python visualize.py
-
-# Demo topology-aware simplices
-python demo.py
-```
-
-See [examples/cifar/README.md](examples/cifar/README.md) for detailed experimentation pipeline.
-
-## Model variants
-
-### Vision Energy Transformer (ViET)
-Standard ET with energy-based components:
 ```python
-from energy_transformer.models.vision import viet_small_cifar
-model = viet_small_cifar(num_classes=100)
-```
-
-### Vision Simplicial Energy Transformer (ViSET)
-ET with topology-aware simplicial Hopfield networks:
-```python
-from energy_transformer.models.vision import viset_2l_e50_t50_cifar
-
-# 50% edges, 50% triangles from spatial topology
-model = viset_2l_e50_t50_cifar(num_classes=100)
-```
-
-### Vision Transformer (ViT)
-Standard transformer baseline:
-```python
-from energy_transformer.models.vision import vit_small_cifar
-model = vit_small_cifar(num_classes=100)
-```
-
-## Key components
-
-### Energy Transformer Block
-```python
-from energy_transformer.models.base import EnergyTransformer
-from energy_transformer.layers import (
-    LayerNorm, MultiHeadEnergyAttention, HopfieldNetwork
+import torch
+from energy_transformer.models.vision import (
+    vit_base,          # Standard Vision Transformer
+    viet_base,         # Vision Energy Transformer
+    viset_tiny         # Vision Simplicial Energy Transformer
 )
 
+# Standard Vision Transformer (baseline)
+vit = vit_base(img_size=224, patch_size=16, num_classes=1000)
+
+# Vision Energy Transformer
+viet = viet_base(img_size=224, patch_size=16, num_classes=1000)
+
+# Vision Simplicial Energy Transformer
+viset = viset_tiny(img_size=224, patch_size=16, num_classes=1000)
+
+# Forward pass
+images = torch.randn(4, 3, 224, 224)
+
+# For ViT
+logits_vit = vit(images)
+
+# For ViET/ViSET (energy-based models)
+logits_viet = viet(images, et_kwargs={"detach": False})  # For training
+logits_viset = viset(images, et_kwargs={"detach": True})  # For inference
+```
+
+### Building custom models
+
+```python
+from energy_transformer.models import EnergyTransformer
+from energy_transformer.layers import (
+    LayerNorm,
+    MultiHeadEnergyAttention,
+    HopfieldNetwork
+)
+
+# Create Energy Transformer block
 et_block = EnergyTransformer(
-    layer_norm=LayerNorm(embed_dim),
+    layer_norm=LayerNorm(in_dim=768),
     attention=MultiHeadEnergyAttention(
-        in_dim=embed_dim,
+        in_dim=768,
         num_heads=12,
         head_dim=64
     ),
     hopfield=HopfieldNetwork(
-        in_dim=embed_dim,
-        hidden_dim=embed_dim * 4
+        in_dim=768,
+        hidden_dim=3072
     ),
-    steps=12,
+    steps=4,
     alpha=0.125
 )
+
+# Process tokens
+tokens = torch.randn(4, 100, 768)
+refined_tokens = et_block(tokens)
 ```
 
-### Simplicial Hopfield Network
+### Using the specification system
+
 ```python
-from energy_transformer.layers.simplicial import SimplicialHopfieldNetwork
-
-# Topology-aware with spatial coordinates
-coords = [(i, j) for i in range(8) for j in range(8)]  # 8x8 grid
-shn = SimplicialHopfieldNetwork(
-    in_dim=768,
-    coordinates=coords,
-    max_dim=2,  # Include up to triangles
-    budget=0.15,  # 15% of full edge budget
-    temperature=0.5
+from energy_transformer import seq, loop, realise
+from energy_transformer.spec.library import (
+    PatchEmbedSpec, CLSTokenSpec, PosEmbedSpec,
+    ETBlockSpec, LayerNormSpec, ClassificationHeadSpec,
+    MHEASpec, HNSpec
 )
+
+# Define architecture declaratively
+vit_spec = seq(
+    # Patch embedding
+    PatchEmbedSpec(
+        img_size=224,
+        patch_size=16,
+        embed_dim=768,
+        in_chans=3
+    ),
+    
+    # Add CLS token
+    CLSTokenSpec(),
+    
+    # Add positional embeddings
+    PosEmbedSpec(include_cls=True),
+    
+    # Stack transformer blocks
+    loop(
+        ETBlockSpec(
+            attention=MHEASpec(num_heads=12, head_dim=64),
+            hopfield=HNSpec(multiplier=4.0),
+            steps=4,
+            alpha=0.125
+        ),
+        times=12
+    ),
+    
+    # Final norm and classification
+    LayerNormSpec(),
+    ClassificationHeadSpec(num_classes=1000)
+)
+
+# Convert to PyTorch module
+model = realise(vit_spec)
 ```
 
-## Architecture details
+## Examples
 
-The Energy Transformer operates through iterative energy minimization:
-
-1. **Layer Normalization**: Transform tokens with energy-based normalization
-2. **Energy Computation**: Combine attention and Hopfield energies
-3. **Gradient Descent**: Update tokens via energy landscape optimization
-4. **Convergence**: Reach low-energy configuration after T steps
-
-### Optimization Modes
-
-- **SGD**: Fixed step size (classic ET)
-- **Barzilai-Borwein**: Adaptive step size with line search (recommended)
-
-### Simplicial Extensions
-
-The SET variant enhances ET with spatial topology awareness:
-- **k-NN graphs**: Connect spatially nearby patches
-- **Delaunay triangulation**: Capture regional structure
-- **Higher-order simplices**: Model complex spatial relationships
+See the `examples/` directory for:
+- CIFAR-100 experiments comparing topologies
+- Ablation studies
+- Topology visualization
 
 ## Citation
 
@@ -241,17 +201,6 @@ If you use this code, please cite:
   year={2023}
 }
 ```
-
-## Contributors
-
-- **Idea**: Suresh Meena and [Ayan Das](https://github.com/b-vitamins)
-- **AI Contributors**:
-  - Claude Opus 4 (Anthropic)
-  - Claude Sonnet 4 (Anthropic)
-  - Claude Sonnet 3.7 (Anthropic)
-  - ChatGPT o3 (OpenAI)
-  - ChatGPT Codex (OpenAI)
-- **Human in the Loop**: Ayan
 
 ## License
 
