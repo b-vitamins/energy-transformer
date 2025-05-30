@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import torch.nn as nn
+import torch.nn.functional as F  # noqa: N812
 from torch import Tensor
 
 # Expose as tuple for faster import
@@ -132,8 +133,10 @@ class ClassificationHead(nn.Module):  # type: ignore[misc]
             # Use global average pooling over all tokens
             x = x.mean(dim=1)  # (B, D)
 
-        # Apply pre-logits processing, dropout and classification in one chain
-        x = self.drop(self.pre_logits(x))
+        # Apply pre-logits processing then dropout using functional variant
+        x = self.pre_logits(x)
+        if self.drop.p > 0:
+            x = F.dropout(x, p=self.drop.p, training=self.training)
         return self.head(x)
 
 

@@ -111,7 +111,7 @@ class LayerNorm(BaseLayerNorm):
 
         # Use fused layer_norm kernel for efficiency
         normed = F.layer_norm(x, (self.in_dim,), eps=self.eps)
-        g = γ * normed + δ
+        g = normed.mul(γ).add(δ)
 
         # Convert back to original dtype if necessary
         if calc_dtype != orig_dtype:
@@ -238,8 +238,9 @@ def _functional_layernorm_energy(
     # Compute normalization
     x_mean = x.mean(dim=-1, keepdim=True)
     var = torch.var(x, dim=-1, unbiased=False, keepdim=True)
-    x_c = x - x_mean
-    g = γ * x_c / torch.sqrt(var + eps) + δ
+    inv_std = torch.rsqrt(var + eps)
+    g = (x - x_mean) * inv_std
+    g = g.mul(γ).add(δ)
 
     # Convert back to original dtype
     if orig_dtype in {torch.float16, torch.bfloat16}:

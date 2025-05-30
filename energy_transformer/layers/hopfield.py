@@ -12,9 +12,8 @@ from .base import BaseHopfieldNetwork
 
 def _default_energy(h: Tensor) -> Tensor:
     """Efficient default energy function used when none is provided."""
-    relu = F.relu(h)
-    relu_sq = relu.square()
-    return -0.5 * relu_sq.sum()
+    clamped = h.clamp_min(0)
+    return -0.5 * (clamped * clamped).sum()
 
 
 class HopfieldNetwork(BaseHopfieldNetwork):
