@@ -55,8 +55,8 @@ def to_pair(x: int | tuple[int, int]) -> tuple[int, int]:
 def validate_positive(x: int | float | tuple[int | float, ...]) -> bool:
     """Validate that a value is positive."""
     if isinstance(x, tuple):
-        return all(isinstance(v, int | float) and v > 0 for v in x)
-    return isinstance(x, int | float) and x > 0
+        return all(isinstance(v, (int, float)) and v > 0 for v in x)
+    return isinstance(x, (int, float)) and x > 0
 
 
 def validate_probability(x: float) -> bool:
