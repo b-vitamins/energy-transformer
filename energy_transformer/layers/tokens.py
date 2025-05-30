@@ -6,9 +6,10 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-__all__ = [
+# Expose as tuple for faster imports
+__all__ = (
     "CLSToken",
-]
+)
 
 
 class CLSToken(nn.Module):  # type: ignore[misc]

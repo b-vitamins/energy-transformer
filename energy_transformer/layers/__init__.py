@@ -39,7 +39,8 @@ from .layer_norm import LayerNorm
 from .simplicial import SimplicialHopfieldNetwork
 from .tokens import CLSToken
 
-__all__ = [
+# Use tuple for slightly faster module import and immutability
+__all__ = (
     # Attention
     "MultiHeadEnergyAttention",
     # Embeddings
@@ -55,4 +56,4 @@ __all__ = [
     "LayerNorm",
     # Tokens
     "CLSToken",
-]
+)

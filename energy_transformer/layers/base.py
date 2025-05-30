@@ -122,8 +122,9 @@ def _validate_scalar_energy(energy: Tensor, component_name: str) -> None:
     ValueError
         If energy tensor is not a scalar
     """
-    if energy.dim() != 0:
+    if energy.ndim != 0:
+        # Build error message lazily only on failure
         raise ValueError(
             f"{component_name} must return scalar energy tensor, "
-            f"got shape {energy.shape}"
+            f"got shape {tuple(energy.shape)}"
         )

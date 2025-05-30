@@ -100,34 +100,18 @@ class LayerNorm(BaseLayerNorm):
         """
         orig_dtype = x.dtype
 
-        # For mixed precision calculations, use at least float32 internally
-        # Handle both float16 and bfloat16 for mixed precision training
+        # For mixed precision calculations, use float32 internally
         calc_dtype = orig_dtype
         if orig_dtype in {torch.float16, torch.bfloat16}:
-            # For numerical stability, use float32 for internal calculations
             x = x.to(torch.float32)
             calc_dtype = torch.float32
 
-        # Get positive γ using softplus
         γ = F.softplus(self.logγ).to(dtype=calc_dtype)
-
-        # Ensure δ has the correct dtype
         δ = self.δ.to(dtype=calc_dtype)
 
-        # x̄ = 1/D·∑ₖ₌₁ᴰ xₖ
-        x_mean = x.mean(dim=-1, keepdim=True)  # shape: [..., 1]
-
-        # More efficient variance computation using torch.var
-        # 1/D·∑ⱼ(xⱼ - x̄)² computed in-kernel
-        var = torch.var(
-            x, dim=-1, unbiased=False, keepdim=True
-        )  # shape: [..., 1]
-
-        # xᵢ - x̄
-        x_c = x - x_mean  # shape: [..., D]
-
-        # gᵢ = γ·(xᵢ - x̄)/√(1/D·∑ⱼ(xⱼ - x̄)² + ε) + δᵢ
-        g = γ * x_c / torch.sqrt(var + self.eps) + δ  # shape: [..., D]
+        # Use fused layer_norm kernel for efficiency
+        normed = F.layer_norm(x, (self.in_dim,), eps=self.eps)
+        g = γ * normed + δ
 
         # Convert back to original dtype if necessary
         if calc_dtype != orig_dtype:
