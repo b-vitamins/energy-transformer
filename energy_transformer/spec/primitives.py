@@ -132,7 +132,7 @@ class Dimension:
         """Tokenize mathematical formula into (type, value) pairs."""
         import re
 
-        TOKEN_REGEX = re.compile(
+        token_regex = re.compile(
             r"(?P<NUMBER>\d+(?:\.\d+)?)|"
             r"(?P<IDENT>[a-zA-Z_][a-zA-Z0-9_]*)|"
             r"(?P<PLUS>\+)|"
@@ -147,7 +147,7 @@ class Dimension:
         )
 
         tokens = []
-        for match in TOKEN_REGEX.finditer(formula):
+        for match in token_regex.finditer(formula):
             kind = match.lastgroup
             value = match.group()
             if kind == "WHITESPACE":
@@ -671,7 +671,7 @@ class Spec(ABC, metaclass=SpecMeta):
         """Validate parameters after initialization."""
         self._validate_all_fields()
 
-    def _validate_all_fields(self) -> None:
+    def _validate_all_fields(self) -> None:  # noqa: C901
         """Validate all fields using metadata and type hints."""
         hints = get_type_hints(self.__class__)
 
@@ -741,19 +741,41 @@ class Spec(ABC, metaclass=SpecMeta):
         list[str]
             List of validation issues (empty if valid)
         """
-        issues = []
+        issues: list[str] = []
 
-        # Check version compatibility
+        # Step 1: check version compatibility with original context
         issues.extend(self._validate_version(context))
 
-        # Check required dimensions
+        # Step 2: ensure required dimensions exist before updates
         issues.extend(self._validate_required_dimensions(context))
 
-        # Validate dimension parameters
-        issues.extend(self._validate_dimension_parameters(context))
+        # Step 3: create child context with this spec's updates
+        child_context = context.child()
+        try:
+            updated_context = self.apply_context(child_context)
+        except Exception as e:
+            issues.append(
+                f"Failed to apply context updates: {type(e).__name__}: {e}"
+            )
+            return issues
 
-        # Validate nested specs
-        issues.extend(self._validate_children(context))
+        # Step 4: validate dimension parameters with updated context
+        issues.extend(self._validate_dimension_parameters(updated_context))
+
+        # Step 5: validate children with updated context
+        for i, child in enumerate(self.children()):
+            try:
+                child_issues = child.validate(updated_context)
+                for issue in child_issues:
+                    issues.append(
+                        f"{self.__class__.__name__}.children[{i}] "
+                        f"({child.__class__.__name__}): {issue}"
+                    )
+            except Exception as e:
+                issues.append(
+                    f"{self.__class__.__name__}.children[{i}]: "
+                    f"Validation crashed with {type(e).__name__}: {e}"
+                )
 
         return issues
 
@@ -825,6 +847,9 @@ class Spec(ABC, metaclass=SpecMeta):
     def _validate_children(self, context: Context) -> list[str]:
         """Validate child specifications.
 
+        DEPRECATED: This method is now integrated into validate() for proper
+        context propagation. Kept for backward compatibility only.
+
         Parameters
         ----------
         context : Context
@@ -833,13 +858,9 @@ class Spec(ABC, metaclass=SpecMeta):
         Returns
         -------
         list[str]
-            Child validation issues
+            Empty list (validation now done in main validate method)
         """
-        issues = []
-        for child in self.children():
-            child_issues = child.validate(context)
-            issues.extend(child_issues)
-        return issues
+        return []
 
     def apply_context(self, context: Context) -> Context:
         """Apply this spec's effects to context.
@@ -879,7 +900,7 @@ class Spec(ABC, metaclass=SpecMeta):
             value = getattr(self, field_info.name)
             if isinstance(value, Spec):
                 children.append(value)
-            elif isinstance(value, (list, tuple)):
+            elif isinstance(value, list | tuple):
                 children.extend(v for v in value if isinstance(v, Spec))
         return children
 
@@ -933,7 +954,7 @@ class Spec(ABC, metaclass=SpecMeta):
             value = getattr(self, field_info.name)
             if isinstance(value, Spec):
                 value = value.to_dict()
-            elif isinstance(value, (list, tuple)):
+            elif isinstance(value, list | tuple):
                 value = [
                     v.to_dict() if isinstance(v, Spec) else v for v in value
                 ]

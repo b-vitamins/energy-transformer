@@ -15,7 +15,7 @@ from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal, TypeVar, overload
 
-from .primitives import Context, Spec
+from .primitives import Context, Spec, ValidationError
 
 __all__ = [
     "Sequential",
@@ -137,7 +137,7 @@ class Sequential(Spec):
         """Return all parts as children."""
         return list(self.parts)
 
-    def validate(self, context: Context) -> list[str]:
+    def validate(self, context: Context) -> list[str]:  # noqa: C901
         """Validate sequence with context propagation.
 
         Parameters
@@ -234,7 +234,7 @@ class Parallel(Spec):
         """Return all branches as children."""
         return list(self.branches)
 
-    def validate(self, context: Context) -> list[str]:
+    def validate(self, context: Context) -> list[str]:  # noqa: C901
         """Validate all branches and merge compatibility.
 
         Parameters
@@ -249,29 +249,68 @@ class Parallel(Spec):
         """
         issues = super().validate(context)
 
+        # Validate each branch independently
         for i, branch in enumerate(self.branches):
             branch_issues = branch.validate(context)
             issues.extend(f"Branch {i}: {issue}" for issue in branch_issues)
 
         # Validate merge compatibility
         if self.merge in ["add", "multiply", "mean", "max"]:
+            merge_dim_name = self.merge_dim or "embed_dim"
             dims = []
-            for branch in self.branches:
-                branch_ctx = branch.apply_context(context.child())
-                if dim := branch_ctx.get_dim(self.merge_dim or "embed_dim"):
-                    dims.append(dim)
 
-            if len(set(dims)) > 1:
+            for i, branch in enumerate(self.branches):
+                branch_ctx = branch.apply_context(context.child())
+                dim_value = branch_ctx.get_dim(merge_dim_name)
+
+                if dim_value is None:
+                    issues.append(
+                        f"Branch {i} does not provide required dimension "
+                        f"'{merge_dim_name}' for {self.merge} merge"
+                    )
+                else:
+                    dims.append((i, dim_value))
+
+            if dims:
+                unique_dims = set(d[1] for d in dims)
+                if len(unique_dims) > 1:
+                    dim_info = ", ".join(f"Branch {i}: {d}" for i, d in dims)
+                    issues.append(
+                        f"Incompatible dimensions for {self.merge} merge: {dim_info}. "
+                        f"All branches must output the same dimension."
+                    )
+
+        elif self.merge == "concat":
+            if self.merge_dim:
+                dims = []
+                for _i, branch in enumerate(self.branches):
+                    branch_ctx = branch.apply_context(context.child())
+                    dim_value = branch_ctx.get_dim(self.merge_dim)
+                    if dim_value:
+                        dims.append(dim_value)
+
+                if dims and max(dims) > min(dims) * 10:
+                    issues.append(
+                        f"Warning: Large dimension disparity in concat merge: "
+                        f"min={min(dims)}, max={max(dims)}"
+                    )
+
+        # Validate weights if provided
+        if self.weights:
+            if len(self.weights) != len(self.branches):
                 issues.append(
-                    f"Incompatible dimensions for {self.merge} merge: {dims}"
+                    f"Weight count ({len(self.weights)}) doesn't match "
+                    f"branch count ({len(self.branches)})"
                 )
 
-        # Validate weights
-        if self.weights and len(self.weights) != len(self.branches):
-            issues.append(
-                f"Weight count ({len(self.weights)}) doesn't match "
-                f"branch count ({len(self.branches)})"
-            )
+            if not all(isinstance(w, int | float) for w in self.weights):
+                issues.append("All weights must be numeric")
+
+            if self.merge == "add" and abs(sum(self.weights) - 1.0) > 1e-6:
+                issues.append(
+                    f"Warning: Weights sum to {sum(self.weights)}, not 1.0. "
+                    f"This may cause unexpected scaling."
+                )
 
         return issues
 
@@ -425,6 +464,24 @@ class Graph(Spec):
     inputs: list[str] = field(default_factory=list)
     outputs: list[str] = field(default_factory=list)
 
+    def __post_init__(self) -> None:
+        """Validate graph structure immediately after creation."""
+        super().__post_init__()
+        try:
+            if self._has_cycle():
+                cycle_path = self._find_cycle_path()
+                raise ValidationError(
+                    "Graph contains cycles",
+                    spec=self,
+                    suggestion=f"Remove cyclic dependency in path: {' -> '.join(cycle_path)}",
+                )
+        except Exception as e:
+            raise ValidationError(
+                f"Graph validation failed: {e}",
+                spec=self,
+                suggestion="Check graph edge definitions",
+            ) from e
+
     def add_node(self, name: str, spec: Spec) -> Graph:
         """Add a node to the graph.
 
@@ -540,6 +597,39 @@ class Graph(Spec):
                     return True
 
         return False
+
+    def _find_cycle_path(self) -> list[str]:
+        """Find a cycle path for error reporting."""
+        visited = set()
+        rec_stack = set()
+        path: list[str] = []
+
+        def dfs(node: str) -> bool:
+            visited.add(node)
+            rec_stack.add(node)
+            path.append(node)
+
+            for from_node, to_node, _ in self.edges:
+                if from_node == node and to_node in self.nodes:
+                    if to_node not in visited:
+                        if dfs(to_node):
+                            return True
+                    elif to_node in rec_stack:
+                        cycle_start = path.index(to_node)
+                        del path[:cycle_start]
+                        path.append(to_node)
+                        return True
+
+            rec_stack.remove(node)
+            path.pop()
+            return False
+
+        for node in self.nodes:
+            if node not in visited:
+                if dfs(node):
+                    return path
+
+        return []
 
 
 @dataclass(frozen=True)
