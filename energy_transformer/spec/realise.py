@@ -33,6 +33,23 @@ from .combinators import (
 )
 from .primitives import Context, Spec, SpecMeta, ValidationError
 
+# Default mappings for auto-importing modules based on Spec names
+module_mappings = {
+    "LayerNormSpec": ("energy_transformer.layers", "LayerNorm"),
+    "PatchEmbedSpec": ("energy_transformer.layers.embeddings", "PatchEmbedding"),
+    "CLSTokenSpec": ("energy_transformer.layers.tokens", "CLSToken"),
+    "PosEmbedSpec": ("energy_transformer.layers.embeddings", "PositionalEmbedding2D"),
+    "MHEASpec": ("energy_transformer.layers.attention", "MultiHeadEnergyAttention"),
+    "MHASpec": ("torch.nn", "MultiheadAttention"),
+    "HNSpec": ("energy_transformer.layers.hopfield", "HopfieldNetwork"),
+    "SHNSpec": ("energy_transformer.layers.simplicial", "SimplicialHopfieldNetwork"),
+    "ClassificationHeadSpec": ("energy_transformer.layers.heads", "ClassificationHead"),
+    "FeatureHeadSpec": ("energy_transformer.layers.heads", "FeatureHead"),
+    "MLPSpec": ("energy_transformer.layers.mlp", "MLP"),
+    "DropoutSpec": ("torch.nn", "Dropout"),
+    "IdentitySpec": ("torch.nn", "Identity"),
+}
+
 if TYPE_CHECKING:
     pass
 
@@ -146,25 +163,103 @@ class ModuleCache:
         self._miss_count = 0
 
     def _make_key(self, spec: Spec, context: Context) -> tuple[Any, ...]:
-        """Create cache key from spec and context."""
+        """Create cache key from spec and context.
 
-        def make_hashable(obj: Any) -> Any:
-            if isinstance(obj, dict):
-                return tuple(
-                    sorted((k, make_hashable(v)) for k, v in obj.items())
-                )
-            elif isinstance(obj, list):
-                return tuple(make_hashable(item) for item in obj)
-            elif isinstance(obj, set):
-                return tuple(sorted(make_hashable(item) for item in obj))
-            else:
-                return obj
+        This implementation performs deep sorting of nested structures and
+        handles cycles gracefully to ensure deterministic keys.
+        """
 
-        spec_dict = spec.to_dict()
-        spec_key = (spec.__class__.__name__, make_hashable(spec_dict))
-        ctx_dims_key = tuple(sorted(context.dimensions.items()))
-        ctx_meta_key = make_hashable(context.metadata)
-        return (spec_key, ctx_dims_key, ctx_meta_key)
+        def make_hashable(obj: Any, seen: set[int] | None = None) -> Any:
+            """Recursively convert ``obj`` into a hashable form."""
+
+            if seen is None:
+                seen = set()
+
+            if obj is None:
+                return None
+
+            obj_id = id(obj)
+            if isinstance(obj, (dict, list, set)) and obj_id in seen:
+                return f"<cycle:{obj_id}>"
+
+            try:
+                if isinstance(obj, (str, int, float, bool)):
+                    return (type(obj).__name__, obj)
+
+                elif isinstance(obj, tuple):
+                    seen.add(obj_id)
+                    result = tuple(make_hashable(item, seen) for item in obj)
+                    seen.discard(obj_id)
+                    return result
+
+                elif isinstance(obj, dict):
+                    seen.add(obj_id)
+                    items = []
+                    for k, v in sorted(obj.items(), key=lambda x: str(x[0])):
+                        k_hash = make_hashable(k, seen)
+                        v_hash = make_hashable(v, seen)
+                        items.append((k_hash, v_hash))
+                    seen.discard(obj_id)
+                    return ("dict", tuple(items))
+
+                elif isinstance(obj, list):
+                    seen.add(obj_id)
+                    result = ("list", tuple(make_hashable(i, seen) for i in obj))
+                    seen.discard(obj_id)
+                    return result
+
+                elif isinstance(obj, set):
+                    seen.add(obj_id)
+                    sorted_items = sorted(
+                        obj, key=lambda x: (type(x).__name__, str(x))
+                    )
+                    result = (
+                        "set",
+                        tuple(make_hashable(i, seen) for i in sorted_items),
+                    )
+                    seen.discard(obj_id)
+                    return result
+
+                elif isinstance(obj, Spec):
+                    return (
+                        "spec",
+                        obj.__class__.__name__,
+                        make_hashable(obj.to_dict(), seen),
+                    )
+
+                else:
+                    return (type(obj).__name__, str(obj))
+
+            except Exception as e:  # pragma: no cover - defensive
+                import logging
+
+                logger = logging.getLogger(__name__)
+                logger.debug(f"Cache key generation failed for {type(obj)}: {e}")
+                return (type(obj).__name__, "<error>")
+
+        try:
+            spec_dict = spec.to_dict()
+            spec_key = make_hashable(
+                {
+                    "class": spec.__class__.__name__,
+                    "module": spec.__class__.__module__,
+                    "data": spec_dict,
+                }
+            )
+
+            ctx_dims = make_hashable(dict(sorted(context.dimensions.items())))
+            ctx_meta = make_hashable(context.metadata)
+
+            cache_version = getattr(self, "version", 1)
+
+            return (cache_version, spec_key, ctx_dims, ctx_meta)
+
+        except Exception as e:  # pragma: no cover - defensive
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Cache key generation failed: {e}")
+            return (id(spec), id(context), "uncacheable")
 
     def get(self, spec: Spec, context: Context) -> nn.Module | None:
         """Get cached module if available.
@@ -361,55 +456,93 @@ class Realiser:
     def realise(self, spec: Spec) -> nn.Module:
         """Realise a spec into a PyTorch module.
 
-        Parameters
-        ----------
-        spec : Spec
-            Specification to realise
-
-        Returns
-        -------
-        nn.Module
-            Realised module
-
-        Raises
-        ------
-        RealisationError
-            If realisation fails
+        The realisation process performs caching, optimization, recursion
+        depth tracking and circular dependency detection.
         """
-        # Check recursion limit using depth counter
-        if self._recursion_depth >= _config.max_recursion:
-            raise RealisationError(
-                "Maximum recursion depth exceeded",
-                spec=spec,
-                context=self.context,
-                suggestion="Check for circular dependencies in specifications",
-            )
 
-        # Apply optimizations if enabled
-        if _config.optimizations:
-            spec = self._optimize_spec(spec)
-
-        # Check cache
+        # Cache lookup first to avoid unnecessary recursion
         if cached := _config.cache.get(spec, self.context):
             return cached
 
+        # Apply optimizations and re-check cache
+        if _config.optimizations:
+            spec = self._optimize_spec(spec)
+            if cached := _config.cache.get(spec, self.context):
+                return cached
+
+        # Enforce recursion limit only for uncached specs
+        if self._recursion_depth >= _config.max_recursion:
+            stack_summary = self._get_stack_summary()
+            raise RealisationError(
+                f"Maximum recursion depth ({_config.max_recursion}) exceeded",
+                spec=spec,
+                context=self.context,
+                suggestion=(
+                    f"Current stack depth: {self._recursion_depth}\n"
+                    f"Stack summary: {stack_summary}\n"
+                    "Consider:\n"
+                    "1. Increasing max_recursion in configure_realisation()\n"
+                    "2. Using loop() instead of deep nesting\n"
+                    "3. Checking for circular dependencies"
+                ),
+            )
+
+        # Detect cycles
         if spec in self._realiser_stack:
+            cycle_path = self._get_cycle_path(spec)
             raise RealisationError(
                 "Circular dependency detected",
                 spec=spec,
                 context=self.context,
+                suggestion=f"Dependency cycle: {' -> '.join(cycle_path)}",
             )
 
+        # Track stack and depth
         self._realiser_stack.append(spec)
-        # Increment depth for this realisation
         self._recursion_depth += 1
+
         try:
             module = self._realise_impl(spec)
             _config.cache.put(spec, self.context, module)
             return module
+        except Exception as e:
+            if not isinstance(e, RealisationError):
+                raise RealisationError(
+                    f"Realisation failed: {type(e).__name__}: {e}",
+                    spec=spec,
+                    context=self.context,
+                    cause=e,
+                    suggestion=f"Error at depth {self._recursion_depth}",
+                ) from e
+            e.suggestion = (
+                f"{e.suggestion}\nFailed at depth {self._recursion_depth}"
+                if e.suggestion
+                else f"Failed at depth {self._recursion_depth}"
+            )
+            raise
         finally:
             self._realiser_stack.pop()
             self._recursion_depth -= 1
+
+    def _get_stack_summary(self) -> str:
+        """Get a brief summary of the current realisation stack."""
+        if not self._realiser_stack:
+            return "Empty"
+
+        recent = self._realiser_stack[-5:]
+        summary = " -> ".join(spec.__class__.__name__ for spec in recent)
+        if len(self._realiser_stack) > 5:
+            summary = f"... ({len(self._realiser_stack) - 5} more) -> {summary}"
+        return summary
+
+    def _get_cycle_path(self, target_spec: Spec) -> list[str]:
+        """Return the dependency cycle path for ``target_spec``."""
+        try:
+            start_idx = self._realiser_stack.index(target_spec)
+            cycle_specs = self._realiser_stack[start_idx:] + [target_spec]
+            return [spec.__class__.__name__ for spec in cycle_specs]
+        except ValueError:  # pragma: no cover - should not happen
+            return ["Unknown cycle"]
 
     def _realise_impl(self, spec: Spec) -> nn.Module:
         """Implement realisation logic."""
@@ -496,48 +629,98 @@ class Realiser:
         return None
 
     def _try_auto_import(self, spec: Spec) -> nn.Module | None:
-        """Try to automatically import and create module."""
-        # Map spec names to module paths
+        """Try to automatically import and instantiate a module.
+
+        All failures are logged when warnings are enabled to aid debugging.
+        """
+        import logging
+
+        logger = logging.getLogger(__name__)
+
         spec_name = spec.__class__.__name__
 
-        # Common mappings
-        module_mappings = {
-            "LayerNormSpec": ("energy_transformer.layers", "LayerNorm"),
-            "PatchEmbedSpec": (
-                "energy_transformer.layers.embeddings",
-                "PatchEmbedding",
-            ),
-            "CLSTokenSpec": ("energy_transformer.layers.tokens", "CLSToken"),
-            "MHEASpec": (
-                "energy_transformer.layers.attention",
-                "MultiHeadEnergyAttention",
-            ),
-            "HNSpec": (
-                "energy_transformer.layers.hopfield",
-                "HopfieldNetwork",
-            ),
-        }
-
         mapping = module_mappings.get(spec_name)
-        if mapping:
-            module_path, class_name = mapping
-            try:
-                module = importlib.import_module(module_path)
-                cls = getattr(module, class_name)
+        if not mapping:
+            if _config.warnings:
+                logger.debug(
+                    f"No auto-import mapping for {spec_name}. Available mappings: {list(module_mappings.keys())}"
+                )
+            return None
 
-                # Extract constructor args from spec
-                kwargs = {}
-                for field_info in spec.__dataclass_fields__.values():
-                    value = getattr(spec, field_info.name)
-                    kwargs[field_info.name] = value
+        module_path, class_name = mapping
 
-                instance = cls(**kwargs)
-                assert isinstance(instance, nn.Module)
-                return instance
-            except Exception:
-                pass
+        try:
+            module = importlib.import_module(module_path)
+        except ImportError as e:
+            if _config.warnings:
+                logger.warning(
+                    f"Failed to import {module_path} for {spec_name}: {e}. Is the module installed? Try: pip install energy-transformer"
+                )
+            return None
+        except Exception as e:
+            if _config.warnings:
+                logger.error(
+                    f"Unexpected error importing {module_path}: {type(e).__name__}: {e}",
+                    exc_info=True,
+                )
+            return None
 
-        return None
+        try:
+            cls = getattr(module, class_name)
+        except AttributeError as e:
+            if _config.warnings:
+                logger.warning(
+                    f"Module {module_path} has no attribute {class_name}. Available attributes: {[a for a in dir(module) if not a.startswith('_')]}"
+                )
+            return None
+
+        try:
+            kwargs = {}
+            for field_name, field_info in spec.__dataclass_fields__.items():
+                value = getattr(spec, field_name)
+                if hasattr(field_info.default, "__call__"):
+                    continue
+                elif value == field_info.default:
+                    continue
+                kwargs[field_name] = value
+
+            if _config.warnings and logger.isEnabledFor(logging.DEBUG):
+                logger.debug(f"Auto-importing {class_name} with kwargs: {kwargs}")
+        except Exception as e:
+            if _config.warnings:
+                logger.error(
+                    f"Failed to extract kwargs from {spec_name}: {type(e).__name__}: {e}",
+                    exc_info=True,
+                )
+            return None
+
+        try:
+            instance = cls(**kwargs)
+            if not isinstance(instance, nn.Module):
+                if _config.warnings:
+                    logger.warning(
+                        f"Auto-imported {class_name} is not an nn.Module, got {type(instance)}"
+                    )
+                return None
+
+            if _config.warnings:
+                logger.info(f"Successfully auto-imported {spec_name} as {class_name}")
+
+            return instance
+        except TypeError as e:
+            if _config.warnings:
+                error_msg = str(e)
+                logger.warning(
+                    f"Failed to instantiate {class_name}: {error_msg}. Provided kwargs: {list(kwargs.keys())}. This usually means the spec and module have incompatible parameters."
+                )
+            return None
+        except Exception as e:
+            if _config.warnings:
+                logger.error(
+                    f"Failed to instantiate {class_name}: {type(e).__name__}: {e}",
+                    exc_info=True,
+                )
+            return None
 
     def _realise_sequential(self, spec: Sequential) -> nn.Module:
         """Realise sequential composition."""
@@ -607,8 +790,9 @@ class Realiser:
         return GraphModule(nodes, spec.edges, spec.inputs, spec.outputs)
 
     def _realise_loop(self, spec: Loop) -> nn.Module:
-        """Realise loop structure."""
-        # Resolve loop count
+        """Realise loop structure with proper cache handling."""
+
+        # Resolve loop count from context if needed
         if isinstance(spec.times, str):
             times = self.context.get_dim(spec.times)
             if times is None:
@@ -616,37 +800,84 @@ class Realiser:
                     f"Unknown dimension for loop count: {spec.times}",
                     spec=spec,
                     context=self.context,
+                    suggestion=(
+                        f"Available dimensions: {list(self.context.dimensions.keys())}"
+                    ),
                 )
         else:
             times = spec.times
 
+        if times <= 0:
+            raise RealisationError(
+                f"Invalid loop count: {times}",
+                spec=spec,
+                context=self.context,
+                suggestion="Loop count must be positive",
+            )
+
         if spec.unroll:
-            # Unrolled loop
             if spec.share_weights:
-                # Share weights across iterations
                 body = self.realise(spec.body)
-                modules = [body for _ in range(times)]  # Same instance
+                modules = [body for _ in range(times)]
                 return nn.Sequential(*modules)
             else:
-                # Independent weights - don't share module instances
-                bodies = []
-                # Temporarily disable caching to ensure fresh instances
-                original_cache_enabled = _config.cache.enabled
-                _config.cache.enabled = False
-                try:
-                    for _ in range(times):
-                        # Create child realiser with inherited depth
-                        child_realiser = Realiser(
-                            self.context, self._recursion_depth
-                        )
-                        bodies.append(child_realiser.realise(spec.body))
-                finally:
-                    _config.cache.enabled = original_cache_enabled
-                return nn.Sequential(*bodies)
+                return self._realise_unrolled_independent(spec, times)
         else:
-            # Dynamic loop
             body = self.realise(spec.body)
             return LoopModule(body, times)
+
+    def _realise_unrolled_independent(self, spec: Loop, times: int) -> nn.Module:
+        """Realise unrolled loop with independent weights."""
+
+        bodies: list[nn.Module] = []
+        original_cache_enabled = _config.cache.enabled
+        cache_error: Exception | None = None
+
+        try:
+            _config.cache.enabled = False
+            for i in range(times):
+                try:
+                    child_realiser = Realiser(self.context.child(), self._recursion_depth)
+                    child_realiser.context.metadata["loop_iteration"] = i
+                    body = child_realiser.realise(spec.body)
+                    bodies.append(body)
+                except Exception as e:
+                    if isinstance(e, RealisationError):
+                        e.suggestion = (
+                            f"Failed at loop iteration {i+1}/{times}\n{e.suggestion}"
+                            if e.suggestion
+                            else f"Failed at loop iteration {i+1}/{times}"
+                        )
+                        raise
+                    else:
+                        raise RealisationError(
+                            f"Loop iteration {i+1}/{times} failed",
+                            spec=spec.body,
+                            context=self.context,
+                            cause=e,
+                        ) from e
+        except Exception as e:
+            cache_error = e
+        finally:
+            try:
+                _config.cache.enabled = original_cache_enabled
+            except Exception as restore_error:  # pragma: no cover - defensive
+                import logging
+
+                logger = logging.getLogger(__name__)
+                logger.critical(
+                    f"Failed to restore cache state: {restore_error}", exc_info=True
+                )
+                if cache_error:
+                    raise RuntimeError(
+                        "Multiple errors: cache restore failed after realisation error"
+                    ) from cache_error
+                raise
+
+        if cache_error:
+            raise cache_error
+
+        return nn.Sequential(*bodies)
 
     def _realise_switch(self, spec: Switch) -> nn.Module:
         """Realise switch structure."""
