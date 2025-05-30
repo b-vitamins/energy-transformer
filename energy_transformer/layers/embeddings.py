@@ -6,10 +6,11 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-__all__ = [
+# Expose as tuple for faster import
+__all__ = (
     "PatchEmbedding",
     "PositionalEmbedding2D",
-]
+)
 
 
 def _to_pair(x: int | tuple[int, int]) -> tuple[int, int]:
@@ -123,18 +124,16 @@ class PatchEmbedding(nn.Module):  # type: ignore[misc]
         AssertionError
             If input image size doesn't match expected size.
         """
-        b, c, h, w = x.shape
+        b, _, h, w = x.shape
 
-        # Validate input dimensions
-        assert h == self.img_size[0] and w == self.img_size[1], (
-            f"Input size ({h}*{w}) doesn't match model "
-            f"({self.img_size[0]}*{self.img_size[1]})"
-        )
+        # Fast dimension check without string formatting unless failing
+        if h != self.img_size[0] or w != self.img_size[1]:
+            raise AssertionError(
+                f"Input size {(h, w)} doesn't match model {self.img_size}"
+            )
 
         # Extract patches and project to embedding space
-        x = self.proj(x)  # (b, embed_dim, h//patch_h, w//patch_w)
-        x = x.flatten(2)  # (b, embed_dim, num_patches)
-        x = x.transpose(1, 2)  # (b, num_patches, embed_dim)
+        x = self.proj(x).flatten(2).transpose(1, 2)
 
         return x
 

@@ -4,6 +4,7 @@ import math
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F  # noqa: N812
 from torch import Tensor
 
 from .base import BaseEnergyAttention
@@ -160,32 +161,43 @@ class MultiHeadEnergyAttention(BaseEnergyAttention):
         if seq_len == 1:
             return torch.zeros((), device=g.device, dtype=g.dtype)
 
-        # Mixed-precision safety: cast weights to input dtype for pure bf16
+        # Mixed-precision safety: cast weights/biases to input dtype
         if g.dtype in {torch.float16, torch.bfloat16}:
-            w_k_cast = self.w_k.to(g.dtype)
-            w_q_cast = self.w_q.to(g.dtype)
+            w_k = self.w_k.to(g.dtype)
+            w_q = self.w_q.to(g.dtype)
+            b_k = self.b_k.to(g.dtype) if self.b_k is not None else None
+            b_q = self.b_q.to(g.dtype) if self.b_q is not None else None
         else:
-            w_k_cast = self.w_k
-            w_q_cast = self.w_q
+            w_k = self.w_k
+            w_q = self.w_q
+            b_k = self.b_k
+            b_q = self.b_q
 
-        # Kₐₕᴮ = ∑ⱼ W^K_ₐₕⱼ·gⱼᴮ,    K ∈ ℝʸˣᴴˣᴺ
-        k = torch.einsum(
-            "...nd,hyd->...nhy", g, w_k_cast
-        )  # shape: [..., N, H, Y]
+        # Fuse key/query projection into a single linear op for efficiency
+        w_cat = torch.cat(
+            (
+                w_k.reshape(self.num_heads * self.head_dim, self.in_dim),
+                w_q.reshape(self.num_heads * self.head_dim, self.in_dim),
+            ),
+            dim=0,
+        )  # shape: [2*H*Y, D]
 
-        # Qₐₕᶜ = ∑ⱼ W^Q_ₐₕⱼ·gⱼᶜ,    Q ∈ ℝʸˣᴴˣᴺ
-        q = torch.einsum(
-            "...nd,hyd->...nhy", g, w_q_cast
-        )  # shape: [..., N, H, Y]
+        if b_k is not None or b_q is not None:
+            bk = b_k if b_k is not None else torch.zeros_like(self.b_q)
+            bq = b_q if b_q is not None else torch.zeros_like(self.b_k)
+            bias = torch.cat((bk.repeat(self.num_heads), bq.repeat(self.num_heads)))
+        else:
+            bias = None
 
-        # Add bias if present
-        if self.b_k is not None:
-            k = k + self.b_k  # shape: [..., N, H, Y]
-        if self.b_q is not None:
-            q = q + self.b_q  # shape: [..., N, H, Y]
+        proj = F.linear(g, w_cat, bias)  # (..., N, 2*H*Y)
+        k, q = proj.split(self.num_heads * self.head_dim, dim=-1)
+        k = k.view(*g.shape[:-1], self.num_heads, self.head_dim)
+        q = q.view(*g.shape[:-1], self.num_heads, self.head_dim)
 
         # Aₕᴮᶜ = ∑ₐ Kₐₕᴮ·Qₐₕᶜ,     A ∈ ℝᴴˣᴺˣᴺ
-        a = torch.einsum("...nhy,...mhy->...hnm", k, q)  # shape: [..., H, N, N]
+        k = k.transpose(-3, -2)  # (..., H, N, Y)
+        q = q.transpose(-3, -2)  # (..., H, N, Y)
+        a = torch.matmul(k, q.transpose(-1, -2))  # (..., H, N, N)
         # TODO: avoid full N×N materialization
 
         # Mask diagonal (self-token) entries if requested

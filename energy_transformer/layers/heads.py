@@ -5,10 +5,11 @@ from __future__ import annotations
 import torch.nn as nn
 from torch import Tensor
 
-__all__ = [
+# Expose as tuple for faster import
+__all__ = (
     "ClassificationHead",
     "FeatureHead",
-]
+)
 
 
 class ClassificationHead(nn.Module):  # type: ignore[misc]
@@ -131,14 +132,9 @@ class ClassificationHead(nn.Module):  # type: ignore[misc]
             # Use global average pooling over all tokens
             x = x.mean(dim=1)  # (B, D)
 
-        # Apply pre-logits processing
-        x = self.pre_logits(x)  # (B, representation_size) or (B, D)
-
-        # Apply dropout and classification
-        x = self.drop(x)
-        logits: Tensor = self.head(x)  # (B, num_classes)
-
-        return logits
+        # Apply pre-logits processing, dropout and classification in one chain
+        x = self.drop(self.pre_logits(x))
+        return self.head(x)
 
 
 class FeatureHead(nn.Module):  # type: ignore[misc]

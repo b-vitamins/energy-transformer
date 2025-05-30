@@ -25,9 +25,9 @@ except ImportError:
 
 from .base import BaseHopfieldNetwork
 
-__all__: Final = [
+__all__: Final = (
     "SimplicialHopfieldNetwork",
-]
+)
 
 
 class SimplexValidator:
@@ -676,12 +676,11 @@ class SimplicialHopfieldNetwork(BaseHopfieldNetwork):
         Tensor
             Shape (..., k, sₘ) containing the products per simplex.
         """
-        prod = torch.index_select(u, -1, idx[:, 0])  # (..., k, sₘ)
-        # m ≤ 3 in practice; a tiny Python loop is faster and lighter
-        for j in range(1, idx.shape[1]):  # over remaining vertices
-            slice_j = torch.index_select(u, -1, idx[:, j])  # (..., k, sₘ)
-            prod = prod.mul_(slice_j)
-        return prod
+        # gather all vertices for each simplex in a single operation
+        flat_idx = idx.reshape(-1)
+        gathered = torch.index_select(u, -1, flat_idx)
+        gathered = gathered.view(*u.shape[:-1], idx.shape[0], idx.shape[1])
+        return gathered.prod(dim=-1)
 
     def forward(self, g: Tensor) -> Tensor:
         """Compute the simplicial Hopfield energy.

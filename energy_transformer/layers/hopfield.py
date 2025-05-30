@@ -10,6 +10,13 @@ from torch import Tensor
 from .base import BaseHopfieldNetwork
 
 
+def _default_energy(h: Tensor) -> Tensor:
+    """Efficient default energy function used when none is provided."""
+    relu = F.relu(h)
+    relu_sq = relu.square()
+    return -0.5 * relu_sq.sum()
+
+
 class HopfieldNetwork(BaseHopfieldNetwork):
     """Modern Hopfield Network with energy-based formulation.
 
@@ -47,9 +54,7 @@ class HopfieldNetwork(BaseHopfieldNetwork):
         in_dim: int,
         hidden_dim: int | None = None,
         multiplier: float = 4.0,
-        energy_fn: Callable[[Tensor], Tensor] = (
-            lambda h: -0.5 * (F.relu(h) ** 2).sum()
-        ),
+        energy_fn: Callable[[Tensor], Tensor] | None = None,
     ):
         """Initialize the Hopfield Network.
 
@@ -61,8 +66,9 @@ class HopfieldNetwork(BaseHopfieldNetwork):
             Number of memory patterns K
         energy_fn : callable, optional
             Custom energy function that takes the hidden activations.
-            Default is -0.5 * (ReLU(h) ** 2).sum(), corresponding to
-            G(z) = 0.5 * (max(0, z))² where r(z) = G'(z) = max(0, z)
+            By default an efficient implementation of
+            ``-0.5 * (ReLU(h)**2).sum()`` is used, corresponding to
+            ``G(z) = 0.5 * (max(0, z))^2`` where ``r(z) = G'(z) = max(0, z)``.
             The function must return a scalar tensor.
         """
         super().__init__()
@@ -78,7 +84,7 @@ class HopfieldNetwork(BaseHopfieldNetwork):
         self.ξ = nn.Parameter(torch.empty(hidden_dim, in_dim))  # shape: [K, D]
 
         # Default: G(z) = 0.5 * (max(0, z))² where r(z) = G'(z) = max(0, z)
-        self.energy_fn = energy_fn
+        self.energy_fn = energy_fn or _default_energy
 
         self.reset_parameters()
 
