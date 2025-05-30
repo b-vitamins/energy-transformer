@@ -109,30 +109,37 @@ from .realise import (
     visualize,
 )
 
-_LIBRARY_AVAILABLE = False
-try:
-    from .library import (  # noqa: F401
-        ClassificationHeadSpec,
-        CLSTokenSpec,
-        DropoutSpec,
-        ETBlockSpec,
-        FeatureHeadSpec,
-        HNSpec,
-        IdentitySpec,
-        LayerNormSpec,
-        MHASpec,
-        MHEASpec,
-        MLPSpec,
-        PatchEmbedSpec,
-        PosEmbedSpec,
-        SHNSpec,
-        TransformerBlockSpec,
-        VisionEmbeddingSpec,
-    )
+# Lazy loading for library specs
+_LIBRARY_SPECS = [
+    "LayerNormSpec",
+    "PatchEmbedSpec",
+    "CLSTokenSpec",
+    "PosEmbedSpec",
+    "MHASpec",
+    "MHEASpec",
+    "MLPSpec",
+    "HNSpec",
+    "SHNSpec",
+    "ETBlockSpec",
+    "ClassificationHeadSpec",
+    "FeatureHeadSpec",
+    "DropoutSpec",
+    "IdentitySpec",
+    "VisionEmbeddingSpec",
+    "TransformerBlockSpec",
+]
 
-    _LIBRARY_AVAILABLE = True
-except ImportError:
-    pass
+def __getattr__(name: str):
+    """Lazy load library specifications."""
+    if name in _LIBRARY_SPECS:
+        from . import library
+        try:
+            return getattr(library, name)
+        except AttributeError:  # pragma: no cover - unexpected
+            raise AttributeError(
+                f"energy_transformer.spec.library has no spec {name!r}"
+            ) from None
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 __all__ = [
     # --- Core Primitives ---
@@ -188,37 +195,7 @@ __all__ = [
     "from_yaml",
 ]
 
-# Add library specs to __all__ if available
-if _LIBRARY_AVAILABLE:
-    __all__.extend(
-        [
-            # Core layer specs
-            "PatchEmbedSpec",
-            "CLSTokenSpec",
-            "PosEmbedSpec",
-            "LayerNormSpec",
-            "MHASpec",
-            "MHEASpec",
-            "MLPSpec",
-            "HNSpec",
-            "SHNSpec",
-            # Head specs
-            "ClassificationHeadSpec",
-            "FeatureHeadSpec",
-            # Utility specs
-            "DropoutSpec",
-            "IdentitySpec",
-            # Composite specs
-            "VisionEmbeddingSpec",
-            "TransformerBlockSpec",
-            "ETBlockSpec",
-            # Utility functions
-            "to_pair",
-            "validate_positive",
-            "validate_probability",
-            "validate_dimension",
-        ]
-    )
+
 
 # Version information
 __version__ = "0.2.0-alpha1"
@@ -232,34 +209,52 @@ Rep = loop
 # Type aliases for better IDE support
 SpecLike: TypeAlias = Spec | Sequential | Parallel | Conditional | Residual
 
-# Configure default settings
-configure_realisation(
-    cache=ModuleCache(max_size=128, enabled=True),
-    strict=True,
-    warnings=True,
-    auto_import=True,
-    optimizations=True,
-    max_recursion=100,
-)
+# NO GLOBAL CONFIGURATION ON IMPORT!
+# Users must explicitly configure if they want non-defaults
+def initialize_defaults():
+    """Initialize default configuration.
+
+    This must be called explicitly by users who want default settings.
+
+    Example
+    -------
+    >>> import energy_transformer.spec as et_spec
+    >>> et_spec.initialize_defaults()  # Explicit initialization
+    """
+    from .realise import configure_realisation, ModuleCache
+
+    configure_realisation(
+        cache=ModuleCache(max_size=128, enabled=True),
+        strict=True,
+        warnings=True,
+        auto_import=True,
+        optimizations=True,
+        max_recursion=100,
+    )
 
 
 # Quick start guide in docstring
 def quickstart() -> None:
     """Print quick start guide for the specification system.
 
+    This only prints information, it does not modify any global state.
+
     Example
     -------
     >>> from energy_transformer.spec import quickstart
     >>> quickstart()
     """
-    print("""
-Energy Transformer Specification System - Quick Start
+    guide = """Energy Transformer Specification System - Quick Start
 ====================================================
-
-1. Define specifications:
+1. Initialize defaults (optional):
    ```python
-   from energy_transformer.spec import *
-
+   import energy_transformer.spec as et_spec
+   et_spec.initialize_defaults()
+   ```
+2. Define specifications:
+   ```python
+   from energy_transformer.spec import seq
+   from energy_transformer.spec.library import *
    model = seq(
        PatchEmbedSpec(img_size=224, patch_size=16, embed_dim=768),
        CLSTokenSpec(),
@@ -267,49 +262,28 @@ Energy Transformer Specification System - Quick Start
        LayerNormSpec()
    )
    ```
-
-2. Realise into PyTorch module:
+3. Realise into PyTorch module:
    ```python
+   from energy_transformer import realise
    module = realise(model)
    ```
-
-3. Use operators for composition:
-   - Sequential: spec1 >> spec2 >> spec3
-   - Parallel: spec1 | spec2 | spec3
-   - Conditional: cond("use_cls", CLSTokenSpec())
-   - Loop: loop(ETBlockSpec(), times=12)
-
-4. Register custom realisers:
-   ```python
-   @register(MySpec)
-   def realise_my_spec(spec, context):
-       return MyModule(spec.param1, spec.param2)
-   ```
-
-5. Configure the system:
-   ```python
-   configure_realisation(
-       cache=ModuleCache(max_size=256),
-       strict=False,
-       auto_import=True
-   )
-   ```
-
-For more information, see the module docstring or documentation.
-""")
+For more information, see the documentation."""
+    print(guide)
+    # DO NOT call initialize_defaults() here!
 
 
 # Export pattern for specific use cases
 def export_patterns() -> dict[str, Callable[..., Spec]]:
-    """Return common architectural patterns ready to use.
+    """Return common architectural patterns ready to use."""
+    from . import library
 
-    Returns
-    -------
-    dict
-        Dictionary of pattern name to spec factory function
-    """
-    if not _LIBRARY_AVAILABLE:
-        return {}
+    PatchEmbedSpec = library.PatchEmbedSpec
+    CLSTokenSpec = library.CLSTokenSpec
+    PosEmbedSpec = library.PosEmbedSpec
+    ETBlockSpec = library.ETBlockSpec
+    LayerNormSpec = library.LayerNormSpec
+    MHEASpec = library.MHEASpec
+    HNSpec = library.HNSpec
 
     return {
         "vit_tiny": lambda **kwargs: seq(
@@ -421,9 +395,4 @@ def benchmark_realisation(
     }
 
 
-# Module initialization message (can be disabled)
-_INIT_MESSAGE_ENABLED = False
-
-if _INIT_MESSAGE_ENABLED:
-    print(f"Energy Transformer Spec System v{__version__} loaded")
-    print("Use quickstart() for a quick introduction")
+# Module initialization message removed. Use quickstart() for help.
