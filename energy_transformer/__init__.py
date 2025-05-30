@@ -1,118 +1,95 @@
 """Energy Transformer: Energy-based transformers with associative memory.
 
 This package implements the Energy Transformer architecture, which replaces
-standard transformer components with energy-based alternatives.
+standard transformer components with energy-based alternatives. The key insight
+is viewing attention and feed-forward networks as energy functions that can be
+optimized through gradient descent.
 
 Quick Start
 -----------
->>> from energy_transformer import realise, seq
->>> from energy_transformer.spec.library import ETBlockSpec
+>>> # Using the specification system (recommended)
+>>> from energy_transformer import seq, realise
+>>> from energy_transformer.spec.library import *
 >>>
->>> model = realise(seq(ETBlockSpec(), ETBlockSpec()))
+>>> model_spec = seq(
+...     PatchEmbedSpec(img_size=224, patch_size=16, embed_dim=768),
+...     CLSTokenSpec(),
+...     loop(ETBlockSpec(), times=12),
+...     ClassificationHeadSpec(num_classes=1000)
+... )
+>>> model = realise(model_spec)
 
-For visualization and optional features:
->>> from energy_transformer.utils import visualize  # Loads matplotlib
->>> from energy_transformer.models import viet_base  # Loads full models
+>>> # Or use pre-built vision models
+>>> from energy_transformer.models.vision import viet_base
+>>> model = viet_base(num_classes=1000)
+
+Key Features
+------------
+- **Energy-based attention**: Multi-head attention as energy minimization
+- **Hopfield networks**: Associative memory replacing feed-forward networks
+- **Simplicial complexes**: Topology-aware memory with higher-order interactions
+- **Declarative specification**: Build models using composable specifications
+
+Architecture Components
+-----------------------
+1. **Layer Normalization**: Energy-based normalization with learnable temperature
+2. **Energy Attention**: Attention weights derived from energy landscape
+3. **Hopfield Networks**: Modern continuous Hopfield networks for memory
+4. **Iterative Refinement**: Token optimization through gradient descent
+
+References
+----------
+.. [1] Hoover et al. "Energy Transformer" arXiv:2302.07253 (2023)
+.. [2] Ramsauer et al. "Hopfield Networks is All You Need" ICLR (2021)
+.. [3] Burns & Fukai "Simplicial Hopfield Networks" arXiv:2305.05179 (2023)
 """
 
-from typing import TYPE_CHECKING, Any
+# Core models
+from .models import EnergyTransformer
 
-__version__ = "0.3.1"
-__author__ = "Ayan Das <bvits@riseup.net>"
-__license__ = "Apache-2.0"
+# Specification API - Core functionality
+from .spec import (
+    Context,
+    RealisationError,
+    # Base types for type hints
+    Spec,
+    # Common errors
+    ValidationError,
+    cond,
+    configure_realisation,
+    loop,
+    parallel,
+    # Main API functions
+    realise,
+    register,
+    # Composition functions
+    seq,
+    # Advanced features
+    visualize,
+)
 
-# Lazy import system using PEP 562
-_LAZY_IMPORTS = {
-    # Core - always available
-    "realise": "energy_transformer.spec",
-    "register": "energy_transformer.spec",
-    "seq": "energy_transformer.spec",
-    "loop": "energy_transformer.spec",
-    "parallel": "energy_transformer.spec",
-    "cond": "energy_transformer.spec",
-    "Spec": "energy_transformer.spec",
-    "Context": "energy_transformer.spec",
-    "ValidationError": "energy_transformer.spec",
-    "RealisationError": "energy_transformer.spec",
-    # Heavy imports - loaded on demand
-    "EnergyTransformer": "energy_transformer.models",
-    "visualize": "energy_transformer.spec",
-    "configure_realisation": "energy_transformer.spec",
-}
-
-# For static type checking, import everything
-if TYPE_CHECKING:
-    from .models import EnergyTransformer  # noqa: F401
-    from .spec import (  # noqa: F401
-        Context,
-        RealisationError,
-        Spec,
-        ValidationError,
-        cond,
-        configure_realisation,
-        loop,
-        parallel,
-        realise,
-        register,
-        seq,
-        visualize,
-    )
-
-
-def __getattr__(name: str) -> Any:
-    """Lazy load modules and attributes.
-
-    This implements PEP 562 for lazy loading. Attributes are only
-    imported when actually accessed, dramatically improving import time.
-    """
-    if name in _LAZY_IMPORTS:
-        module_name = _LAZY_IMPORTS[name]
-        import importlib
-
-        try:
-            module = importlib.import_module(module_name)
-        except ImportError as e:
-            raise ImportError(
-                f"Cannot import {name} from {module_name}. "
-                f"This might be due to missing optional dependencies. "
-                f"Try: pip install energy-transformer[all]\n"
-                f"Original error: {e}"
-            ) from e
-        try:
-            attr = getattr(module, name)
-        except AttributeError:
-            raise AttributeError(
-                f"Module {module_name} has no attribute {name}"
-            ) from None
-        globals()[name] = attr
-        return attr
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-
-def __dir__() -> list[str]:
-    """List available attributes for tab completion."""
-    return list(_LAZY_IMPORTS.keys()) + [
-        "__version__",
-        "__author__",
-        "__license__",
-        "__all__",
-    ]
-
-
-# Only include commonly used exports in __all__
 __all__ = [
-    # Core API - what most users need
+    # Core model
+    "EnergyTransformer",
+    # Spec system - Main API
     "realise",
+    "register",
+    # Spec system - Composition
     "seq",
     "loop",
     "parallel",
-    # Base types
+    "cond",
+    # Spec system - Base types
     "Spec",
     "Context",
-    # Errors
+    # Spec system - Errors
     "ValidationError",
     "RealisationError",
+    # Spec system - Utilities
+    "visualize",
+    "configure_realisation",
 ]
 
-# NO SIDE EFFECTS ON IMPORT!
-# Configuration should be explicit, not automatic
+__version__ = "0.1.0"
+__author__ = "Ayan Das <bvits@riseup.net>"
+__license__ = "Apache-2.0"
