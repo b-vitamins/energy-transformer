@@ -525,9 +525,11 @@ class Realiser:
                 module = importlib.import_module(module_path)
                 cls = getattr(module, class_name)
 
-                # Extract constructor args from spec
+                # Extract constructor args from spec, skipping private fields
                 kwargs = {}
                 for field_info in spec.__dataclass_fields__.values():
+                    if field_info.name.startswith("_"):
+                        continue
                     value = getattr(spec, field_info.name)
                     kwargs[field_info.name] = value
 
