@@ -1,35 +1,47 @@
 """Test realisation system robustness."""
 
-import pytest
-import torch
-import torch.nn as nn
 import logging
-from unittest.mock import patch, MagicMock
-from dataclasses import dataclass
-
-import sys
 import os
+import sys
+from dataclasses import dataclass
+from unittest.mock import patch
+
+import pytest
+import torch.nn as nn
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from energy_transformer.spec import (
-    Spec, Context, param, seq, loop, realise,
-    configure_realisation, RealisationError, Sequential
-)
-from energy_transformer.spec.realise import (
-    Realiser, ModuleCache, _config, register
+    Context,
+    RealisationError,
+    Sequential,
+    Spec,
+    configure_realisation,
+    loop,
+    param,
+    realise,
+    seq,
 )
 from energy_transformer.spec.primitives import SpecMeta
+from energy_transformer.spec.realise import (
+    ModuleCache,
+    Realiser,
+    _config,
+    register,
+)
 
 
 @dataclass(frozen=True)
 class SimpleSpec(Spec):
     """Simple spec for testing."""
+
     value: int = param(default=1)
 
 
 @dataclass(frozen=True)
 class DeepSpec(Spec):
     """Spec that creates deep nesting."""
+
     depth: int = param(default=10)
 
     def children(self) -> list[Spec]:
@@ -83,17 +95,23 @@ class TestRecursionDepth:
         @dataclass(frozen=True)
         class CircularSpec(Spec):
             name: str = param()
+
             def children(self) -> list[Spec]:
                 if self.name == "A":
                     return [CircularSpec(name="B")]
                 elif self.name == "B":
                     return [CircularSpec(name="A")]
                 return []
+
         realiser = Realiser()
 
         @register(CircularSpec)
         def realise_circular(spec, context):
-            return realiser.realise(spec.children()[0]) if spec.children() else nn.Identity()
+            return (
+                realiser.realise(spec.children()[0])
+                if spec.children()
+                else nn.Identity()
+            )
 
         configure_realisation(strict=False)
 
@@ -102,6 +120,26 @@ class TestRecursionDepth:
             realiser.realise(circular)
         assert "Circular dependency" in str(exc_info.value)
         SpecMeta._realisers.pop(CircularSpec, None)
+
+    def test_verify_recursion_fix_script_behavior(self):
+        """Test exact behavior from verify_recursion_fix.py."""
+        from energy_transformer.spec import configure_realisation, realise, seq
+        from energy_transformer.spec.library import IdentitySpec
+        from energy_transformer.spec.realise import _config
+
+        configure_realisation(max_recursion=5)
+        deep_model_spec = seq(*[IdentitySpec() for _ in range(20)])
+
+        model1 = realise(deep_model_spec)
+        assert model1 is not None, "First realisation should succeed"
+
+        initial_hits = _config.cache._hit_count
+        model2 = realise(deep_model_spec)
+        assert model2 is not None, "Second realisation should succeed"
+
+        final_hits = _config.cache._hit_count
+        assert final_hits > initial_hits, "Cache should have been used"
+        assert _config.cache.hit_rate > 0, "Hit rate should be positive"
 
 
 class TestCacheStateRestoration:
@@ -142,8 +180,8 @@ class TestCacheStateRestoration:
         assert _config.cache.enabled
 
         simple = SimpleSpec()
-        model1 = realise(simple)
-        model2 = realise(simple)
+        realise(simple)
+        realise(simple)
         assert _config.cache.hit_rate > 0
         SpecMeta._realisers.pop(SimpleSpec, None)
 
@@ -153,6 +191,7 @@ class TestCacheStateRestoration:
         @dataclass(frozen=True)
         class OuterSpec(Spec):
             inner: Spec = param()
+
             def children(self) -> list[Spec]:
                 return [self.inner]
 
@@ -165,7 +204,9 @@ class TestCacheStateRestoration:
             raise RuntimeError("Inner failure")
 
         nested = OuterSpec(
-            inner=loop(InnerFailSpec(), times=2, unroll=True, share_weights=False)
+            inner=loop(
+                InnerFailSpec(), times=2, unroll=True, share_weights=False
+            )
         )
 
         initial_state = _config.cache.enabled
@@ -174,10 +215,12 @@ class TestCacheStateRestoration:
         assert _config.cache.enabled == initial_state
 
     def test_multiple_cache_errors_handled(self):
-        with patch.object(_config, 'cache') as mock_cache:
+        with patch.object(_config, "cache") as mock_cache:
             type(mock_cache).enabled = property(
                 lambda self: True,
-                lambda self, v: (_ for _ in ()).throw(RuntimeError("Cache restore failed"))
+                lambda self, v: (_ for _ in ()).throw(
+                    RuntimeError("Cache restore failed")
+                ),
             )
 
             @dataclass(frozen=True)
@@ -186,8 +229,60 @@ class TestCacheStateRestoration:
 
             with pytest.raises(RuntimeError) as exc_info:
                 realiser = Realiser()
-                realiser._realise_unrolled_independent(loop(BadSpec(), times=1), times=1)
+                realiser._realise_unrolled_independent(
+                    loop(BadSpec(), times=1), times=1
+                )
             assert "Multiple errors" in str(exc_info.value)
+
+    def test_verify_cache_restoration_script_behavior(self):
+        """Test exact behavior from verify_cache_restoration.py."""
+        from dataclasses import dataclass
+
+        import torch.nn as nn
+
+        from energy_transformer.spec import (
+            Spec,
+            configure_realisation,
+            loop,
+            realise,
+        )
+        from energy_transformer.spec.realise import (
+            ModuleCache,
+            _config,
+            register,
+        )
+
+        @dataclass(frozen=True)
+        class FailingSpec(Spec):
+            pass
+
+        call_count = 0
+
+        @register(FailingSpec)
+        def realise_failing(spec, context):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 2:
+                raise ValueError("Intentional failure")
+            return nn.Identity()
+
+        configure_realisation(cache=ModuleCache(enabled=True))
+        initial_state = _config.cache.enabled
+        assert initial_state
+
+        with pytest.raises(Exception) as exc_info:
+            realise(
+                loop(FailingSpec(), times=3, unroll=True, share_weights=False)
+            )
+
+        assert "Intentional failure" in str(exc_info.value)
+        assert _config.cache.enabled == initial_state, (
+            "Cache state was not restored!"
+        )
+
+        from energy_transformer.spec.primitives import SpecMeta
+
+        SpecMeta._realisers.pop(FailingSpec, None)
 
 
 class TestCacheKeyGeneration:
@@ -196,8 +291,20 @@ class TestCacheKeyGeneration:
     def test_nested_dict_ordering(self):
         cache = ModuleCache()
         spec = SimpleSpec()
-        ctx1 = Context(dimensions={"a": 1, "b": 2}, metadata={"config": {"y": 2, "x": 1}, "nested": {"inner": {"b": 2, "a": 1}}})
-        ctx2 = Context(dimensions={"b": 2, "a": 1}, metadata={"config": {"x": 1, "y": 2}, "nested": {"inner": {"a": 1, "b": 2}}})
+        ctx1 = Context(
+            dimensions={"a": 1, "b": 2},
+            metadata={
+                "config": {"y": 2, "x": 1},
+                "nested": {"inner": {"b": 2, "a": 1}},
+            },
+        )
+        ctx2 = Context(
+            dimensions={"b": 2, "a": 1},
+            metadata={
+                "config": {"x": 1, "y": 2},
+                "nested": {"inner": {"a": 1, "b": 2}},
+            },
+        )
         key1 = cache._make_key(spec, ctx1)
         key2 = cache._make_key(spec, ctx2)
         assert key1 == key2
@@ -238,13 +345,55 @@ class TestCacheKeyGeneration:
         class ComplexSpec(Spec):
             data: dict = param(default_factory=dict)
 
-        spec = ComplexSpec(data={"lists": [[1,2],[3,4]], "sets": {1,2,3}, "mixed": {"a": [{"x":1}, {"y":2}], "b": {(1,2), (3,4)}}})
+        spec = ComplexSpec(
+            data={
+                "lists": [[1, 2], [3, 4]],
+                "sets": {1, 2, 3},
+                "mixed": {"a": [{"x": 1}, {"y": 2}], "b": {(1, 2), (3, 4)}},
+            }
+        )
         ctx = Context()
         key = cache._make_key(spec, ctx)
         assert key is not None
-        spec2 = ComplexSpec(data={"mixed": {"b": {(3,4),(1,2)}, "a": [{"x":1},{"y":2}]}, "sets": {3,2,1}, "lists": [[1,2],[3,4]]})
+        spec2 = ComplexSpec(
+            data={
+                "mixed": {"b": {(3, 4), (1, 2)}, "a": [{"x": 1}, {"y": 2}]},
+                "sets": {3, 2, 1},
+                "lists": [[1, 2], [3, 4]],
+            }
+        )
         key2 = cache._make_key(spec2, ctx)
         assert key == key2
+
+    def test_verify_cache_keys_script_behavior(self):
+        """Test exact behavior from verify_cache_keys.py."""
+        from energy_transformer.spec import Context, realise
+        from energy_transformer.spec.library import IdentitySpec
+        from energy_transformer.spec.realise import _config
+
+        ctx1 = Context(
+            dimensions={"a": 1, "b": 2}, metadata={"nested": {"x": 1, "y": 2}}
+        )
+        ctx2 = Context(
+            dimensions={"b": 2, "a": 1}, metadata={"nested": {"y": 2, "x": 1}}
+        )
+
+        spec = IdentitySpec()
+
+        _config.cache.clear()
+        _config.cache._hit_count = 0
+        _config.cache._miss_count = 0
+
+        model1 = realise(spec, context=ctx1)
+        assert _config.cache._hit_count == 0
+        assert _config.cache._miss_count > 0
+
+        miss_after_first = _config.cache._miss_count
+
+        model2 = realise(spec, context=ctx2)
+        assert _config.cache._hit_count >= 1
+        assert _config.cache._miss_count == miss_after_first
+        assert model1 is model2
 
 
 class TestAutoImportLogging:
@@ -252,7 +401,9 @@ class TestAutoImportLogging:
 
     def test_import_failure_logged(self, caplog):
         configure_realisation(warnings=True)
-        caplog.set_level(logging.DEBUG, logger="energy_transformer.spec.realise")
+        caplog.set_level(
+            logging.DEBUG, logger="energy_transformer.spec.realise"
+        )
 
         @dataclass(frozen=True)
         class UnknownSpec(Spec):
@@ -266,11 +417,18 @@ class TestAutoImportLogging:
 
     def test_missing_module_logged(self, caplog):
         configure_realisation(warnings=True)
-        caplog.set_level(logging.WARNING, logger="energy_transformer.spec.realise")
-        with patch.dict('energy_transformer.spec.realise.module_mappings', {'TestSpec': ('non_existent_module', 'TestClass')}):
+        caplog.set_level(
+            logging.WARNING, logger="energy_transformer.spec.realise"
+        )
+        with patch.dict(
+            "energy_transformer.spec.realise.module_mappings",
+            {"TestSpec": ("non_existent_module", "TestClass")},
+        ):
+
             @dataclass(frozen=True)
             class TestSpec(Spec):
                 pass
+
             realiser = Realiser()
             result = realiser._try_auto_import(TestSpec())
             assert result is None
@@ -279,11 +437,18 @@ class TestAutoImportLogging:
 
     def test_missing_class_logged(self, caplog):
         configure_realisation(warnings=True)
-        caplog.set_level(logging.WARNING, logger="energy_transformer.spec.realise")
-        with patch.dict('energy_transformer.spec.realise.module_mappings', {'TestSpec': ('torch.nn', 'NonExistentClass')}):
+        caplog.set_level(
+            logging.WARNING, logger="energy_transformer.spec.realise"
+        )
+        with patch.dict(
+            "energy_transformer.spec.realise.module_mappings",
+            {"TestSpec": ("torch.nn", "NonExistentClass")},
+        ):
+
             @dataclass(frozen=True)
             class TestSpec(Spec):
                 pass
+
             realiser = Realiser()
             result = realiser._try_auto_import(TestSpec())
             assert result is None
@@ -292,24 +457,39 @@ class TestAutoImportLogging:
 
     def test_instantiation_failure_logged(self, caplog):
         configure_realisation(warnings=True)
-        caplog.set_level(logging.WARNING, logger="energy_transformer.spec.realise")
-        with patch.dict('energy_transformer.spec.realise.module_mappings', {'TestSpec': ('torch.nn', 'Linear')}):
+        caplog.set_level(
+            logging.WARNING, logger="energy_transformer.spec.realise"
+        )
+        with patch.dict(
+            "energy_transformer.spec.realise.module_mappings",
+            {"TestSpec": ("torch.nn", "Linear")},
+        ):
+
             @dataclass(frozen=True)
             class TestSpec(Spec):
                 pass
+
             realiser = Realiser()
             result = realiser._try_auto_import(TestSpec())
             assert result is None
             assert "Failed to instantiate Linear" in caplog.text
-            assert "missing" in caplog.text.lower() or "required" in caplog.text.lower()
+            assert (
+                "missing" in caplog.text.lower()
+                or "required" in caplog.text.lower()
+            )
 
     def test_successful_import_logged(self, caplog):
         configure_realisation(warnings=True)
         caplog.set_level(logging.INFO, logger="energy_transformer.spec.realise")
-        with patch.dict('energy_transformer.spec.realise.module_mappings', {'TestSpec': ('torch.nn', 'Identity')}):
+        with patch.dict(
+            "energy_transformer.spec.realise.module_mappings",
+            {"TestSpec": ("torch.nn", "Identity")},
+        ):
+
             @dataclass(frozen=True)
             class TestSpec(Spec):
                 pass
+
             realiser = Realiser()
             result = realiser._try_auto_import(TestSpec())
             assert result is not None
@@ -343,6 +523,7 @@ class TestRealisationErrorContext:
         @dataclass(frozen=True)
         class Level1Spec(Spec):
             child: Spec = param()
+
             def children(self) -> list[Spec]:
                 return [self.child]
 
