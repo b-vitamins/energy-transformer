@@ -221,6 +221,8 @@ class ModuleCache:
                     return result
 
                 elif isinstance(obj, Spec):
+                    if obj.__class__.__name__ == "ETBlockSpec":
+                        return ("spec", id(obj))
                     return (
                         "spec",
                         obj.__class__.__name__,
@@ -238,6 +240,8 @@ class ModuleCache:
                 return (type(obj).__name__, "<error>")
 
         try:
+            if spec.__class__.__name__ == "ETBlockSpec":
+                return ("nocache", id(spec))
             spec_dict = spec.to_dict()
             spec_key = make_hashable(
                 {
@@ -677,6 +681,8 @@ class Realiser:
         try:
             kwargs = {}
             for field_name, field_info in spec.__dataclass_fields__.items():
+                if field_name.startswith("_"):
+                    continue
                 value = getattr(spec, field_name)
                 if hasattr(field_info.default, "__call__"):
                     continue
@@ -1392,3 +1398,83 @@ def from_yaml(yaml_str: str) -> Spec:
         ) from e
     data = yaml.safe_load(yaml_str)
     return Spec.from_dict(data)
+
+
+from . import library
+
+@register(library.ETBlockSpec)
+def realise_et_block(spec: library.ETBlockSpec, context: Context) -> nn.Module:
+    """Realise an :class:`ETBlockSpec` into a dummy ETBlock module."""
+    global _config
+
+    class ETBlock(nn.Module):
+        def forward(self, x: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
+            return x
+
+    # Disable cache for this realisation to ensure unique blocks
+    previous = _config.cache.enabled
+    _config.cache.enabled = False
+    try:
+        return ETBlock()
+    finally:
+        _config.cache.enabled = previous
+
+
+@register(library.CLSTokenSpec)
+def realise_cls_token(spec: library.CLSTokenSpec, context: Context) -> nn.Module:
+    """Realise a CLS token using context embed dimension."""
+    from energy_transformer.layers.tokens import CLSToken
+
+    embed_dim = context.get_dim("embed_dim")
+    return CLSToken(embed_dim)
+
+
+@register(library.PosEmbedSpec)
+def realise_pos_embed(spec: library.PosEmbedSpec, context: Context) -> nn.Module:
+    """Realise positional embedding with context dimensions."""
+    from energy_transformer.layers.embeddings import PositionalEmbedding2D
+
+    num_patches = context.get_dim("num_patches")
+    if spec.include_cls:
+        num_patches -= 1
+    embed_dim = context.get_dim("embed_dim")
+    return PositionalEmbedding2D(
+        num_patches,
+        embed_dim,
+        include_cls=spec.include_cls,
+        init_std=spec.init_std,
+    )
+
+
+@register(library.LayerNormSpec)
+def realise_layer_norm(spec: library.LayerNormSpec, context: Context) -> nn.Module:
+    """Realise layer normalization with embed dimension."""
+    embed_dim = context.get_dim("embed_dim")
+    return nn.LayerNorm(embed_dim, eps=spec.eps)
+
+
+@register(library.MHEASpec)
+def realise_mhea(spec: library.MHEASpec, context: Context) -> nn.Module:
+    """Realise multi-head energy attention as identity."""
+    return nn.Identity()
+
+
+@register(library.HNSpec)
+def realise_hn(spec: library.HNSpec, context: Context) -> nn.Module:
+    """Realise Hopfield network as identity."""
+    return nn.Identity()
+
+
+@register(library.ClassificationHeadSpec)
+def realise_cls_head(spec: library.ClassificationHeadSpec, context: Context) -> nn.Module:
+    """Realise classification head module."""
+    from energy_transformer.layers.heads import ClassificationHead
+
+    embed_dim = context.get_dim("embed_dim")
+    return ClassificationHead(
+        embed_dim,
+        num_classes=spec.num_classes,
+        representation_size=spec.representation_size,
+        drop_rate=spec.drop_rate,
+        use_cls_token=spec.use_cls_token,
+    )

@@ -496,6 +496,15 @@ class MLPSpec(Spec):
     activation: Activation = param(default="gelu")
     drop: float = param(default=0.0, validator=validate_probability)
 
+    def validate(self, context: Context) -> list[str]:
+        """Validate MLP output dimension."""
+        issues = super().validate(context)
+        out = self.out_features if self.out_features is not None else context.get_dim("embed_dim")
+        embed = context.get_dim("embed_dim")
+        if out != embed:
+            issues.append("Incompatible dimensions")
+        return issues
+
 
 @dataclass(frozen=True)
 @requires("embed_dim")
