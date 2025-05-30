@@ -205,4 +205,7 @@ class PositionalEmbedding2D(nn.Module):  # type: ignore[misc]
             Token embeddings with positional information added,
             shape (B, N, D).
         """
-        return x + self.pos_embed.to(x.dtype)
+        pe = self.pos_embed
+        if pe.dtype != x.dtype:
+            pe = pe.to(x.dtype)
+        return x + pe

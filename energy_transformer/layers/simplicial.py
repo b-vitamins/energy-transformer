@@ -302,6 +302,7 @@ class RandomSimplexGenerator(SimplexGenerator):
         """Generate and shuffle candidate simplices by dimension."""
         candidates: dict[int, list[tuple[int, ...]]] = {}
 
+        MAX_CANDIDATES = 1000
         for simplex_size in range(2, max_dim + 2):
             if simplex_size - 1 not in dim_weights:
                 continue
@@ -309,6 +310,8 @@ class RandomSimplexGenerator(SimplexGenerator):
             all_combinations = list(
                 combinations(range(num_vertices), simplex_size)
             )
+            if len(all_combinations) > MAX_CANDIDATES:
+                all_combinations = self.rng.sample(all_combinations, MAX_CANDIDATES)
             self.rng.shuffle(all_combinations)
             candidates[simplex_size] = all_combinations
 

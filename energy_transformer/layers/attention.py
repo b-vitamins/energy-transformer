@@ -202,12 +202,8 @@ class MultiHeadEnergyAttention(BaseEnergyAttention):
 
         # Mask diagonal (self-token) entries if requested
         if not include_diag:
-            # ∑ᴮ≠ᶜ - Create mask for self-attention exclusion
-            diag_mask = torch.eye(seq_len, device=g.device, dtype=torch.bool)
-            diag_mask = diag_mask[
-                None, None
-            ]  # Broadcast for heads [..., 1, 1, N, N]
-            a = a.masked_fill(diag_mask, float("-inf"))  # shape: [..., H, N, N]
+            # Efficiently fill diagonals without allocating a mask matrix
+            a.diagonal(dim1=-2, dim2=-1).fill_(float("-inf"))
 
         # Apply external attention mask if provided
         if attn_mask is not None:

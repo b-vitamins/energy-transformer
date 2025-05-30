@@ -72,8 +72,11 @@ class CLSToken(nn.Module):  # type: ignore[misc]
         """
         b = x.shape[0]
 
-        # Expand CLS token to match batch size
-        cls_tokens = self.cls_token.expand(b, -1, -1)  # (B, 1, D)
+        # Expand CLS token to match batch size and dtype
+        cls_tokens = self.cls_token
+        if cls_tokens.dtype != x.dtype:
+            cls_tokens = cls_tokens.to(x.dtype)
+        cls_tokens = cls_tokens.expand(b, -1, -1)  # (B, 1, D)
 
         # Prepend CLS token to sequence
         return torch.cat([cls_tokens, x], dim=1)  # (B, N+1, D)
