@@ -32,6 +32,7 @@ from energy_transformer.spec.combinators import (
 from energy_transformer.spec.primitives import (
     Context,
     Spec,
+    ValidationError,
     param,
     provides,
     requires,
@@ -533,11 +534,10 @@ class TestGraph:
             .add_node("c", MockSpec())
             .add_edge("a", "b")
             .add_edge("b", "c")
-            .add_edge("c", "a")  # Creates cycle
         )
 
-        issues = g.validate(Context())
-        assert any("cycle" in issue.lower() for issue in issues)
+        with pytest.raises(ValidationError):
+            g.add_edge("c", "a")  # Creates cycle
 
     def test_unknown_node_validation(self):
         """Test validation catches unknown nodes."""

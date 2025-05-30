@@ -55,8 +55,8 @@ def to_pair(x: int | tuple[int, int]) -> tuple[int, int]:
 def validate_positive(x: int | float | tuple[int | float, ...]) -> bool:
     """Validate that a value is positive."""
     if isinstance(x, tuple):
-        return all(isinstance(v, (int, float)) and v > 0 for v in x)
-    return isinstance(x, (int, float)) and x > 0
+        return all(isinstance(v, int | float) and v > 0 for v in x)
+    return isinstance(x, int | float) and x > 0
 
 
 def validate_probability(x: float) -> bool:
@@ -230,15 +230,30 @@ class HNSpec(Spec):
         """Apply Hopfield network specification to context."""
         context = super().apply_context(context)
 
-        # Set hidden_dim if not explicitly provided
-        if self.hidden_dim is None and (
-            embed_dim := context.get_dim("embed_dim")
-        ):
-            context.set_dim(
-                "hopfield_hidden_dim", int(embed_dim * self.multiplier)
-            )
+        if self.hidden_dim is None:
+            if embed_dim := context.get_dim("embed_dim"):
+                computed_hidden = int(embed_dim * self.multiplier)
+                context.set_dim("hopfield_hidden_dim", computed_hidden)
+        else:
+            if isinstance(self.hidden_dim, Dimension):
+                if resolved := self.hidden_dim.resolve(context):
+                    context.set_dim("hopfield_hidden_dim", resolved)
+            elif isinstance(self.hidden_dim, int):
+                context.set_dim("hopfield_hidden_dim", self.hidden_dim)
 
         return context
+
+    def validate(self, context: Context) -> list[str]:
+        """Validate with proper hidden_dim handling."""
+        issues = super().validate(context)
+
+        if self.hidden_dim is None:
+            if context.get_dim("embed_dim") is None:
+                issues.append(
+                    "Cannot compute hidden_dim: embed_dim not available in context"
+                )
+
+        return issues
 
 
 @dataclass(frozen=True)
@@ -288,12 +303,15 @@ class SHNSpec(Spec):
         context = super().apply_context(context)
 
         # Set hidden_dim if not explicitly provided
-        if self.hidden_dim is None and (
-            embed_dim := context.get_dim("embed_dim")
-        ):
-            context.set_dim(
-                "simplicial_hidden_dim", int(embed_dim * self.multiplier)
-            )
+        if self.hidden_dim is None:
+            if embed_dim := context.get_dim("embed_dim"):
+                computed_hidden = int(embed_dim * self.multiplier)
+                context.set_dim("simplicial_hidden_dim", computed_hidden)
+        elif isinstance(self.hidden_dim, Dimension):
+            if resolved := self.hidden_dim.resolve(context):
+                context.set_dim("simplicial_hidden_dim", resolved)
+        elif isinstance(self.hidden_dim, int):
+            context.set_dim("simplicial_hidden_dim", self.hidden_dim)
 
         # Set num_vertices from context if not provided
         if self.num_vertices is None and (

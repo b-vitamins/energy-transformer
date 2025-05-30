@@ -688,7 +688,7 @@ class ParallelModule(nn.Module):  # type: ignore[misc]
         self.merge = merge
         self.weights = weights
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # noqa: C901
         """Execute branches and merge outputs."""
         outputs: list[torch.Tensor] = [branch(x) for branch in self.branches]
 
@@ -732,7 +732,7 @@ class ResidualModule(nn.Module):  # type: ignore[misc]
         self.merge = merge
         self.scale = scale
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # noqa: C901
         """Apply inner module with residual connection."""
         residual = x
         out: torch.Tensor = self.inner(x)
@@ -770,47 +770,132 @@ class GraphModule(nn.Module):  # type: ignore[misc]
         self.inputs = inputs
         self.outputs = outputs
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Execute graph computation."""
-        # Build adjacency for topological sort
-        in_degree: dict[str, int] = {name: 0 for name in self.nodes}
-        adjacency: dict[str, list[tuple[str, str | None]]] = {
-            name: [] for name in self.nodes
-        }
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # noqa: C901
+        """Execute graph computation with proper data flow.
+
+        This method executes nodes in topological order, ensuring each node
+        receives the correct inputs based on the graph edges.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor
+
+        Returns
+        -------
+        torch.Tensor
+            Output tensor from the specified output nodes
+
+        Raises
+        ------
+        RuntimeError
+            If graph execution fails or outputs are not available
+        """
+        from collections import defaultdict, deque
+
+        adjacency = defaultdict(list)
+        in_degree = defaultdict(int)
+        incoming_edges = defaultdict(list)
 
         for edge in self.edges:
-            # Handle both 2-tuple and 3-tuple edges
             if len(edge) == 2:
-                from_node, to_node = edge
+                source, target = edge
                 transform = None
             else:
-                from_node, to_node, transform = edge
-            if to_node in self.nodes:
-                in_degree[to_node] += 1
-                if from_node in self.nodes:
-                    adjacency[from_node].append((to_node, None))
+                source, target, transform = edge
 
-        # Topological sort
-        queue = [node for node, degree in in_degree.items() if degree == 0]
-        topo_order = []
+            if source in self.nodes or source in self.inputs:
+                adjacency[source].append((target, transform))
+
+            if target in self.nodes:
+                incoming_edges[target].append((source, transform))
+                if source in self.nodes:
+                    in_degree[target] += 1
+
+        values: dict[str, torch.Tensor] = {}
+
+        if isinstance(x, dict):
+            for name, tensor in x.items():
+                if name in self.inputs:
+                    values[name] = tensor
+        else:
+            for input_name in self.inputs:
+                values[input_name] = x
+
+        queue = deque([n for n in self.nodes if in_degree[n] == 0])
+        execution_order: list[str] = []
 
         while queue:
-            node = queue.pop(0)
-            topo_order.append(node)
-            for next_node, _ in adjacency[node]:
-                in_degree[next_node] -= 1
-                if in_degree[next_node] == 0:
-                    queue.append(next_node)
+            current_node = queue.popleft()
+            execution_order.append(current_node)
+            for target, _ in adjacency.get(current_node, []):
+                if target in self.nodes:
+                    in_degree[target] -= 1
+                    if in_degree[target] == 0:
+                        queue.append(target)
 
-        # Execute in topological order
-        values = {"input": x}
-        for node in topo_order:
-            # For simplicity, assume single input
-            node_input = x
-            values[node] = self.nodes[node](node_input)
+        if len(execution_order) != len(self.nodes):
+            unprocessed = set(self.nodes) - set(execution_order)
+            raise RuntimeError(
+                f"Graph contains cycles or unreachable nodes: {unprocessed}"
+            )
 
-        # Return first output
-        return values.get(self.outputs[0], x) if self.outputs else x
+        for node_name in execution_order:
+            node_inputs: list[torch.Tensor] = []
+            for source, transform in incoming_edges[node_name]:
+                if source not in values:
+                    raise RuntimeError(
+                        f"Input '{source}' not available for node '{node_name}'. "
+                        f"Available values: {list(values.keys())}"
+                    )
+                value = values[source]
+                if transform is not None:
+                    value = self._apply_edge_transform(value, transform)
+                node_inputs.append(value)
+
+            if not node_inputs:
+                raise RuntimeError(f"Node '{node_name}' has no inputs")
+            elif len(node_inputs) == 1:
+                values[node_name] = self.nodes[node_name](node_inputs[0])
+            else:
+                combined = torch.cat(node_inputs, dim=-1)
+                values[node_name] = self.nodes[node_name](combined)
+
+        output_tensors = []
+        for output_name in self.outputs:
+            if output_name not in values:
+                raise RuntimeError(
+                    f"Output '{output_name}' not computed. "
+                    f"Available values: {list(values.keys())}"
+                )
+            output_tensors.append(values[output_name])
+
+        if len(output_tensors) == 0:
+            raise RuntimeError("No outputs specified for graph")
+        elif len(output_tensors) == 1:
+            return output_tensors[0]
+        else:
+            return tuple(output_tensors)
+
+    def _apply_edge_transform(self, tensor: torch.Tensor, transform: str) -> torch.Tensor:
+        """Apply named transformation to tensor on graph edge."""
+        if transform == "detach":
+            return tensor.detach()
+        elif transform == "sigmoid":
+            return torch.sigmoid(tensor)
+        elif transform == "relu":
+            return torch.relu(tensor)
+        elif transform == "normalize":
+            return torch.nn.functional.normalize(tensor, dim=-1)
+        elif transform == "stop_gradient":
+            return tensor.detach()
+        else:
+            if transform.startswith("[") and transform.endswith("]"):
+                try:
+                    return eval(f"tensor{transform}")
+                except Exception:
+                    pass
+            raise ValueError(f"Unknown edge transformation: {transform}")
 
 
 class LoopModule(nn.Module):  # type: ignore[misc]
