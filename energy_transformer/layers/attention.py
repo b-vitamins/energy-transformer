@@ -197,24 +197,42 @@ class MultiHeadEnergyAttention(BaseEnergyAttention):
         # Aₕᴮᶜ = ∑ₐ Kₐₕᴮ·Qₐₕᶜ,     A ∈ ℝᴴˣᴺˣᴺ
         k = k.transpose(-3, -2)  # (..., H, N, Y)
         q = q.transpose(-3, -2)  # (..., H, N, Y)
-        a = torch.matmul(k, q.transpose(-1, -2))  # (..., H, N, N)
-        # TODO: avoid full N×N materialization
 
-        # Mask diagonal (self-token) entries if requested
-        if not include_diag:
-            # Efficiently fill diagonals without allocating a mask matrix
-            a.diagonal(dim1=-2, dim2=-1).fill_(float("-inf"))
+        # Compute logsumexp of the attention scores without materializing the
+        # full N×N matrix. For typical sequence lengths this matches the
+        # original behaviour, while for long sequences it avoids allocating a
+        # potentially huge attention matrix.
+        block_size = 512
+        if seq_len <= block_size:
+            a = torch.matmul(k, q.transpose(-1, -2))  # (..., H, N, N)
 
-        # Apply external attention mask if provided
-        if attn_mask is not None:
-            # Use additive masking (compatible with -inf values)
-            a = a + attn_mask  # shape: [..., H, N, N]
+            if not include_diag:
+                a.diagonal(dim1=-2, dim2=-1).fill_(float("-inf"))
 
-        # β·Aₕᴮᶜ - Scale attention matrix by temperature
-        βa = self.β * a  # shape: [..., H, N, N]
+            if attn_mask is not None:
+                a = a + attn_mask
 
-        # log(∑ᴮ exp(β·Aₕᴮᶜ)) - LogSumExp over keys dimension
-        lse = torch.logsumexp(βa, dim=-2)  # shape: [..., H, N]
+            βa = self.β * a
+            lse = torch.logsumexp(βa, dim=-2)
+        else:
+            lse_parts = []
+            for start in range(0, seq_len, block_size):
+                end = min(start + block_size, seq_len)
+                q_block = q[..., start:end, :]  # (..., H, B, Y)
+                a_block = torch.matmul(k, q_block.transpose(-1, -2))  # (..., H, N, B)
+
+                if not include_diag:
+                    idx = torch.arange(start, end, device=g.device)
+                    a_block[..., idx, idx - start] = float("-inf")
+
+                if attn_mask is not None:
+                    a_block = a_block + attn_mask[..., :, :, start:end]
+
+                βa_block = self.β * a_block
+                lse_block = torch.logsumexp(βa_block, dim=-2)
+                lse_parts.append(lse_block)
+
+            lse = torch.cat(lse_parts, dim=-1)
 
         # E^ATT = -(1/β)·∑ₕ₌₁ᴴ·∑ᶜ₌₁ᴺ·log(∑ᴮ exp(β·Aₕᴮᶜ))
         β_inv = 1.0 / self.β
