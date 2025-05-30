@@ -90,6 +90,6 @@ __all__ = [
     "configure_realisation",
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.2.0-alpha1"
 __author__ = "Ayan Das <bvits@riseup.net>"
 __license__ = "Apache-2.0"

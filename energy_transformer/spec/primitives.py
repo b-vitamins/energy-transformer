@@ -125,6 +125,134 @@ class Dimension:
         self.formula = formula
         self.constraints = constraints or []
 
+    def _tokenize(self, formula: str) -> list[tuple[str, str]]:
+        """Tokenize mathematical formula into (type, value) pairs."""
+        import re
+
+        TOKEN_REGEX = re.compile(r'''
+            (?P<NUMBER>\d+(?:\.\d+)?)           | # Numbers
+            (?P<IDENT>[a-zA-Z_][a-zA-Z0-9_]*)   | # Identifiers
+            (?P<PLUS>\+)                         | # Plus
+            (?P<MINUS>-)                         | # Minus
+            (?P<TIMES>\*)                        | # Times
+            (?P<DIVIDE>/)                        | # Divide
+            (?P<LPAREN>\()                       | # Left paren
+            (?P<RPAREN>\))                       | # Right paren
+            (?P<WHITESPACE>\s+)                  | # Whitespace
+            (?P<INVALID>.)                       # Any other character
+        ''', re.VERBOSE)
+
+        tokens = []
+        for match in TOKEN_REGEX.finditer(formula):
+            kind = match.lastgroup
+            value = match.group()
+            if kind == 'WHITESPACE':
+                continue
+            elif kind == 'INVALID':
+                raise ValueError(f"Invalid character in formula: {value!r}")
+            tokens.append((kind, value))
+
+        return tokens
+
+    def _parse_expression(self, tokens: list[tuple[str, str]], pos: int, variables: dict[str, int | None]) -> tuple[float, int]:
+        """Parse mathematical expression recursively."""
+        left, pos = self._parse_term(tokens, pos, variables)
+
+        while pos < len(tokens) and tokens[pos][0] in ('PLUS', 'MINUS'):
+            op = tokens[pos][0]
+            pos += 1
+            right, pos = self._parse_term(tokens, pos, variables)
+            if op == 'PLUS':
+                left = left + right
+            else:
+                left = left - right
+
+        return left, pos
+
+    def _parse_term(self, tokens: list[tuple[str, str]], pos: int, variables: dict[str, int | None]) -> tuple[float, int]:
+        """Parse multiplication/division term."""
+        left, pos = self._parse_factor(tokens, pos, variables)
+
+        while pos < len(tokens) and tokens[pos][0] in ('TIMES', 'DIVIDE'):
+            op = tokens[pos][0]
+            pos += 1
+            right, pos = self._parse_factor(tokens, pos, variables)
+            if op == 'TIMES':
+                left = left * right
+            else:
+                if right == 0:
+                    raise ValueError("Division by zero")
+                left = left / right
+
+        return left, pos
+
+    def _parse_factor(self, tokens: list[tuple[str, str]], pos: int, variables: dict[str, int | None]) -> tuple[float, int]:
+        """Parse number, variable, or parenthesized expression."""
+        if pos >= len(tokens):
+            raise ValueError("Unexpected end of expression")
+
+        token_type, token_value = tokens[pos]
+
+        if token_type == 'NUMBER':
+            return float(token_value), pos + 1
+
+        elif token_type == 'IDENT':
+            if token_value not in variables:
+                raise ValueError(f"Unknown variable: {token_value}")
+            value = variables[token_value]
+            if value is None:
+                raise ValueError(f"Variable {token_value} has no value")
+            return float(value), pos + 1
+
+        elif token_type == 'LPAREN':
+            pos += 1  # Skip '('
+            value, pos = self._parse_expression(tokens, pos, variables)
+            if pos >= len(tokens) or tokens[pos][0] != 'RPAREN':
+                raise ValueError("Missing closing parenthesis")
+            return value, pos + 1  # Skip ')'
+
+        elif token_type == 'MINUS':
+            pos += 1  # Skip unary minus
+            value, pos = self._parse_factor(tokens, pos, variables)
+            return -value, pos
+
+        else:
+            raise ValueError(f"Unexpected token: {token_value}")
+
+    def _safe_eval_formula(self, formula: str, variables: dict[str, int | None]) -> float | None:
+        """Safely evaluate mathematical formula without eval().
+
+        Only supports:
+        - Numbers (integers and floats)
+        - Variables (must exist in variables dict)
+        - Arithmetic operators: +, -, *, /
+        - Parentheses for grouping
+        - Unary minus
+
+        Explicitly rejects:
+        - Function calls
+        - Attribute access
+        - List/dict operations
+        - Any Python keywords or builtins
+        """
+        try:
+            tokens = self._tokenize(formula)
+            if not tokens:
+                return None
+
+            result, pos = self._parse_expression(tokens, 0, variables)
+
+            if pos < len(tokens):
+                raise ValueError(f"Unexpected token after expression: {tokens[pos][1]}")
+
+            return result
+        except Exception as e:
+            # Log the error for debugging
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.debug(f"Formula evaluation failed for {formula!r}: {e}")
+            return None
+
     def resolve(self, context: Context) -> int | None:
         """Resolve dimension value from context.
 
@@ -149,7 +277,7 @@ class Dimension:
                 name: context.get_dim(name) for name in context.dimensions
             }
             try:
-                result = eval(self.formula, {"__builtins__": {}}, local_vars)
+                result = self._safe_eval_formula(self.formula, local_vars)
                 return int(result) if result is not None else None
             except Exception:
                 return None
@@ -582,6 +710,26 @@ class Spec(ABC, metaclass=SpecMeta):
                         field_name=field_info.name,
                     )
 
+                # Ensure type consistency across choices
+                if choices:
+                    choice_types = {type(c) for c in choices}
+                    if len(choice_types) > 1:
+                        # Choices have mixed types, which is suspicious
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.warning(
+                            f"Field {field_info.name} has choices with mixed types: {choice_types}"
+                        )
+
+                    value_type = type(value)
+                    if value_type not in choice_types and value in choices:
+                        raise ValidationError(
+                            f"Value type {value_type.__name__} doesn't match choice types {choice_types}",
+                            spec=self,
+                            field_name=field_info.name,
+                            suggestion="Ensure all choices have consistent types",
+                        )
+
     def validate(self, context: Context) -> list[str]:
         """Validate spec against context, returning issues.
 
@@ -733,7 +881,7 @@ class Spec(ABC, metaclass=SpecMeta):
             value = getattr(self, field_info.name)
             if isinstance(value, Spec):
                 children.append(value)
-            elif isinstance(value, list | tuple):
+            elif isinstance(value, (list, tuple)):
                 children.extend(v for v in value if isinstance(v, Spec))
         return children
 
@@ -787,7 +935,7 @@ class Spec(ABC, metaclass=SpecMeta):
             value = getattr(self, field_info.name)
             if isinstance(value, Spec):
                 value = value.to_dict()
-            elif isinstance(value, list | tuple):
+            elif isinstance(value, (list, tuple)):
                 value = [
                     v.to_dict() if isinstance(v, Spec) else v for v in value
                 ]
