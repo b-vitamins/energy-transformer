@@ -87,7 +87,9 @@ class TestGraphExecution:
             ("add", "mul", None),
             ("mul", "sub", None),
         ]
-        gm = GraphModule(nodes=nodes, edges=edges, inputs=["input"], outputs=["sub"])
+        gm = GraphModule(
+            nodes=nodes, edges=edges, inputs=["input"], outputs=["sub"]
+        )
 
         x = torch.tensor([5.0])
         result = gm(x)
@@ -123,7 +125,9 @@ class TestGraphExecution:
             ("branch1", "merge", None),
             ("branch2", "merge", None),
         ]
-        gm = GraphModule(nodes=nodes, edges=edges, inputs=["input"], outputs=["merge"])
+        gm = GraphModule(
+            nodes=nodes, edges=edges, inputs=["input"], outputs=["merge"]
+        )
 
         x = torch.tensor([[1.0, 2.0]])
         result = gm(x)
@@ -139,7 +143,9 @@ class TestGraphExecution:
 
         nodes = {"node1": Identity(), "node2": Identity()}
         edges = [("input", "node1", None), ("node1", "node2", "relu")]
-        gm = GraphModule(nodes=nodes, edges=edges, inputs=["input"], outputs=["node2"])
+        gm = GraphModule(
+            nodes=nodes, edges=edges, inputs=["input"], outputs=["node2"]
+        )
 
         x = torch.tensor([[-1.0, 2.0, -3.0]])
         result = gm(x)
@@ -150,10 +156,104 @@ class TestGraphExecution:
         """Test graph fails gracefully with missing inputs."""
         nodes = {"node": nn.Identity()}
         edges = [("missing_input", "node", None)]
-        gm = GraphModule(nodes=nodes, edges=edges, inputs=["input"], outputs=["node"])
+        gm = GraphModule(
+            nodes=nodes, edges=edges, inputs=["input"], outputs=["node"]
+        )
 
         with pytest.raises(RuntimeError, match="not available"):
             gm(torch.tensor([1.0]))
+
+    def test_verify_graph_fix_script_behavior(self):
+        """Test the exact computation from verify_graph_fix.py."""
+        from dataclasses import dataclass
+
+        import torch
+        import torch.nn as nn
+
+        from energy_transformer.spec import Spec, graph, param, realise
+        from energy_transformer.spec.combinators import Graph
+        from energy_transformer.spec.realise import register_typed
+
+        class AddModule(nn.Module):
+            def __init__(self, value):
+                super().__init__()
+                self.value = value
+
+            def forward(self, x):
+                return x + self.value
+
+        @dataclass(frozen=True)
+        class AddSpec(Spec):
+            value: int = param()
+
+        @register_typed
+        def _realise_add(spec: AddSpec, context: Context) -> nn.Module:
+            return AddModule(spec.value)
+
+        g = graph()
+        g = g.add_node("layer1", AddSpec(1))
+        g = g.add_node("layer2", AddSpec(10))
+        g = g.add_node("layer3", AddSpec(100))
+
+        g = g.add_edge("input", "layer1")
+        g = g.add_edge("layer1", "layer2")
+        g = g.add_edge("layer2", "layer3")
+
+        graph_spec = Graph(
+            nodes=g.nodes,
+            edges=g.edges,
+            inputs=["input"],
+            outputs=["layer3"],
+        )
+
+        x = torch.tensor([0.0])
+        module = realise(graph_spec)
+        result = module(x)
+
+        expected = 111.0
+        assert torch.allclose(result, torch.tensor([expected])), (
+            f"Graph computation failed: expected {expected}, got {result.item()}"
+        )
+        from energy_transformer.spec.primitives import SpecMeta
+
+        SpecMeta._realisers.pop(AddSpec, None)
+
+    def test_graph_execution_order(self, capfd):
+        """Verify nodes execute in correct order with proper inputs."""
+        import torch
+        import torch.nn as nn
+
+        from energy_transformer.spec.realise import GraphModule
+
+        class LoggingModule(nn.Module):
+            def __init__(self, name):
+                super().__init__()
+                self.name = name
+
+            def forward(self, x):
+                print(f"{self.name} received: {x.item():.1f}")
+                return x + 1
+
+        nodes = {
+            "A": LoggingModule("A"),
+            "B": LoggingModule("B"),
+            "C": LoggingModule("C"),
+        }
+        edges = [
+            ("input", "A"),
+            ("A", "B"),
+            ("B", "C"),
+        ]
+
+        graph_module = GraphModule(nodes, edges, ["input"], ["C"])
+
+        result = graph_module(torch.tensor([0.0]))
+
+        captured = capfd.readouterr()
+        assert "A received: 0.0" in captured.out
+        assert "B received: 1.0" in captured.out
+        assert "C received: 2.0" in captured.out
+        assert result.item() == 3.0
 
     def test_graph_cycle_detection(self):
         """Test that graphs with cycles are caught."""
@@ -229,6 +329,21 @@ class TestValidationOrder:
 
         updated_ctx = spec.apply_context(ctx)
         assert updated_ctx.get_dim("computed_dim") == 512
+
+    def test_verify_validation_order_script_behavior(self):
+        """Test the exact behavior from verify_validation_order.py."""
+        from energy_transformer.spec import Context, seq
+        from energy_transformer.spec.library import LayerNormSpec, MLPSpec
+
+        spec = seq(
+            LayerNormSpec(),
+            MLPSpec(),
+        )
+
+        ctx = Context(dimensions={"embed_dim": 768})
+        issues = spec.validate(ctx)
+
+        assert len(issues) == 0, f"Validation failed with: {issues}"
 
 
 class TestParallelMergeValidation:
@@ -315,11 +430,15 @@ class TestIntegration:
         from energy_transformer.spec.realise import register_typed
 
         @register_typed
-        def _realise_layer_norm(spec: LayerNormSpec, context: Context) -> nn.Module:
+        def _realise_layer_norm(
+            spec: LayerNormSpec, context: Context
+        ) -> nn.Module:
             return nn.LayerNorm(context.get_dim("embed_dim"), eps=spec.eps)
 
         @register_typed
-        def _realise_identity(spec: IdentitySpec, context: Context) -> nn.Module:
+        def _realise_identity(
+            spec: IdentitySpec, context: Context
+        ) -> nn.Module:
             return nn.Identity()
 
         g = graph()
@@ -336,7 +455,9 @@ class TestIntegration:
         g = g.add_edge("attn", "add")
         g = g.add_edge("mlp", "add")
 
-        graph_spec = Graph(nodes=g.nodes, edges=g.edges, inputs=["input"], outputs=["add"])
+        graph_spec = Graph(
+            nodes=g.nodes, edges=g.edges, inputs=["input"], outputs=["add"]
+        )
 
         ctx = Context(dimensions={"embed_dim": 768})
         issues = graph_spec.validate(ctx)
@@ -349,6 +470,7 @@ class TestIntegration:
 
     def test_nested_validation_context_flow(self):
         """Test deeply nested specs with context propagation."""
+
         @dataclass(frozen=True)
         @provides("test_dim", "embed_dim")
         class BothProvider(Spec):
@@ -400,4 +522,3 @@ class TestErrorMessages:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])
-

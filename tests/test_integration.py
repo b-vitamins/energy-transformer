@@ -4,7 +4,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from energy_transformer import seq, realise, ValidationError
+from energy_transformer import realise, seq
 from energy_transformer.spec import Context
 
 
@@ -14,12 +14,12 @@ class TestCompleteWorkflows:
     def test_vision_transformer_workflow(self, simple_image_batch):
         """Test building a complete vision transformer."""
         from energy_transformer.spec.library import (
-            PatchEmbedSpec,
+            ClassificationHeadSpec,
             CLSTokenSpec,
-            PosEmbedSpec,
             ETBlockSpec,
             LayerNormSpec,
-            ClassificationHeadSpec,
+            PatchEmbedSpec,
+            PosEmbedSpec,
         )
 
         vit_spec = seq(
@@ -45,9 +45,9 @@ class TestCompleteWorkflows:
         """Test building a custom model with mixed components."""
         from energy_transformer.spec import loop, parallel
         from energy_transformer.spec.library import (
+            HNSpec,
             LayerNormSpec,
             MHEASpec,
-            HNSpec,
         )
 
         custom_block = seq(
@@ -76,7 +76,9 @@ class TestCompleteWorkflows:
 
         model = realise(deep_spec, embed_dim=768)
 
-        num_blocks = len([m for m in model.modules() if "ETBlock" in str(type(m))])
+        num_blocks = len(
+            [m for m in model.modules() if "ETBlock" in str(type(m))]
+        )
         assert num_blocks >= 24
 
 
@@ -116,7 +118,6 @@ class TestImportPerformance:
 
     def test_core_import_time(self):
         """Test that core imports are fast."""
-        import time
         import subprocess
         import sys
 
@@ -143,4 +144,113 @@ class TestImportPerformance:
         )
 
         assert result.returncode == 0, f"Failed: {result.stderr}"
+        assert "SUCCESS" in result.stdout
+
+
+class TestImportBehavior:
+    """Test import performance and behavior from verify_imports.py."""
+
+    def test_verify_imports_script_core_import_time(self):
+        """Test core import time from verify_imports.py."""
+        import subprocess
+        import sys
+
+        code = """
+import time
+start = time.perf_counter()
+import energy_transformer
+elapsed = time.perf_counter() - start
+print(elapsed)
+"""
+
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+
+        assert result.returncode == 0, f"Import failed: {result.stderr}"
+
+        import_time = float(result.stdout.strip())
+        assert import_time < 0.5, f"Core import too slow: {import_time:.3f}s"
+
+    def test_verify_imports_script_lazy_loading(self):
+        """Test lazy loading behavior from verify_imports.py."""
+        import subprocess
+        import sys
+
+        code = """
+import sys
+
+# Import core
+import energy_transformer
+
+# Check what's NOT loaded
+heavy_modules = ['scipy', 'matplotlib', 'seaborn', 'energy_transformer.models']
+not_loaded = [m for m in heavy_modules if m not in sys.modules]
+
+# These should NOT be loaded yet
+assert 'scipy' not in sys.modules, "scipy should not be loaded on import"
+assert 'matplotlib' not in sys.modules, "matplotlib should not be loaded on import"
+assert 'energy_transformer.models' not in sys.modules, "models should not be loaded on import"
+
+# Now trigger a heavy import
+from energy_transformer import EnergyTransformer
+
+# Models should now be loaded
+assert 'energy_transformer.models' in sys.modules, "models should load when accessed"
+
+print("SUCCESS")
+"""
+
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+
+        assert result.returncode == 0, (
+            f"Lazy loading test failed: {result.stderr}"
+        )
+        assert "SUCCESS" in result.stdout
+
+    def test_verify_imports_script_no_side_effects(self):
+        """Test no side effects on import from verify_imports.py."""
+        import subprocess
+        import sys
+
+        code = """
+# Import and check for side effects
+import energy_transformer.spec
+from energy_transformer.spec.realise import _config
+
+# Get initial state
+initial_cache_enabled = _config.cache.enabled
+initial_cache_size = _config.cache.max_size
+initial_strict = _config.strict
+
+# Import everything
+from energy_transformer import *
+from energy_transformer.spec import *
+
+# Check if state changed
+assert _config.cache.enabled == initial_cache_enabled, "cache.enabled changed on import!"
+assert _config.cache.max_size == initial_cache_size, "cache.max_size changed on import!"
+assert _config.strict == initial_strict, "strict mode changed on import!"
+
+print("SUCCESS: No side effects detected")
+"""
+
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+
+        assert result.returncode == 0, (
+            f"Side effects test failed: {result.stderr}"
+        )
         assert "SUCCESS" in result.stdout

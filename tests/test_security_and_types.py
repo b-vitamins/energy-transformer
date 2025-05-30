@@ -6,19 +6,24 @@ This module verifies:
 3. Choice validation type safety
 """
 
-import pytest
-import sys
 import os
+import sys
 from unittest.mock import patch
+
+import pytest
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from energy_transformer.spec.primitives import Dimension, Context, ValidationError
 from energy_transformer.spec.library import (
+    validate_dimension,
     validate_positive,
     validate_probability,
-    validate_dimension,
+)
+from energy_transformer.spec.primitives import (
+    Context,
+    Dimension,
+    ValidationError,
 )
 
 
@@ -80,7 +85,44 @@ class TestSecurityFixes:
         dim = Dimension("test", formula="x + y")
         assert dim.resolve(ctx) is None
 
-    @patch('os.system')
+    def test_verify_security_script_behavior(self):
+        """Test the exact behavior from verify_security.py."""
+        from energy_transformer.spec.primitives import Context, Dimension
+
+        # This should NOT print anything or execute code
+        ctx = Context(dimensions={"x": 10})
+        evil = Dimension("evil", formula="print('HACKED!') or x")
+        result = evil.resolve(ctx)
+
+        # Evil formula should return None
+        assert result is None, "Evil formula should fail to parse"
+
+        # Good formula should work correctly
+        good = Dimension("good", formula="x * 2")
+        result = good.resolve(ctx)
+        assert result == 20, "Good formula should evaluate correctly"
+
+    def test_no_output_on_evil_formulas(self, capsys):
+        """Ensure evil formulas produce no output (no code execution)."""
+        from energy_transformer.spec.primitives import Context, Dimension
+
+        ctx = Context(dimensions={"x": 10})
+        evil_formulas = [
+            "print('HACKED!')",
+            "print('HACKED!') or x",
+            "__import__('sys').stdout.write('HACKED')",
+        ]
+
+        for formula in evil_formulas:
+            dim = Dimension("evil", formula=formula)
+            result = dim.resolve(ctx)
+
+            captured = capsys.readouterr()
+            assert captured.out == "", f"Formula {formula!r} produced output!"
+            assert captured.err == "", f"Formula {formula!r} produced errors!"
+            assert result is None
+
+    @patch("os.system")
     def test_no_actual_execution(self, mock_system):
         ctx = Context(dimensions={})
         dim = Dimension("test", formula="__import__('os').system('echo test')")
@@ -99,8 +141,8 @@ class TestTypeUnionFixes:
         assert validate_positive(5.5) is True
         assert validate_positive(0.0) is False
         assert validate_positive(-5.5) is False
-        assert validate_positive(float('inf')) is True
-        assert validate_positive(float('-inf')) is False
+        assert validate_positive(float("inf")) is True
+        assert validate_positive(float("-inf")) is False
 
     def test_validate_positive_with_tuples(self):
         assert validate_positive((1, 2, 3)) is True
@@ -115,6 +157,36 @@ class TestTypeUnionFixes:
         assert validate_positive([1, 2, 3]) is False
         assert validate_positive(None) is False
         assert validate_positive({"x": 5}) is False
+
+    def test_verify_types_script_behavior(self):
+        """Test the exact behavior from verify_types.py."""
+        from energy_transformer.spec.library import validate_positive
+
+        assert validate_positive(5)
+        assert validate_positive(5.5)
+        assert validate_positive((2, 3))
+        assert not validate_positive(-1)
+
+        test_cases = [
+            (5, True),
+            (5.5, True),
+            ((2, 3), True),
+            ((1, -1), False),
+            (-1, False),
+            ("5", False),
+            (None, False),
+        ]
+
+        for value, expected in test_cases:
+            try:
+                result = validate_positive(value)
+                assert result == expected, (
+                    f"validate_positive({value!r}) returned {result}, expected {expected}"
+                )
+            except TypeError:
+                pytest.fail(
+                    f"validate_positive({value!r}) raised TypeError - type union fix failed!"
+                )
 
     def test_validate_probability(self):
         assert validate_probability(0.0) is True
@@ -136,12 +208,15 @@ class TestChoiceValidation:
     """Test that choice validation includes type checking."""
 
     def test_choices_with_consistent_types(self):
-        from energy_transformer.spec.primitives import param, Spec
         from dataclasses import dataclass
+
+        from energy_transformer.spec.primitives import Spec, param
 
         @dataclass(frozen=True)
         class TestSpec(Spec):
-            mode: str = param(default="auto", choices=["auto", "manual", "hybrid"])
+            mode: str = param(
+                default="auto", choices=["auto", "manual", "hybrid"]
+            )
             size: int = param(default=1, choices=[1, 2, 4, 8])
 
         spec = TestSpec(mode="manual", size=4)
@@ -149,9 +224,10 @@ class TestChoiceValidation:
         assert spec.size == 4
 
     def test_choices_with_mixed_types_warns(self, caplog):
-        from energy_transformer.spec.primitives import param, Spec
-        from dataclasses import dataclass
         import logging
+        from dataclasses import dataclass
+
+        from energy_transformer.spec.primitives import Spec, param
 
         logging.basicConfig(level=logging.WARNING)
 
@@ -162,8 +238,12 @@ class TestChoiceValidation:
         BadSpec(value=None)
 
     def test_choices_type_mismatch_error(self):
-        from energy_transformer.spec.primitives import param, Spec, ValidationError
         from dataclasses import dataclass
+
+        from energy_transformer.spec.primitives import (
+            Spec,
+            param,
+        )
 
         @dataclass(frozen=True)
         class TestSpec(Spec):
@@ -179,7 +259,9 @@ class TestIntegration:
     def test_complex_formula_with_validation(self):
         from energy_transformer.spec.primitives import Context, Dimension
 
-        ctx = Context(dimensions={"embed_dim": 768, "num_heads": 12, "mlp_ratio": 4})
+        ctx = Context(
+            dimensions={"embed_dim": 768, "num_heads": 12, "mlp_ratio": 4}
+        )
 
         dim1 = Dimension("head_dim", formula="embed_dim / num_heads")
         assert dim1.resolve(ctx) == 64
