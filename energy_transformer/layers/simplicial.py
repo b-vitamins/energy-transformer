@@ -25,9 +25,7 @@ except ImportError:
 
 from .base import BaseHopfieldNetwork
 
-__all__: Final = (
-    "SimplicialHopfieldNetwork",
-)
+__all__: Final = ("SimplicialHopfieldNetwork",)
 
 
 class SimplexValidator:
@@ -199,11 +197,14 @@ class SimplexBudgetManager:
             if not candidates:
                 continue
 
-            while allowance >= cost_per_simplex and candidates:
-                simplex = candidates.pop()
-                consumed.append(list(simplex))
-                allowance -= cost_per_simplex
-                remaining -= cost_per_simplex
+            max_take = min(len(candidates), allowance // cost_per_simplex)
+            if max_take <= 0:
+                continue
+
+            consumed.extend(candidates[-max_take:])
+            del candidates[-max_take:]
+            used = max_take * cost_per_simplex
+            remaining -= used
 
         return consumed, remaining
 
@@ -307,13 +308,24 @@ class RandomSimplexGenerator(SimplexGenerator):
             if simplex_size - 1 not in dim_weights:
                 continue
 
-            all_combinations = list(
-                combinations(range(num_vertices), simplex_size)
-            )
-            if len(all_combinations) > MAX_CANDIDATES:
-                all_combinations = self.rng.sample(all_combinations, MAX_CANDIDATES)
-            self.rng.shuffle(all_combinations)
-            candidates[simplex_size] = all_combinations
+            count = math.comb(num_vertices, simplex_size)
+            if count <= MAX_CANDIDATES:
+                combos = list(combinations(range(num_vertices), simplex_size))
+            else:
+                # Reservoir sampling avoids materialising all combinations
+                reservoir: list[tuple[int, ...]] = []
+                it = combinations(range(num_vertices), simplex_size)
+                for i, c in enumerate(it):
+                    if i < MAX_CANDIDATES:
+                        reservoir.append(c)
+                    else:
+                        j = self.rng.randint(0, i)
+                        if j < MAX_CANDIDATES:
+                            reservoir[j] = c
+                combos = reservoir
+
+            self.rng.shuffle(combos)
+            candidates[simplex_size] = combos
 
         return candidates
 
@@ -717,8 +729,6 @@ class SimplicialHopfieldNetwork(BaseHopfieldNetwork):
 
         list_of_logits: list[Tensor] = []
         for _m, idx in self.simps_by_size.items():
-            if idx.device != u.device:
-                idx = idx.to(u.device, non_blocking=True)
             # Vectorised gather-and-product (memory-frugal)
             prod = self._simplex_product(u, idx)  # (..., k, sₘ)
             list_of_logits.append(prod)
