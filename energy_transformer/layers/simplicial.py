@@ -7,7 +7,7 @@ import random
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from collections.abc import Sequence
-from itertools import combinations
+from itertools import combinations, islice
 from typing import Final
 
 import torch
@@ -96,10 +96,11 @@ class SimplexValidator:
                 f"Vertex indices must be non-negative; got {canonical}"
             )
 
+
+        if len(canonical) != len(set(canonical)):
+            raise ValueError(f"Simplex {simplex} has duplicate vertices.")
+
         canonical.sort()
-        for a, b in zip(canonical, canonical[1:]):
-            if a == b:
-                raise ValueError(f"Simplex {simplex} has duplicate vertices.")
 
         return canonical
 
@@ -121,7 +122,7 @@ class SimplexBudgetManager:
         int
             Number of edges within the simplex, computed as C(m, 2).
         """
-        return math.comb(m, 2)
+        return m * (m - 1) // 2
 
     @staticmethod
     def normalize_dimension_weights(
@@ -194,23 +195,19 @@ class SimplexBudgetManager:
 
         for dim, weight in dim_weights.items():
             simplex_size = dim + 1
-            allowance = min(int(budget * weight), remaining)
-            cost_per_simplex = cost_cache.get(
-                simplex_size, SimplexBudgetManager.edge_units(simplex_size)
-            )
-
             candidates = candidates_by_size.get(simplex_size)
             if not candidates:
                 continue
 
-            max_take = min(len(candidates), allowance // cost_per_simplex)
-            if max_take <= 0:
-                continue
-
-            consumed.extend(candidates[-max_take:])
-            del candidates[-max_take:]
-            used = max_take * cost_per_simplex
-            remaining -= used
+            allowance = min(int(budget * weight), remaining)
+            cost = cost_cache.get(simplex_size, SimplexBudgetManager.edge_units(simplex_size))
+            max_take = min(len(candidates), allowance // cost)
+            if max_take:
+                consumed.extend(candidates[-max_take:])
+                del candidates[-max_take:]
+                remaining -= max_take * cost
+            if remaining < 1:
+                break
 
         return consumed, remaining
 
@@ -319,15 +316,12 @@ class RandomSimplexGenerator(SimplexGenerator):
             if count <= MAX_CANDIDATES:
                 combos = list(combinations(vertices, simplex_size))
             else:
-                reservoir: list[tuple[int, ...]] = []
                 it = combinations(vertices, simplex_size)
-                for i, c in enumerate(it):
-                    if i < MAX_CANDIDATES:
-                        reservoir.append(c)
-                    else:
-                        j = self.rng.randint(0, i)
-                        if j < MAX_CANDIDATES:
-                            reservoir[j] = c
+                reservoir = list(islice(it, MAX_CANDIDATES))
+                for i, c in enumerate(it, MAX_CANDIDATES):
+                    j = self.rng.randint(0, i)
+                    if j < MAX_CANDIDATES:
+                        reservoir[j] = c
                 combos = reservoir
 
             self.rng.shuffle(combos)
