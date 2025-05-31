@@ -84,24 +84,23 @@ class SimplexValidator:
     @staticmethod
     def _canonicalize_simplex(simplex: Sequence[int]) -> list[int]:
         """Convert a simplex to canonical form (sorted list of unique integers)."""
-        canonical = []
-        for v in simplex:
-            try:
-                v_int = int(v)
-            except (ValueError, TypeError) as err:
-                raise TypeError(
-                    f"Vertex indices must be integers; got {type(v).__name__}"
-                ) from err
-            if v_int < 0:
-                raise ValueError(
-                    f"Vertex indices must be non-negative; got {v_int}"
-                )
-            canonical.append(v_int)
+        try:
+            canonical = [int(v) for v in simplex]
+        except (ValueError, TypeError) as err:  # pragma: no cover - defensive
+            raise TypeError(
+                "Vertex indices must be integers"
+            ) from err
 
-        if len(set(canonical)) != len(canonical):
-            raise ValueError(f"Simplex {simplex} has duplicate vertices.")
+        if any(v < 0 for v in canonical):
+            raise ValueError(
+                f"Vertex indices must be non-negative; got {canonical}"
+            )
 
         canonical.sort()
+        for a, b in zip(canonical, canonical[1:]):
+            if a == b:
+                raise ValueError(f"Simplex {simplex} has duplicate vertices.")
+
         return canonical
 
 
@@ -188,10 +187,17 @@ class SimplexBudgetManager:
         consumed: list[list[int]] = []
         remaining = budget
 
+        cost_cache = {
+            size: SimplexBudgetManager.edge_units(size)
+            for size in candidates_by_size
+        }
+
         for dim, weight in dim_weights.items():
             simplex_size = dim + 1
             allowance = min(int(budget * weight), remaining)
-            cost_per_simplex = SimplexBudgetManager.edge_units(simplex_size)
+            cost_per_simplex = cost_cache.get(
+                simplex_size, SimplexBudgetManager.edge_units(simplex_size)
+            )
 
             candidates = candidates_by_size.get(simplex_size)
             if not candidates:
@@ -304,17 +310,17 @@ class RandomSimplexGenerator(SimplexGenerator):
         candidates: dict[int, list[tuple[int, ...]]] = {}
 
         MAX_CANDIDATES = 1000
+        vertices = list(range(num_vertices))
         for simplex_size in range(2, max_dim + 2):
             if simplex_size - 1 not in dim_weights:
                 continue
 
             count = math.comb(num_vertices, simplex_size)
             if count <= MAX_CANDIDATES:
-                combos = list(combinations(range(num_vertices), simplex_size))
+                combos = list(combinations(vertices, simplex_size))
             else:
-                # Reservoir sampling avoids materialising all combinations
                 reservoir: list[tuple[int, ...]] = []
-                it = combinations(range(num_vertices), simplex_size)
+                it = combinations(vertices, simplex_size)
                 for i, c in enumerate(it):
                     if i < MAX_CANDIDATES:
                         reservoir.append(c)
@@ -419,18 +425,12 @@ class TopologyAwareSimplexGenerator(SimplexGenerator):
         k = self._determine_k_neighbors(num_vertices)
         tree = cKDTree(self.coordinates)
         _, indices = tree.query(self.coordinates, k=min(k + 1, num_vertices))
-
-        edges = []
-        edges_set = set()
-
-        for i, neighbors in enumerate(indices):
-            for j in neighbors[1:]:  # Skip self
-                edge = tuple(sorted([i, j]))
-                if edge not in edges_set:
-                    edges_set.add(edge)
-                    edges.append(list(edge))
-
-        return edges
+        pairs = [
+            tuple(sorted((i, j)))
+            for i, neighbors in enumerate(indices)
+            for j in neighbors[1:]
+        ]
+        return [list(t) for t in dict.fromkeys(pairs)]
 
     def _add_delaunay_simplices(
         self, simplices: list[list[int]], max_dim: int
@@ -460,16 +460,8 @@ class TopologyAwareSimplexGenerator(SimplexGenerator):
     @staticmethod
     def _remove_duplicates(simplices: list[list[int]]) -> list[list[int]]:
         """Remove duplicate simplices while preserving order."""
-        seen = set()
-        unique = []
-
-        for simplex in simplices:
-            key = tuple(simplex)
-            if key not in seen:
-                seen.add(key)
-                unique.append(simplex)
-
-        return unique
+        ordered = dict.fromkeys(tuple(s) for s in simplices)
+        return [list(t) for t in ordered]
 
 
 class SimplexFactory:
