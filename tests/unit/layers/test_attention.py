@@ -146,3 +146,22 @@ def test_attention_mask_broadcast() -> None:
     expanded_mask = mask.expand(1, 2, 3, 3)
     expected = _manual_energy(g, attn.w_k, attn.w_q, attn_mask=expanded_mask)
     assert torch.allclose(energy, expected, atol=1e-6)
+
+
+def test_attention_large_sequence_matches_manual() -> None:
+    torch.manual_seed(0)
+    n = 513
+    in_dim = 2
+    num_heads = 1
+    head_dim = 2
+    attn = MultiHeadEnergyAttention(
+        in_dim=in_dim,
+        num_heads=num_heads,
+        head_dim=head_dim,
+        beta=1.0,
+        bias=False,
+    )
+    g = torch.randn(1, n, in_dim)
+    energy = attn(g)
+    expected = _manual_energy(g, attn.w_k, attn.w_q)
+    assert torch.allclose(energy, expected, atol=1e-6)
