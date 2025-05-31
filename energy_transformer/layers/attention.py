@@ -219,17 +219,37 @@ class MultiHeadEnergyAttention(BaseEnergyAttention):
             for start in range(0, seq_len, block_size):
                 end = min(start + block_size, seq_len)
                 q_block = q[..., start:end, :]  # (..., H, B, Y)
-                a_block = torch.matmul(k, q_block.transpose(-1, -2))  # (..., H, N, B)
 
-                if not include_diag:
-                    idx = torch.arange(start, end, device=g.device)
-                    a_block[..., idx, idx - start] = float("-inf")
+                # Incrementally compute logsumexp over keys to avoid the
+                # N×B intermediate matrix. This dramatically reduces memory
+                # consumption for long sequences while keeping computations
+                # fully vectorized within each block.
+                lse_block = torch.full(
+                    (*g.shape[:-2], self.num_heads, end - start),
+                    float("-inf"),
+                    dtype=g.dtype,
+                    device=g.device,
+                )
+                for k_start in range(0, seq_len, block_size):
+                    k_end = min(k_start + block_size, seq_len)
+                    k_chunk = k[..., k_start:k_end, :]  # (..., H, M, Y)
+                    scores = torch.matmul(
+                        k_chunk, q_block.transpose(-1, -2)
+                    )  # (..., H, M, B)
 
-                if attn_mask is not None:
-                    a_block = a_block + attn_mask[..., :, :, start:end]
+                    if not include_diag:
+                        r_idx = torch.arange(k_start, k_end, device=g.device)
+                        c_idx = torch.arange(start, end, device=g.device)
+                        diag_mask = r_idx[:, None] == c_idx[None, :]
+                        scores = scores.masked_fill(diag_mask, float("-inf"))
 
-                βa_block = self.β * a_block
-                lse_block = torch.logsumexp(βa_block, dim=-2)
+                    if attn_mask is not None:
+                        scores = scores + attn_mask[..., :, k_start:k_end, start:end]
+
+                    βscores = self.β * scores
+                    lse_chunk = torch.logsumexp(βscores, dim=-2)
+                    lse_block = torch.logaddexp(lse_block, lse_chunk)
+
                 lse_parts.append(lse_block)
 
             lse = torch.cat(lse_parts, dim=-1)
