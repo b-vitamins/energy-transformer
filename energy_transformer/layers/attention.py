@@ -220,16 +220,17 @@ class MultiHeadEnergyAttention(BaseEnergyAttention):
                 end = min(start + block_size, seq_len)
                 q_block = q[..., start:end, :]  # (..., H, B, Y)
 
-                # Incrementally compute logsumexp over keys to avoid the
-                # N×B intermediate matrix. This dramatically reduces memory
-                # consumption for long sequences while keeping computations
-                # fully vectorized within each block.
-                lse_block = torch.full(
+                # Incrementally compute logsumexp over keys without materialising
+                # large N×B matrices. We stream over key chunks while maintaining
+                # running maxima and exponential sums for numerical stability.
+                max_block = torch.full(
                     (*g.shape[:-2], self.num_heads, end - start),
                     float("-inf"),
                     dtype=g.dtype,
                     device=g.device,
                 )
+                sum_exp = torch.zeros_like(max_block)
+
                 for k_start in range(0, seq_len, block_size):
                     k_end = min(k_start + block_size, seq_len)
                     k_chunk = k[..., k_start:k_end, :]  # (..., H, M, Y)
@@ -240,16 +241,25 @@ class MultiHeadEnergyAttention(BaseEnergyAttention):
                     if not include_diag:
                         r_idx = torch.arange(k_start, k_end, device=g.device)
                         c_idx = torch.arange(start, end, device=g.device)
-                        diag_mask = r_idx[:, None] == c_idx[None, :]
+                        diag_mask = r_idx[:, None] == c_idx
                         scores = scores.masked_fill(diag_mask, float("-inf"))
 
                     if attn_mask is not None:
                         scores = scores + attn_mask[..., :, k_start:k_end, start:end]
 
                     βscores = self.β * scores
-                    lse_chunk = torch.logsumexp(βscores, dim=-2)
-                    lse_block = torch.logaddexp(lse_block, lse_chunk)
+                    chunk_max = βscores.max(dim=-2).values
+                    new_max = torch.maximum(max_block, chunk_max)
+                    sum_exp = (
+                        sum_exp * torch.exp(max_block - new_max)
+                        + torch.sum(
+                            torch.exp(βscores - new_max.unsqueeze(-2)),
+                            dim=-2,
+                        )
+                    )
+                    max_block = new_max
 
+                lse_block = torch.log(sum_exp) + max_block
                 lse_parts.append(lse_block)
 
             lse = torch.cat(lse_parts, dim=-1)
