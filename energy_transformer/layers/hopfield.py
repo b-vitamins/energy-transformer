@@ -12,8 +12,8 @@ from .base import BaseHopfieldNetwork
 
 def _default_energy(h: Tensor) -> Tensor:
     """Efficient default energy function used when none is provided."""
-    clamped = h.clamp_min(0)
-    return -0.5 * (clamped * clamped).sum()
+    relu = torch.relu(h)
+    return -0.5 * relu.square().sum()
 
 
 class HopfieldNetwork(BaseHopfieldNetwork):
@@ -106,13 +106,24 @@ class HopfieldNetwork(BaseHopfieldNetwork):
         Tensor
             Scalar energy value representing the total Hopfield energy
         """
+        # Mixed precision support - cast weights to match input dtype
+        weight = (
+            self.ξ.to(g.dtype)
+            if g.dtype in {torch.float16, torch.bfloat16}
+            else self.ξ
+        )
+
         # Hidden activations: h_{μB} = ∑_{j=1}^{D} ξ_{μj} g_{jB}
-        h = F.linear(g, self.ξ)  # shape: [..., N, K]
+        h = F.linear(g, weight)  # shape: [..., N, K]
 
         # Energy: E^HN = -∑_{B=1}^{N} ∑_{μ=1}^{K} G(h_{μB})
-        e_hn = self.energy_fn(h)  # scalar
+        if self.energy_fn is _default_energy:
+            h.clamp_min_(0)
+            h.square_()
+            e_hn = -0.5 * h.sum()
+        else:
+            e_hn = self.energy_fn(h)
 
-        # Ensure the energy function returns a scalar
         assert e_hn.ndim == 0, "Energy function must return a scalar tensor"
 
         return e_hn
