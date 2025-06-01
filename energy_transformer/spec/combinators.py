@@ -477,7 +477,7 @@ class Graph(Spec):
                     spec=self,
                     suggestion=f"Remove cyclic dependency in path: {' -> '.join(cycle_path)}",
                 )
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             raise ValidationError(
                 f"Graph validation failed: {e}",
                 spec=self,

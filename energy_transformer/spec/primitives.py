@@ -523,11 +523,11 @@ class ValidationError(ValueError):
 def param(
     default: Any = REQUIRED,  # noqa: ANN401
     *,
-    default_factory: Callable[[], Any] | None = None,  # noqa: ANN401
-    validator: Callable[[Any], bool] | None = None,  # noqa: ANN401
+    default_factory: Callable[[], Any] | None = None,
+    validator: Callable[[Any], bool] | None = None,
     description: str | None = None,
     dimension: bool = False,
-    choices: list[Any] | None = None,  # noqa: ANN401
+    choices: list[Any] | None = None,
 ) -> Any:  # noqa: ANN401
     """Define a specification parameter with validation and metadata.
 
@@ -683,7 +683,7 @@ class Spec(ABC, metaclass=SpecMeta):
         """Validate parameters after initialization."""
         self._validate_all_fields()
 
-    def _validate_all_fields(self) -> None:  # noqa: C901
+    def _validate_all_fields(self) -> None:
         """Validate all fields using metadata and type hints."""
         hints = get_type_hints(self.__class__)
 

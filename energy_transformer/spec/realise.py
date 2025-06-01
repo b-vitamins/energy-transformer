@@ -182,7 +182,7 @@ class ModuleCache:
         self._hit_count = 0
         self._miss_count = 0
 
-    def _make_key(self, spec: Spec, context: Context) -> tuple[Any, ...]:  # noqa: C901, PLR0911
+    def _make_key(self, spec: Spec, context: Context) -> tuple[Any, ...]:  # noqa: C901
         """Create cache key from spec and context.
 
         This implementation performs deep sorting of nested structures and
@@ -536,7 +536,7 @@ class Realiser:
             module = self._realise_impl(spec)
             _config.cache.put(spec, self.context, module)
             return module
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             if not isinstance(e, RealisationError):
                 raise RealisationError(
                     f"Realisation failed: {type(e).__name__}: {e}",
@@ -628,7 +628,7 @@ class Realiser:
         if realiser_fn := SpecMeta.get_realiser(spec.__class__):
             try:
                 return realiser_fn(spec, self.context)
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 raise RealisationError(
                     f"Realiser failed for {spec.__class__.__name__}",
                     spec=spec,
@@ -692,7 +692,7 @@ class Realiser:
                     e,
                 )
             return None
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             if _config.warnings:
                 logger.exception(
                     "Unexpected error importing %s: %s: %s",
@@ -730,7 +730,7 @@ class Realiser:
                     class_name,
                     kwargs,
                 )
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             if _config.warnings:
                 logger.exception(
                     "Failed to extract kwargs from %s: %s: %s",
@@ -769,7 +769,7 @@ class Realiser:
                     list(kwargs.keys()),
                 )
             return None
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             if _config.warnings:
                 logger.exception(
                     "Failed to instantiate %s: %s: %s",
@@ -901,7 +901,7 @@ class Realiser:
                     child_realiser.context.metadata["loop_iteration"] = i
                     body = child_realiser.realise(spec.body)
                     bodies.append(body)
-                except Exception as e:  # noqa: BLE001
+                except Exception as e:
                     if isinstance(e, RealisationError):
                         e.suggestion = (
                             f"Failed at loop iteration {i + 1}/{times}\n{e.suggestion}"
@@ -920,7 +920,7 @@ class Realiser:
         finally:
             try:
                 _config.cache.enabled = original_cache_enabled
-            except Exception as restore_error:  # noqa: BLE001 pragma: no cover - defensive
+            except Exception as restore_error:
                 import logging
 
                 logger = logging.getLogger(__name__)
