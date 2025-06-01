@@ -106,7 +106,7 @@ class MultiHeadEnergyAttention(BaseEnergyAttention):
             self.register_parameter("b_k", None)
             self.register_parameter("b_q", None)
 
-        # beta – same default as the original ET implementation
+        # beta - same default as the original ET implementation
         self.beta = beta if beta is not None else 1.0 / math.sqrt(head_dim)
 
         # Store initialization std for reset_parameters
@@ -189,7 +189,7 @@ class MultiHeadEnergyAttention(BaseEnergyAttention):
 
         # Aₕᴮᶜ = ∑ₐ Kₐₕᴮ·Qₐₕᶜ,     A ∈ ℝᴴˣᴺˣᴺ
         a = torch.einsum("...nhy,...mhy->...hnm", k, q)  # shape: [..., H, N, N]
-        # TODO: avoid full N×N materialization
+        # TODO: avoid full N x N materialization
 
         # Mask diagonal (self-token) entries if requested
         if not include_diag:

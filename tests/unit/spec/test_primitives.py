@@ -27,18 +27,18 @@ from energy_transformer.spec.primitives import (
 class ExampleSpec(Spec):
     """Test specification with dimension requirements."""
 
-    size: int = param(
+    size: int = param(  # noqa: RUF009
         default=REQUIRED,
         validator=lambda x: x > 0,
         description="Size must be positive",
     )
-    ratio: float = param(
+    ratio: float = param(  # noqa: RUF009
         default=1.0,
         validator=lambda x: 0 < x <= 1,
         description="Ratio between 0 and 1",
     )
-    mode: str = param(default="auto", choices=["auto", "manual", "hybrid"])
-    hidden_dim: Dimension = param(
+    mode: str = param(default="auto", choices=["auto", "manual", "hybrid"])  # noqa: RUF009
+    hidden_dim: Dimension = param(  # noqa: RUF009
         default_factory=lambda: Dimension(
             "hidden_dim",
             formula="embed_dim * 4",
@@ -146,7 +146,7 @@ class TestParam:
     def test_required_param(self):
         @dataclass(frozen=True)
         class RequiredSpec(Spec):
-            value: int = param(default=REQUIRED)
+            value: int = param(default=REQUIRED)  # noqa: RUF009
 
         with pytest.raises(TypeError, match="missing 1 required"):
             RequiredSpec()
@@ -154,7 +154,7 @@ class TestParam:
     def test_validator(self):
         @dataclass(frozen=True)
         class ValidatedSpec(Spec):
-            value: int = param(validator=lambda x: x > 0)
+            value: int = param(validator=lambda x: x > 0)  # noqa: RUF009
 
         ValidatedSpec(value=1)  # Should pass
 
@@ -164,7 +164,7 @@ class TestParam:
     def test_choices(self):
         @dataclass(frozen=True)
         class ChoiceSpec(Spec):
-            mode: str = param(choices=["a", "b", "c"])
+            mode: str = param(choices=["a", "b", "c"])  # noqa: RUF009
 
         ChoiceSpec(mode="a")  # Should pass
 

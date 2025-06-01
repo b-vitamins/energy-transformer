@@ -58,7 +58,7 @@ from energy_transformer.spec.realise import (
 class SimpleSpec(Spec):
     """Simple spec for testing."""
 
-    size: int = param(default=100)
+    size: int = param(default=100)  # noqa: RUF009
 
 
 @dataclass(frozen=True)
@@ -67,8 +67,8 @@ class SimpleSpec(Spec):
 class LinearSpec(Spec):
     """Linear layer spec."""
 
-    output_dim: int = param(default=256)
-    bias: bool = param(default=True)
+    output_dim: int = param(default=256)  # noqa: RUF009
+    bias: bool = param(default=True)  # noqa: RUF009
 
     def apply_context(self, context: Context) -> Context:
         context = super().apply_context(context)
@@ -80,7 +80,7 @@ class LinearSpec(Spec):
 class FailingSpec(Spec):
     """Spec that always fails realisation."""
 
-    message: str = param(default="Intentional failure")
+    message: str = param(default="Intentional failure")  # noqa: RUF009
 
 
 class TestModuleCache:
@@ -977,7 +977,7 @@ class TestPublicAPI:
         class UniqueTestSpec(Spec):
             """Unique spec for testing registration."""
 
-            size: int = param(default=64)
+            size: int = param(default=64)  # noqa: RUF009
 
         # Clear any potential cached modules
         from energy_transformer.spec.realise import _config
@@ -1187,7 +1187,7 @@ class TestAutoImport:
         # Create spec that matches import pattern
         @dataclass(frozen=True)
         class TestLayerSpec(Spec):
-            size: int = param(default=10)
+            size: int = param(default=10)  # noqa: RUF009
 
         # Would need to modify realiser to test properly
         # This is more of an integration test
@@ -1200,7 +1200,7 @@ class TestAutoImport:
         class UnregisteredSpec(Spec):
             """Spec with no realiser."""
 
-            value: int = param(default=42)
+            value: int = param(default=42)  # noqa: RUF009
 
         # Ensure it's not registered
         SpecMeta._realisers.pop(UnregisteredSpec, None)

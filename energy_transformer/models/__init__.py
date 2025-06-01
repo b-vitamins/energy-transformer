@@ -20,7 +20,7 @@ The total energy combines attention and memory components:
 
 where tokens are iteratively refined via gradient descent:
 
-    x_{t+1} = x_t - α * ∇E_total(x_t)
+    x_{t+1} = x_t - alpha * ∇E_total(x_t)
 
 Example
 -------

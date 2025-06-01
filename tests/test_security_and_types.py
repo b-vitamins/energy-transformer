@@ -214,11 +214,11 @@ class TestChoiceValidation:
 
         @dataclass(frozen=True)
         class TestSpec(Spec):
-            mode: str = param(
+            mode: str = param(  # noqa: RUF009
                 default="auto",
                 choices=["auto", "manual", "hybrid"],
             )
-            size: int = param(default=1, choices=[1, 2, 4, 8])
+            size: int = param(default=1, choices=[1, 2, 4, 8])  # noqa: RUF009
 
         spec = TestSpec(mode="manual", size=4)
         assert spec.mode == "manual"
@@ -235,7 +235,7 @@ class TestChoiceValidation:
 
         @dataclass(frozen=True)
         class BadSpec(Spec):
-            value: str | None = param(default="a", choices=["a", "b", None])
+            value: str | None = param(default="a", choices=["a", "b", None])  # noqa: RUF009
 
         BadSpec(value=None)
 
@@ -249,7 +249,7 @@ class TestChoiceValidation:
 
         @dataclass(frozen=True)
         class TestSpec(Spec):
-            size: int = param(choices=[1, 2, 4, 8])
+            size: int = param(choices=[1, 2, 4, 8])  # noqa: RUF009
 
         with pytest.raises(ValidationError):
             TestSpec(size="2")

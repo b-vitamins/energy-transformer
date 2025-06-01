@@ -24,21 +24,21 @@ class LayerNorm(BaseLayerNorm):
     Each token is represented by a vector x ∈ ℝᴰ.
     ET block operations use a layer-normalized token representation:
 
-    gᵢ = γ·(xᵢ - x̄)/√(1/D·∑ⱼ(xⱼ - x̄)² + ε) + δᵢ
+    gᵢ = gamma·(xᵢ - x̄)/√(1/D·∑ⱼ(xⱼ - x̄)² + ε) + deltaᵢ
 
     where x̄ = 1/D·∑ₖ₌₁ᴰ xₖ
 
-    The scalar γ > 0 and vector elements δᵢ are learnable parameters.
+    The scalar gamma > 0 and vector elements deltaᵢ are learnable parameters.
     ε is a small regularization constant.
 
     This operation can be defined as a partial derivative
     of the Lagrangian (energy) function:
 
-    L = D·γ·√(1/D·∑ⱼ(xⱼ - x̄)² + ε) + ∑ⱼδⱼ·xⱼ
+    L = D·gamma·√(1/D·∑ⱼ(xⱼ - x̄)² + ε) + ∑ⱼdeltaⱼ·xⱼ
 
     such that gᵢ = ∂L/∂xᵢ
 
-    The positivity constraint on γ ensures that L is bounded below,
+    The positivity constraint on gamma ensures that L is bounded below,
     which is essential for a valid energy-based interpretation where
     probability distributions proportional to e^(-L) must be normalizable.
     """
@@ -128,7 +128,7 @@ class LayerNorm(BaseLayerNorm):
         # xᵢ - x̄
         x_c = x - x_mean  # shape: [..., D]
 
-        # gᵢ = γ·(xᵢ - x̄)/√(1/D·∑ⱼ(xⱼ - x̄)² + ε) + δᵢ
+        # gᵢ = gamma·(xᵢ - x̄)/√(1/D·∑ⱼ(xⱼ - x̄)² + ε) + deltaᵢ
         g = gamma * x_c / torch.sqrt(var + self.eps) + delta  # shape: [..., D]
 
         # Convert back to original dtype if necessary
@@ -185,7 +185,7 @@ class LayerNorm(BaseLayerNorm):
 
         Notes
         -----
-        Computes: L = D·γ·√(1/D·∑ⱼ(xⱼ - x̄)² + ε) + ∑ⱼδⱼ·xⱼ
+        Computes: L = D·gamma·√(1/D·∑ⱼ(xⱼ - x̄)² + ε) + ∑ⱼdeltaⱼ·xⱼ
 
         This is the energy function whose partial derivative gives
         the layer normalization operation: gᵢ = ∂L/∂xᵢ
@@ -209,10 +209,10 @@ class LayerNorm(BaseLayerNorm):
             keepdim=False,
         )  # shape: [...]
 
-        # First term: D·γ·√(1/D·∑ⱼ(xⱼ - x̄)² + ε)
+        # First term: D·gamma·√(1/D·∑ⱼ(xⱼ - x̄)² + ε)
         energy_norm = self.in_dim * gamma * torch.sqrt(var + self.eps)
 
-        # Second term: ∑ⱼδⱼ·xⱼ
+        # Second term: ∑ⱼdeltaⱼ·xⱼ
         energy_bias = torch.sum(delta * x, dim=-1)  # shape: [...]
 
         # Total Lagrangian

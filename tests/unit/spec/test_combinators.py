@@ -44,7 +44,7 @@ from energy_transformer.spec.primitives import (
 class MockSpec(Spec):
     """Simple mock spec for testing."""
 
-    value: int = param(default=1)
+    value: int = param(default=1)  # noqa: RUF009
 
 
 @dataclass(frozen=True)
@@ -52,7 +52,7 @@ class MockSpec(Spec):
 class MockProviderSpec(Spec):
     """Mock spec that provides dimensions."""
 
-    output_dim: int = param(default=100)
+    output_dim: int = param(default=100)  # noqa: RUF009
 
     def apply_context(self, context: Context) -> Context:
         context = super().apply_context(context)
@@ -66,14 +66,14 @@ class MockProviderSpec(Spec):
 class MockRequirerSpec(Spec):
     """Mock spec that requires dimensions."""
 
-    multiplier: int = param(default=2)
+    multiplier: int = param(default=2)  # noqa: RUF009
 
 
 @dataclass(frozen=True)
 class MockTransformSpec(Spec):
     """Mock spec for transformations."""
 
-    transform: str = param(default="identity")
+    transform: str = param(default="identity")  # noqa: RUF009
 
 
 class TestSequential:

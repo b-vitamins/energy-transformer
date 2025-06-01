@@ -555,12 +555,12 @@ def param(
     --------
     >>> @dataclass(frozen=True)
     ... class MySpec(Spec):
-    ...     size: int = param(
+    ...     size: int = param(  # noqa: RUF009
     ...         validator=lambda x: x > 0,
     ...         description="Size must be positive"
     ...     )
-    ...     mode: str = param(default="auto", choices=["auto", "manual"])
-    ...     items: list = param(default_factory=list)
+    ...     mode: str = param(default="auto", choices=["auto", "manual"])  # noqa: RUF009
+    ...     items: list = param(default_factory=list)  # noqa: RUF009
     """
     metadata = {
         "validator": validator,
@@ -580,8 +580,8 @@ def param(
 class SpecMeta(ABCMeta):
     """Metaclass for automatic spec registration and validation setup."""
 
-    _registry: dict[str, type[Spec]] = {}
-    _realisers: dict[type[Spec], ModuleFactory] = {}
+    _registry: ClassVar[dict[str, type[Spec]]] = {}
+    _realisers: ClassVar[dict[type[Spec], ModuleFactory]] = {}
 
     def __new__(
         cls: type[SpecMeta],

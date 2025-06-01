@@ -98,6 +98,7 @@ select = [
     "PTH",
     "ERA",
     "PL",
+    "RUF",
 ]
 ignore = [
     "E203",

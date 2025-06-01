@@ -35,14 +35,14 @@ from energy_transformer.spec.realise import (
 class SimpleSpec(Spec):
     """Simple spec for testing."""
 
-    value: int = param(default=1)
+    value: int = param(default=1)  # noqa: RUF009
 
 
 @dataclass(frozen=True)
 class DeepSpec(Spec):
     """Spec that creates deep nesting."""
 
-    depth: int = param(default=10)
+    depth: int = param(default=10)  # noqa: RUF009
 
     def children(self) -> list[Spec]:
         if self.depth > 0:
@@ -96,7 +96,7 @@ class TestRecursionDepth:
     def test_circular_dependency_detection(self):
         @dataclass(frozen=True)
         class CircularSpec(Spec):
-            name: str = param()
+            name: str = param()  # noqa: RUF009
 
             def children(self) -> list[Spec]:
                 if self.name == "A":
@@ -157,7 +157,7 @@ class TestCacheStateRestoration:
 
         @dataclass(frozen=True)
         class FailingSpec(Spec):
-            fail_on_iteration: int = param(default=2)
+            fail_on_iteration: int = param(default=2)  # noqa: RUF009
 
         attempt_count = 0
 
@@ -192,7 +192,7 @@ class TestCacheStateRestoration:
 
         @dataclass(frozen=True)
         class OuterSpec(Spec):
-            inner: Spec = param()
+            inner: Spec = param()  # noqa: RUF009
 
             def children(self) -> list[Spec]:
                 return [self.inner]
@@ -351,7 +351,7 @@ class TestCacheKeyGeneration:
 
         @dataclass(frozen=True)
         class ComplexSpec(Spec):
-            data: dict = param(default_factory=dict)
+            data: dict = param(default_factory=dict)  # noqa: RUF009
 
         spec = ComplexSpec(
             data={
@@ -517,7 +517,7 @@ class TestRealisationErrorContext:
     def test_error_context_preserved(self):
         @dataclass(frozen=True)
         class FailSpec(Spec):
-            message: str = param(default="Test failure")
+            message: str = param(default="Test failure")  # noqa: RUF009
 
         @register(FailSpec)
         def realise_fail(spec, _context):
@@ -536,7 +536,7 @@ class TestRealisationErrorContext:
     def test_nested_error_context(self):
         @dataclass(frozen=True)
         class Level1Spec(Spec):
-            child: Spec = param()
+            child: Spec = param()  # noqa: RUF009
 
             def children(self) -> list[Spec]:
                 return [self.child]
