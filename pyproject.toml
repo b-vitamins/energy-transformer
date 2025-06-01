@@ -39,6 +39,7 @@ mypy = "1.13.0"
 ruff = "0.9.3"
 types-PyYAML = "6.0.12.20240311"
 PyYAML = "6.0.1"
+mutmut = "2.4.4"
 
 [tool.poetry.group.examples]
 optional = true
@@ -222,3 +223,12 @@ exclude_lines = [
     "pass",
     "except ImportError:",
 ]
+[tool.mutmut]
+paths_to_mutate = "energy_transformer/"
+backup = false
+runner = "python -m pytest -x -q --tb=no"
+tests_dir = "tests/"
+dict_synonyms = "Struct,NamedStruct"
+cache_only = false
+simple_number_mutations = true
+no_backup = true
