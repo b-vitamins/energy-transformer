@@ -49,6 +49,9 @@ MAX_DIM: int = 65536
 MAX_MULTIPLIER: float = 8.0
 MAX_COMPLEX_DIM: int = 3
 MAX_STEPS: int = 50
+DEFAULT_EPS: float = 1e-5
+DEFAULT_INIT_STD: float = 0.02
+DEFAULT_TEMPERATURE: float = 0.5
 
 
 # Utility functions
@@ -88,7 +91,7 @@ class LayerNormSpec(Spec):
         Epsilon for numerical stability
     """
 
-    eps: float = param(default=1e-5, validator=validate_positive)
+    eps: float = param(default=DEFAULT_EPS, validator=validate_positive)
 
 
 @dataclass(frozen=True)
@@ -181,7 +184,9 @@ class PosEmbedSpec(Spec):
     """
 
     include_cls: bool = param(default=False)
-    init_std: float = param(default=0.02, validator=validate_positive)
+    init_std: float = param(
+        default=DEFAULT_INIT_STD, validator=validate_positive
+    )
 
 
 @dataclass(frozen=True)
@@ -307,7 +312,9 @@ class SHNSpec(Spec):
     multiplier: float = param(
         default=4.0, validator=lambda x: 0 < x <= MAX_MULTIPLIER
     )
-    temperature: float = param(default=0.5, validator=validate_positive)
+    temperature: float = param(
+        default=DEFAULT_TEMPERATURE, validator=validate_positive
+    )
 
     def apply_context(self, context: Context) -> Context:
         """Apply simplicial Hopfield specification to context."""
