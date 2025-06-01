@@ -1,3 +1,4 @@
+# ruff: noqa: TRY003
 """Simplicial Hopfield Network."""
 
 from __future__ import annotations

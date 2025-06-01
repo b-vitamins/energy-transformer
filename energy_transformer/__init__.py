@@ -1,3 +1,4 @@
+# ruff: noqa: TRY003
 """Energy Transformer: Energy-based transformers with associative memory.
 
 This package implements the Energy Transformer architecture, which replaces
@@ -14,6 +15,7 @@ For visualization and optional features:
 >>> from energy_transformer.utils import visualize  # Loads matplotlib
 >>> from energy_transformer.models import viet_base  # Loads full models
 """
+# ruff: noqa: TRY003
 
 from typing import TYPE_CHECKING
 

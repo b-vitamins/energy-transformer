@@ -1,3 +1,4 @@
+# ruff: noqa: TRY003
 """Specification primitives for declarative model construction.
 
 This module provides the foundational specification system for defining
@@ -249,11 +250,11 @@ class Dimension:
             result, pos = self._parse_expression(tokens, 0, variables)
 
             if pos < len(tokens):
-                raise ValueError(
+                raise ValueError(  # noqa: TRY301
                     f"Unexpected token after expression: {tokens[pos][1]}",
                 )
-
-            return result
+        except ValueError:
+            raise
         except Exception as e:  # noqa: BLE001 pragma: no cover - debugging
             import logging
 
@@ -264,6 +265,8 @@ class Dimension:
                 e,
             )
             return None
+        else:
+            return result
 
     def resolve(self, context: Context) -> int | None:
         """Resolve dimension value from context.
