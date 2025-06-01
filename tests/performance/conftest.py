@@ -127,12 +127,19 @@ def assert_performance(
     thresholds: dict[str, float],
 ) -> None:
     """Assert performance meets requirements and check for regressions."""
-    # Access benchmark stats correctly
+    # Access benchmark stats correctly. pytest-benchmark 4 changed
+    # ``benchmark.stats`` to return a :class:`Metadata` object which stores the
+    # actual statistics on ``stats``.
+    stats = (
+        benchmark.stats.stats
+        if hasattr(benchmark.stats, "stats")
+        else benchmark.stats
+    )
     stats_dict = {
-        "mean": benchmark.stats.mean,
-        "stddev": benchmark.stats.stddev,
-        "min": benchmark.stats.min,
-        "max": benchmark.stats.max,
+        "mean": stats.mean,
+        "stddev": stats.stddev,
+        "min": stats.min,
+        "max": stats.max,
     }
     full_name = f"{test_name}_{device_type}"
 

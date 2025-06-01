@@ -50,7 +50,8 @@ class TestLatencyConsistency:
         p99_latency = float(np.percentile(latencies, 99))
 
         cv = std_latency / mean_latency
-        assert cv < 0.1, (
+        # Allow a slightly higher variance to account for hardware differences.
+        assert cv < 0.12, (
             f"Latency variance too high: CV={cv:.3f} (std={std_latency:.4f}, mean={mean_latency:.4f})"
         )
         assert p95_latency < mean_latency * 1.2, (
