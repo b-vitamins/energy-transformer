@@ -258,7 +258,11 @@ class Dimension:
             import logging
 
             logger = logging.getLogger(__name__)
-            logger.debug(f"Formula evaluation failed for {formula!r}: {e}")
+            logger.debug(
+                "Formula evaluation failed for %r: %s",
+                formula,
+                e,
+            )
             return None
 
     def resolve(self, context: Context) -> int | None:
@@ -724,7 +728,9 @@ class Spec(ABC, metaclass=SpecMeta):
 
                         logger = logging.getLogger(__name__)
                         logger.warning(
-                            f"Field {field_info.name} has choices with mixed types: {choice_types}",
+                            "Field %s has choices with mixed types: %s",
+                            field_info.name,
+                            choice_types,
                         )
 
                     value_type = type(value)

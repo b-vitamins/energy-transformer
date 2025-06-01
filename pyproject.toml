@@ -85,6 +85,11 @@ select = [
     "BLE",
     "A",
     "COM",
+    "C4",
+    "DTZ",
+    "ISC",
+    "ICN",
+    "G",
 ]
 ignore = [
     "E203",

@@ -255,7 +255,9 @@ class ModuleCache:
 
                 logger = logging.getLogger(__name__)
                 logger.debug(
-                    f"Cache key generation failed for {type(obj)}: {e}",
+                    "Cache key generation failed for %s: %s",
+                    type(obj),
+                    e,
                 )
                 return (type(obj).__name__, "<error>")
 
@@ -282,7 +284,7 @@ class ModuleCache:
             import logging
 
             logger = logging.getLogger(__name__)
-            logger.warning(f"Cache key generation failed: {e}")
+            logger.warning("Cache key generation failed: %s", e)
             return (id(spec), id(context), "uncacheable")
 
     def get(self, spec: Spec, context: Context) -> nn.Module | None:
@@ -668,7 +670,9 @@ class Realiser:
         if not mapping:
             if _config.warnings:
                 logger.debug(
-                    f"No auto-import mapping for {spec_name}. Available mappings: {list(module_mappings.keys())}",
+                    "No auto-import mapping for %s. Available mappings: %s",
+                    spec_name,
+                    list(module_mappings.keys()),
                 )
             return None
 
@@ -679,14 +683,19 @@ class Realiser:
         except ImportError as e:
             if _config.warnings:
                 logger.warning(
-                    f"Failed to import {module_path} for {spec_name}: {e}. Is the module installed? Try: pip install energy-transformer",
+                    "Failed to import %s for %s: %s. Is the module installed? Try: pip install energy-transformer",
+                    module_path,
+                    spec_name,
+                    e,
                 )
             return None
         except Exception as e:  # noqa: BLE001
             if _config.warnings:
-                logger.error(
-                    f"Unexpected error importing {module_path}: {type(e).__name__}: {e}",
-                    exc_info=True,
+                logger.exception(
+                    "Unexpected error importing %s: %s: %s",
+                    module_path,
+                    type(e).__name__,
+                    e,
                 )
             return None
 
@@ -695,7 +704,10 @@ class Realiser:
         except AttributeError:
             if _config.warnings:
                 logger.warning(
-                    f"Module {module_path} has no attribute {class_name}. Available attributes: {[a for a in dir(module) if not a.startswith('_')]}",
+                    "Module %s has no attribute %s. Available attributes: %s",
+                    module_path,
+                    class_name,
+                    [a for a in dir(module) if not a.startswith("_")],
                 )
             return None
 
@@ -711,13 +723,17 @@ class Realiser:
 
             if _config.warnings and logger.isEnabledFor(logging.DEBUG):
                 logger.debug(
-                    f"Auto-importing {class_name} with kwargs: {kwargs}",
+                    "Auto-importing %s with kwargs: %s",
+                    class_name,
+                    kwargs,
                 )
         except Exception as e:  # noqa: BLE001
             if _config.warnings:
-                logger.error(
-                    f"Failed to extract kwargs from {spec_name}: {type(e).__name__}: {e}",
-                    exc_info=True,
+                logger.exception(
+                    "Failed to extract kwargs from %s: %s: %s",
+                    spec_name,
+                    type(e).__name__,
+                    e,
                 )
             return None
 
@@ -726,13 +742,17 @@ class Realiser:
             if not isinstance(instance, nn.Module):
                 if _config.warnings:
                     logger.warning(
-                        f"Auto-imported {class_name} is not an nn.Module, got {type(instance)}",
+                        "Auto-imported %s is not an nn.Module, got %s",
+                        class_name,
+                        type(instance),
                     )
                 return None
 
             if _config.warnings:
                 logger.info(
-                    f"Successfully auto-imported {spec_name} as {class_name}",
+                    "Successfully auto-imported %s as %s",
+                    spec_name,
+                    class_name,
                 )
 
             return instance
@@ -740,14 +760,19 @@ class Realiser:
             if _config.warnings:
                 error_msg = str(e)
                 logger.warning(
-                    f"Failed to instantiate {class_name}: {error_msg}. Provided kwargs: {list(kwargs.keys())}. This usually means the spec and module have incompatible parameters.",
+                    "Failed to instantiate %s: %s. Provided kwargs: %s. This usually means the spec and module have incompatible parameters.",
+                    class_name,
+                    error_msg,
+                    list(kwargs.keys()),
                 )
             return None
         except Exception as e:  # noqa: BLE001
             if _config.warnings:
-                logger.error(
-                    f"Failed to instantiate {class_name}: {type(e).__name__}: {e}",
-                    exc_info=True,
+                logger.exception(
+                    "Failed to instantiate %s: %s: %s",
+                    class_name,
+                    type(e).__name__,
+                    e,
                 )
             return None
 
@@ -897,7 +922,8 @@ class Realiser:
 
                 logger = logging.getLogger(__name__)
                 logger.critical(
-                    f"Failed to restore cache state: {restore_error}",
+                    "Failed to restore cache state: %s",
+                    restore_error,
                     exc_info=True,
                 )
                 if cache_error:
