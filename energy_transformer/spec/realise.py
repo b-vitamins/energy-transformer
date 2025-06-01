@@ -25,7 +25,15 @@ from collections import defaultdict, deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, Protocol, TypeVar, cast, get_type_hints
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Optional,
+    Protocol,
+    TypeVar,
+    cast,
+    get_type_hints,
+)
 
 import torch
 from torch import nn
@@ -624,6 +632,7 @@ class RealiserConfig:
     metrics_collector: MetricsCollector = field(
         default_factory=MetricsCollector
     )
+    debug_tracer: Optional["DebugTracer"] = None
 
 
 # Thread-local configuration
@@ -736,9 +745,13 @@ class Realiser:
         }
 
     def realise(self, spec: Spec) -> nn.Module:  # noqa: C901
-        """Realise a spec into a PyTorch module with metrics."""
+        """Realise a spec into a PyTorch module with metrics and debugging."""
         config = _get_config()
         metrics = config.metrics_collector
+        tracer = config.debug_tracer
+
+        if tracer:
+            tracer.trace_enter(spec, self._recursion_depth, self.context)
 
         start_time = time.perf_counter() if metrics.enabled else 0
 
@@ -747,6 +760,8 @@ class Realiser:
 
         if cached:
             metrics.record_cache_hit()
+            if tracer:
+                tracer.trace_cache_hit(spec, self._recursion_depth)
             if metrics.enabled:
                 config.metrics_collector._metrics.total_time += (
                     time.perf_counter() - start_time
@@ -760,6 +775,8 @@ class Realiser:
             spec = self._optimize_spec(spec)
             if cached := config.cache.get(spec, self.context):
                 metrics.record_cache_hit()
+                if tracer:
+                    tracer.trace_cache_hit(spec, self._recursion_depth)
                 if metrics.enabled:
                     config.metrics_collector._metrics.total_time += (
                         time.perf_counter() - start_time
@@ -800,8 +817,14 @@ class Realiser:
         try:
             with metrics.spec_timer(spec.__class__.__name__):
                 module = self._realise_impl(spec)
+
             config.cache.put(spec, self.context, module)
+
+            if tracer:
+                tracer.trace_exit(spec, self._recursion_depth, module)
         except Exception as e:
+            if tracer:
+                tracer.trace_error(spec, self._recursion_depth, e)
             if not isinstance(e, RealisationError):
                 raise RealisationError(
                     f"Realisation failed: {type(e).__name__}: {e}",
