@@ -143,8 +143,8 @@ def train_epoch(
     total_loss, correct, total = 0.0, 0, 0
     start_time = time.time()
 
-    for batch_idx, (data, target) in enumerate(loader):
-        data, target = data.to(device), target.to(device)
+    for batch_idx, (data_cpu, target_cpu) in enumerate(loader):
+        data, target = data_cpu.to(device), target_cpu.to(device)
         optimizer.zero_grad()
         device_type, enabled = device.type, scaler is not None
         with torch.amp.autocast(device_type=device_type, enabled=enabled):
@@ -204,8 +204,8 @@ def evaluate(
     total_loss, correct, total = 0.0, 0, 0
 
     with torch.no_grad():
-        for data, target in loader:
-            data, target = data.to(device), target.to(device)
+        for data_cpu, target_cpu in loader:
+            data, target = data_cpu.to(device), target_cpu.to(device)
             output = (
                 model(data, et_kwargs={"detach": True})
                 if is_et

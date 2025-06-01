@@ -61,27 +61,27 @@ class LayerNorm(BaseLayerNorm):
         self.in_dim = in_dim
         self.eps = eps
 
-        # Store log(γ) and apply softplus to ensure γ > 0
-        # Initialize to make softplus(logγ) = 1.0
-        self.logγ = nn.Parameter(
+        # Store log(gamma) and apply softplus to ensure gamma > 0
+        # Initialize to make softplus(log_gamma) = 1.0
+        self.log_gamma = nn.Parameter(
             torch.tensor(math.log(math.exp(1.0) - 1)),
         )  # shape: scalar
 
-        # δ ∈ ℝᴰ
-        self.δ = nn.Parameter(torch.empty(in_dim))  # shape: [D]
+        # delta ∈ ℝᴰ
+        self.delta = nn.Parameter(torch.empty(in_dim))  # shape: [D]
 
         self.reset_parameters()
 
     def reset_parameters(self) -> None:
         """Initialize learnable parameters.
 
-        logγ is initialized to make softplus(logγ) = 1.0,
+        log_gamma is initialized to make softplus(log_gamma) = 1.0,
         maintaining the standard identity initialization.
         """
-        # Initialize logγ to make softplus(logγ) = 1.0
+        # Initialize log_gamma to make softplus(log_gamma) = 1.0
         with torch.no_grad():
-            self.logγ.fill_(math.log(math.exp(1.0) - 1.0))
-        nn.init.zeros_(self.δ)
+            self.log_gamma.fill_(math.log(math.exp(1.0) - 1.0))
+        nn.init.zeros_(self.delta)
 
     def forward(self, x: Tensor) -> Tensor:
         """Apply layer normalization to input tensor.
@@ -107,11 +107,11 @@ class LayerNorm(BaseLayerNorm):
             x = x.to(torch.float32)
             calc_dtype = torch.float32
 
-        # Get positive γ using softplus
-        γ = F.softplus(self.logγ).to(dtype=calc_dtype)
+        # Get positive gamma using softplus
+        gamma = F.softplus(self.log_gamma).to(dtype=calc_dtype)
 
-        # Ensure δ has the correct dtype
-        δ = self.δ.to(dtype=calc_dtype)
+        # Ensure delta has the correct dtype
+        delta = self.delta.to(dtype=calc_dtype)
 
         # x̄ = 1/D·∑ₖ₌₁ᴰ xₖ
         x_mean = x.mean(dim=-1, keepdim=True)  # shape: [..., 1]
@@ -129,7 +129,7 @@ class LayerNorm(BaseLayerNorm):
         x_c = x - x_mean  # shape: [..., D]
 
         # gᵢ = γ·(xᵢ - x̄)/√(1/D·∑ⱼ(xⱼ - x̄)² + ε) + δᵢ
-        g = γ * x_c / torch.sqrt(var + self.eps) + δ  # shape: [..., D]
+        g = gamma * x_c / torch.sqrt(var + self.eps) + delta  # shape: [..., D]
 
         # Convert back to original dtype if necessary
         if calc_dtype != orig_dtype:
@@ -161,12 +161,12 @@ class LayerNorm(BaseLayerNorm):
 
         # Copy the learned parameters
         with torch.no_grad():
-            # γ parameter (weight in standard LayerNorm)
-            γ = F.softplus(self.logγ)
-            standard_ln.weight.fill_(γ.item())
+            # gamma parameter (weight in standard LayerNorm)
+            gamma = F.softplus(self.log_gamma)
+            standard_ln.weight.fill_(gamma.item())
 
-            # δ parameter (bias in standard LayerNorm)
-            standard_ln.bias.copy_(self.δ)
+            # delta parameter (bias in standard LayerNorm)
+            standard_ln.bias.copy_(self.delta)
 
         return standard_ln
 
@@ -197,9 +197,9 @@ class LayerNorm(BaseLayerNorm):
             x = x.to(torch.float32)
             calc_dtype = torch.float32
 
-        # Get positive γ
-        γ = F.softplus(self.logγ).to(dtype=calc_dtype)
-        δ = self.δ.to(dtype=calc_dtype)
+        # Get positive gamma
+        gamma = F.softplus(self.log_gamma).to(dtype=calc_dtype)
+        delta = self.delta.to(dtype=calc_dtype)
 
         # Compute variance term: 1/D·∑ⱼ(xⱼ - x̄)²
         var = torch.var(
@@ -210,10 +210,10 @@ class LayerNorm(BaseLayerNorm):
         )  # shape: [...]
 
         # First term: D·γ·√(1/D·∑ⱼ(xⱼ - x̄)² + ε)
-        energy_norm = self.in_dim * γ * torch.sqrt(var + self.eps)
+        energy_norm = self.in_dim * gamma * torch.sqrt(var + self.eps)
 
         # Second term: ∑ⱼδⱼ·xⱼ
-        energy_bias = torch.sum(δ * x, dim=-1)  # shape: [...]
+        energy_bias = torch.sum(delta * x, dim=-1)  # shape: [...]
 
         # Total Lagrangian
         lagrangian = energy_norm + energy_bias
@@ -228,8 +228,8 @@ class LayerNorm(BaseLayerNorm):
 # Utility function for TorchInductor optimization preparation
 def _functional_layernorm_energy(
     x: Tensor,
-    logγ: Tensor,
-    δ: Tensor,
+    log_gamma: Tensor,
+    delta: Tensor,
     eps: float = 1e-5,
 ) -> Tensor:
     """Functional version of energy LayerNorm for compilation optimization.
@@ -241,9 +241,9 @@ def _functional_layernorm_energy(
     ----------
     x : Tensor
         Input tensor
-    logγ : Tensor
+    log_gamma : Tensor
         Log-gamma parameter (scalar)
-    δ : Tensor
+    delta : Tensor
         Delta bias parameter
     eps : float
         Epsilon for numerical stability
@@ -258,14 +258,14 @@ def _functional_layernorm_energy(
     if orig_dtype in {torch.float16, torch.bfloat16}:
         x = x.to(torch.float32)
 
-    # Get positive γ
-    γ = F.softplus(logγ)
+    # Get positive gamma
+    gamma = F.softplus(log_gamma)
 
     # Compute normalization
     x_mean = x.mean(dim=-1, keepdim=True)
     var = torch.var(x, dim=-1, unbiased=False, keepdim=True)
     x_c = x - x_mean
-    g = γ * x_c / torch.sqrt(var + eps) + δ
+    g = gamma * x_c / torch.sqrt(var + eps) + delta
 
     # Convert back to original dtype
     if orig_dtype in {torch.float16, torch.bfloat16}:

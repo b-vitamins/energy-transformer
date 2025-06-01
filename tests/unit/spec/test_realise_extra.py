@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 import torch
-import torch.nn as nn
+from torch import nn
 
 from energy_transformer.spec import Context, library
 from energy_transformer.spec.realise import GraphModule, ModuleCache

@@ -7,7 +7,7 @@ from contextlib import redirect_stdout
 from io import StringIO
 
 import pytest
-import torch.nn as nn
+from torch import nn
 
 from energy_transformer.spec import Context
 from energy_transformer.spec.debug import (

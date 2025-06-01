@@ -28,6 +28,11 @@ __all__: Final = [
     "SimplicialHopfieldNetwork",
 ]
 
+MIN_SIMPLEX_SIZE: Final = 2
+TRIANGLE_SIZE: Final = 3
+MIN_DELAUNAY_DIM: Final = 2
+MIN_TRIANGLE_VERTICES: Final = 3
+
 
 class SimplexValidator:
     """Validates and canonicalizes simplices, ensuring they meet requirements."""
@@ -65,7 +70,7 @@ class SimplexValidator:
         seen: set[tuple[int, ...]] = set()
 
         for simplex in simplices:
-            if len(simplex) < 2:
+            if len(simplex) < MIN_SIMPLEX_SIZE:
                 raise ValueError(
                     "Simplices of size <2 are not allowed (no self-loops).",
                 )
@@ -377,7 +382,11 @@ class TopologyAwareSimplexGenerator(SimplexGenerator):
             simplices.extend(self._generate_knn_edges(num_vertices))
 
         # Add Delaunay simplices
-        if self.include_delaunay and max_dim >= 2 and num_vertices >= 3:
+        if (
+            self.include_delaunay
+            and max_dim >= MIN_DELAUNAY_DIM
+            and num_vertices >= MIN_TRIANGLE_VERTICES
+        ):
             self._add_delaunay_simplices(simplices, max_dim)
 
         # Remove duplicates
@@ -430,18 +439,24 @@ class TopologyAwareSimplexGenerator(SimplexGenerator):
         try:
             tri = Delaunay(self.coordinates)
 
-            if self.coordinates.shape[1] == 2:  # 2D case
+            if self.coordinates.shape[1] == MIN_DELAUNAY_DIM:  # 2D case
                 for simplex in tri.simplices:
                     simplices.append(sorted(simplex.tolist()))
 
-            elif self.coordinates.shape[1] >= 3 and max_dim >= 3:
+            elif (
+                self.coordinates.shape[1] >= MIN_TRIANGLE_VERTICES
+                and max_dim >= TRIANGLE_SIZE
+            ):
                 for simplex in tri.simplices:
                     # Add full simplex if within max_dim
                     if len(simplex) - 1 <= max_dim:
                         simplices.append(sorted(simplex.tolist()))
 
                     # Add all faces
-                    for r in range(2, min(len(simplex), max_dim + 2)):
+                    for r in range(
+                        MIN_SIMPLEX_SIZE,
+                        min(len(simplex), max_dim + MIN_SIMPLEX_SIZE),
+                    ):
                         for subset in combinations(simplex, r):
                             simplices.append(sorted(subset))
         except QhullError as exc:
@@ -545,7 +560,7 @@ def _autogen_simps(
     RuntimeError
         If generation fails.
     """
-    if num_vertices < 2:
+    if num_vertices < MIN_SIMPLEX_SIZE:
         raise ValueError("Need at least 2 vertices to build a complex.")
     if max_dim < 1:
         raise ValueError("max_dim must be >=1 (edges).")
@@ -730,11 +745,14 @@ class SimplicialHopfieldNetwork(BaseHopfieldNetwork):
         u = u.transpose(-1, -2)
 
         list_of_logits: list[Tensor] = []
-        for _m, idx in self.simps_by_size.items():
-            if idx.device != u.device:
-                idx = idx.to(u.device, non_blocking=True)
+        for _m, idx_tensor in self.simps_by_size.items():
+            idx_device = (
+                idx_tensor.to(u.device, non_blocking=True)
+                if idx_tensor.device != u.device
+                else idx_tensor
+            )
             # Vectorised gather-and-product (memory-frugal)
-            prod = self._simplex_product(u, idx)  # (..., k, sₘ)
+            prod = self._simplex_product(u, idx_device)  # (..., k, sₘ)
             list_of_logits.append(prod)
 
         # Concatenate across all simplex sizes: (..., k, total_simplices)

@@ -9,6 +9,9 @@ from energy_transformer.layers.simplicial import (
     TopologyAwareSimplexGenerator,
 )
 
+EDGE_SIZE = 2
+TRIANGLE_SIZE = 3
+
 # Type alias for clarity
 Coordinate = tuple[int, int]
 Simplex = list[int]
@@ -70,7 +73,7 @@ def visualize_topology(grid_size: int = 8) -> None:
             ax.text(j, i, str(idx), ha="center", va="center", fontsize=6)
 
         # Draw edges
-        edges = [s for s in simplices if len(s) == 2]
+        edges = [s for s in simplices if len(s) == EDGE_SIZE]
         for edge in edges:
             p1, p2 = coords[edge[0]], coords[edge[1]]
             ax.plot(
@@ -82,7 +85,7 @@ def visualize_topology(grid_size: int = 8) -> None:
             )
 
         # Draw triangles
-        triangles = [s for s in simplices if len(s) == 3]
+        triangles = [s for s in simplices if len(s) == TRIANGLE_SIZE]
         for tri in triangles:
             points = [coords[idx] for idx in tri]
             triangle = Polygon(
@@ -120,7 +123,7 @@ def visualize_topology(grid_size: int = 8) -> None:
         ("Topology-aware", topo_simplices),
         ("Random", random_simplices),
     ]:
-        edges = [s for s in simplices if len(s) == 2]
+        edges = [s for s in simplices if len(s) == EDGE_SIZE]
         distances: list[float] = []
 
         for edge in edges:

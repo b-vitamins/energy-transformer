@@ -121,7 +121,7 @@ def test_attention_default_beta_matches_manual() -> None:
         beta=None,
         bias=False,
     )
-    assert attn.β == pytest.approx(1.0 / math.sqrt(head_dim))
+    assert attn.beta == pytest.approx(1.0 / math.sqrt(head_dim))
     with torch.no_grad():
         attn.w_k.zero_()
         attn.w_q.zero_()
@@ -129,7 +129,7 @@ def test_attention_default_beta_matches_manual() -> None:
         attn.w_q[0, :2].copy_(torch.eye(2))
     g = torch.tensor([[1.0, 0.0], [0.0, 1.0]])
     energy = attn(g)
-    expected = _manual_energy(g, attn.w_k, attn.w_q, beta=attn.β)
+    expected = _manual_energy(g, attn.w_k, attn.w_q, beta=attn.beta)
     assert torch.allclose(energy, expected, atol=1e-6)
 
 

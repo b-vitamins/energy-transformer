@@ -1010,17 +1010,19 @@ class Spec(ABC, metaclass=SpecMeta):
 
         # Recursively convert nested specs
         kwargs = {}
-        for key, value in data.items():
-            if isinstance(value, dict) and "_type" in value:
-                value = Spec.from_dict(value)
-            elif isinstance(value, list):
-                value = [
+        for key, val in data.items():
+            if isinstance(val, dict) and "_type" in val:
+                val_converted: Any = Spec.from_dict(val)
+            elif isinstance(val, list):
+                val_converted = [
                     Spec.from_dict(v)
                     if isinstance(v, dict) and "_type" in v
                     else v
-                    for v in value
+                    for v in val
                 ]
-            kwargs[key] = value
+            else:
+                val_converted = val
+            kwargs[key] = val_converted
 
         return spec_cls(**kwargs)
 
