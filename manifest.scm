@@ -16,6 +16,7 @@
    "python-pytest"
    "python-pytest-cov"
    "python-pytest-xdist"
+   "python-mutmut"
    "python-mypy"
    "python-ruff"
    "python-types-pyyaml"
