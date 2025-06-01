@@ -19,6 +19,7 @@ import importlib
 import json
 import logging
 import threading
+import time
 import warnings
 from collections import defaultdict, deque
 from collections.abc import Callable
@@ -40,6 +41,7 @@ from .combinators import (
     Sequential,
     Switch,
 )
+from .metrics import MetricsCollector
 from .primitives import Context, Spec, SpecMeta, ValidationError
 
 
@@ -619,6 +621,7 @@ class RealiserConfig:
     constants: RealisationConstants = field(
         default_factory=RealisationConstants
     )
+    metrics_collector: MetricsCollector = field(default_factory=MetricsCollector)
 
 
 # Thread-local configuration
@@ -646,6 +649,7 @@ def configure_realisation(**kwargs: Any) -> None:
         - optimizations: bool for spec optimizations
         - max_recursion: int for recursion limit
         - constants: RealisationConstants for all constants
+        - enable_metrics: bool to enable metrics collection
 
     Raises
     ------
@@ -653,6 +657,9 @@ def configure_realisation(**kwargs: Any) -> None:
         If unknown configuration option
     """
     config = _get_config()
+
+    if "enable_metrics" in kwargs:
+        config.metrics_collector.enabled = kwargs.pop("enable_metrics")
 
     # Handle constants specially
     if "constants" in kwargs:
@@ -726,21 +733,31 @@ class Realiser:
             Lambda: lambda spec: LambdaModule(spec.fn, spec.name),
         }
 
-    def realise(self, spec: Spec) -> nn.Module:
-        """Realise a spec into a PyTorch module.
-
-        The realisation process performs caching, optimization, recursion
-        depth tracking and circular dependency detection.
-        """
-        # Cache lookup first to avoid unnecessary recursion
+    def realise(self, spec: Spec) -> nn.Module:  # noqa: C901
+        """Realise a spec into a PyTorch module with metrics."""
         config = _get_config()
-        if cached := config.cache.get(spec, self.context):
+        metrics = config.metrics_collector
+
+        start_time = time.perf_counter() if metrics.enabled else 0
+
+        with metrics.timer("cache_lookup_time"):
+            cached = config.cache.get(spec, self.context)
+
+        if cached:
+            metrics.record_cache_hit()
+            if metrics.enabled:
+                config.metrics_collector._metrics.total_time += time.perf_counter() - start_time
             return cached
 
-        # Apply optimizations and re-check cache
+        metrics.record_cache_miss()
+        metrics.update_max_depth(self._recursion_depth)
+
         if config.optimizations:
             spec = self._optimize_spec(spec)
             if cached := config.cache.get(spec, self.context):
+                metrics.record_cache_hit()
+                if metrics.enabled:
+                    config.metrics_collector._metrics.total_time += time.perf_counter() - start_time
                 return cached
 
         # Enforce recursion limit only for uncached specs
@@ -775,7 +792,8 @@ class Realiser:
         self._recursion_depth += 1
 
         try:
-            module = self._realise_impl(spec)
+            with metrics.spec_timer(spec.__class__.__name__):
+                module = self._realise_impl(spec)
             config.cache.put(spec, self.context, module)
         except Exception as e:
             if not isinstance(e, RealisationError):
@@ -797,6 +815,10 @@ class Realiser:
         finally:
             self._realiser_stack.pop()
             self._recursion_depth -= 1
+            if metrics.enabled:
+                config.metrics_collector._metrics.total_time += (
+                    time.perf_counter() - start_time
+                )
 
     def _get_stack_summary(self) -> str:
         """Get a brief summary of the current realisation stack."""
