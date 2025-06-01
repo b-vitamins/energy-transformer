@@ -20,7 +20,7 @@ def load_latest_results() -> tuple[list[dict[str, Any]], Path]:
         sys.exit(1)
 
     latest = max(DATA_HOME.glob("ablation_*"), key=lambda p: p.stat().st_mtime)
-    with open(latest / "results.json") as f:
+    with (latest / "results.json").open() as f:
         return json.load(f), latest
 
 

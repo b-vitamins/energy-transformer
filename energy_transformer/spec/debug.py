@@ -15,7 +15,7 @@ def debug_realisation(
     log_level: int = logging.DEBUG,
     break_on_error: bool = False,
     trace_cache: bool = True,
-    trace_imports: bool = True,
+    _trace_imports: bool = True,
 ) -> Iterator[None]:
     """Context manager for debugging realisation issues."""
     logger = logging.getLogger("energy_transformer.spec")

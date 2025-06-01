@@ -190,13 +190,13 @@ def test_autogen_simps_uses_generator(monkeypatch: pytest.MonkeyPatch) -> None:
         def __init__(self):
             pass
 
-        def generate(self, *a, **k):
+        def generate(self, *_args, **_kwargs):
             return [[0, 1]]
 
     monkeypatch.setattr(
         simplicial.SimplexFactory,
         "create_generator",
-        lambda *a, **k: DummyGen(),
+        lambda *_args, **_kwargs: DummyGen(),
     )
     simplices = simplicial._autogen_simps(2, max_dim=1, twiddle=1.0)
     assert simplices == [[0, 1]]
@@ -206,7 +206,7 @@ def test_autogen_simps_uses_generator(monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(ValueError, match="max_dim"):
         simplicial._autogen_simps(3, max_dim=0, twiddle=1.0)
 
-    monkeypatch.setattr(DummyGen, "generate", lambda *a, **k: [])
+    monkeypatch.setattr(DummyGen, "generate", lambda *_args, **_kwargs: [])
     with pytest.raises(RuntimeError, match="Auto-generation"):
         simplicial._autogen_simps(3, max_dim=1, twiddle=1.0)
 
@@ -239,7 +239,11 @@ def test_shn_forward_raises_for_few_tokens() -> None:
 
 
 def test_shn_autogeneration(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(simplicial, "_autogen_simps", lambda *a, **k: [[0, 1]])
+    monkeypatch.setattr(
+        simplicial,
+        "_autogen_simps",
+        lambda *_args, **_kwargs: [[0, 1]],
+    )
     net = simplicial.SimplicialHopfieldNetwork(
         in_dim=1,
         simplices=None,

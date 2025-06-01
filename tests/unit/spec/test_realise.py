@@ -299,7 +299,7 @@ class TestConfiguration:
             def can_realise(self, spec):
                 return isinstance(spec, SimpleSpec)
 
-            def realise(self, spec, context):
+            def realise(self, spec, _context):
                 return nn.Linear(spec.size, spec.size)
 
         plugin = TestPlugin()
@@ -324,7 +324,7 @@ class TestRealiserPlugins:
             def can_realise(self, spec):
                 return spec.size > 50 if isinstance(spec, SimpleSpec) else False
 
-            def realise(self, spec, context):
+            def realise(self, spec, _context):
                 return nn.Linear(spec.size, spec.size)
 
         plugin = WorkingPlugin()
@@ -346,7 +346,7 @@ class TestRealiserPlugins:
             def can_realise(self, spec):
                 return isinstance(spec, SimpleSpec) and spec.size == 42
 
-            def realise(self, spec, context):
+            def realise(self, spec, _context):
                 # Return a custom module
                 return nn.Conv2d(3, spec.size, 3)
 
@@ -375,7 +375,7 @@ class TestRealiserPlugins:
             def can_realise(self, spec):
                 return isinstance(spec, SimpleSpec)
 
-            def realise(self, spec, context):
+            def realise(self, _spec, _context):
                 raise RuntimeError("Plugin is broken")
 
         configure_realisation(plugins=[BrokenPlugin()], warnings=True)
@@ -402,14 +402,14 @@ class TestRealiserPlugins:
             def can_realise(self, spec):
                 return isinstance(spec, SimpleSpec) and spec.size < 50
 
-            def realise(self, spec, context):
+            def realise(self, spec, _context):
                 return nn.Linear(spec.size, 10)
 
         class PluginB:
             def can_realise(self, spec):
                 return isinstance(spec, SimpleSpec) and spec.size >= 50
 
-            def realise(self, spec, context):
+            def realise(self, spec, _context):
                 return nn.Linear(spec.size, 20)
 
         configure_realisation(plugins=[PluginA(), PluginB()])
@@ -435,7 +435,7 @@ class TestRealiser:
         """Test basic spec realisation."""
 
         @register(SimpleSpec)
-        def realise_simple(spec, context):
+        def realise_simple(spec, _context):
             return nn.Linear(spec.size, spec.size)
 
         try:
@@ -484,7 +484,7 @@ class TestRealiser:
         """Test exceptions in realisers are wrapped."""
 
         @register(FailingSpec)
-        def realise_failing(spec, context):
+        def realise_failing(spec, _context):
             raise RuntimeError(spec.message)
 
         try:
@@ -505,7 +505,7 @@ class TestRealiser:
         """Test realising nested specs."""
 
         @register(SimpleSpec)
-        def realise_simple(spec, context):
+        def realise_simple(spec, _context):
             return nn.Linear(10, spec.size)
 
         @register(LinearSpec)
@@ -538,7 +538,7 @@ class TestRealiser:
         configure_realisation(max_recursion=5, optimizations=False)
 
         @register(SimpleSpec)
-        def realise_simple(spec, context):
+        def realise_simple(spec, _context):
             return nn.Linear(spec.size, spec.size)
 
         try:
@@ -563,7 +563,7 @@ class TestRealiser:
         call_count = 0
 
         @register(SimpleSpec)
-        def realise_simple(spec, context):
+        def realise_simple(spec, _context):
             nonlocal call_count
             call_count += 1
             return nn.Linear(spec.size, spec.size)
@@ -626,8 +626,8 @@ class TestBuiltinRealisers:
         """Test Sequential realisation."""
 
         @register(SimpleSpec)
-        def realise_simple(spec, context):
-            context.set_dim("test", spec.size)
+        def realise_simple(spec, _context):
+            _context.set_dim("test", spec.size)
             return nn.Linear(10, spec.size)
 
         try:
@@ -650,7 +650,7 @@ class TestBuiltinRealisers:
         """Test Parallel realisation."""
 
         @register(SimpleSpec)
-        def realise_simple(spec, context):
+        def realise_simple(spec, _context):
             return nn.Linear(10, spec.size)
 
         try:
@@ -673,7 +673,7 @@ class TestBuiltinRealisers:
         """Test Conditional realisation."""
 
         @register(SimpleSpec)
-        def realise_simple(spec, context):
+        def realise_simple(spec, _context):
             return nn.Linear(spec.size, spec.size)
 
         try:
@@ -698,7 +698,7 @@ class TestBuiltinRealisers:
             assert module2.in_features == 20  # False branch
 
             # No else branch
-            cond_spec2 = cond(lambda ctx: False, SimpleSpec(size=30))
+            cond_spec2 = cond(lambda _ctx: False, SimpleSpec(size=30))
 
             realiser3 = Realiser()
             module3 = realiser3.realise(cond_spec2)
@@ -711,7 +711,7 @@ class TestBuiltinRealisers:
         """Test Residual realisation."""
 
         @register(SimpleSpec)
-        def realise_simple(spec, context):
+        def realise_simple(spec, _context):
             return nn.Linear(spec.size, spec.size)
 
         try:
@@ -731,7 +731,7 @@ class TestBuiltinRealisers:
         """Test Loop realisation."""
 
         @register(SimpleSpec)
-        def realise_simple(spec, context):
+        def realise_simple(spec, _context):
             return nn.Linear(spec.size, spec.size)
 
         try:
@@ -774,7 +774,7 @@ class TestBuiltinRealisers:
         """Test Switch realisation."""
 
         @register(SimpleSpec)
-        def realise_simple(spec, context):
+        def realise_simple(spec, _context):
             return nn.Linear(spec.size, spec.size)
 
         try:
@@ -806,7 +806,7 @@ class TestBuiltinRealisers:
         """Test Graph realisation."""
 
         @register(SimpleSpec)
-        def realise_simple(spec, context):
+        def realise_simple(spec, _context):
             return nn.Linear(spec.size, spec.size)
 
         try:
@@ -889,7 +889,7 @@ class TestOptimization:
             spec = seq(Identity(), SimpleSpec(), Identity())
 
             @register(SimpleSpec)
-            def realise_simple(spec, context):
+            def realise_simple(_spec, _context):
                 return nn.Identity()
 
             try:
@@ -985,7 +985,7 @@ class TestPublicAPI:
         _config.cache.clear()
 
         @register(UniqueTestSpec)
-        def my_realiser(spec, context):
+        def my_realiser(spec, _context):
             return nn.Conv2d(3, spec.size, 3)
 
         try:
@@ -1005,7 +1005,7 @@ class TestPublicAPI:
         @register_typed
         def realise_simple_spec(
             spec: SimpleSpec,
-            context: Context,
+            _context: Context,
         ) -> nn.Module:
             return nn.Linear(spec.size, spec.size)
 

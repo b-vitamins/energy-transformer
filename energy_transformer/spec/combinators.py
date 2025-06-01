@@ -1066,6 +1066,7 @@ def transformer_block(
         attn_block = seq(residual(attention), Identity())
         mlp_block = seq(residual(mlp), Identity())
 
+    _ = drop_path
     return seq(attn_block, mlp_block)
 
 
@@ -1115,6 +1116,7 @@ def mixture_of_experts(
     Graph
         Mixture of experts specification
     """
+    _ = top_k
     g = graph()
 
     # Add router

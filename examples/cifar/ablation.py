@@ -325,7 +325,7 @@ def main() -> None:
     results_dir = DATA_HOME / "experiments" / f"ablation_{timestamp}"
     results_dir.mkdir(parents=True)
 
-    with open(results_dir / "results.json", "w") as f:
+    with (results_dir / "results.json").open("w") as f:
         json.dump(results, f, indent=2)
 
     # Summary

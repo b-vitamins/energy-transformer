@@ -7,15 +7,15 @@ This module verifies:
 4. Graph cycle detection works early
 """
 
-import os
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 
 import pytest
 import torch
 from torch import nn
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from energy_transformer.spec import (
     Context,
@@ -199,7 +199,7 @@ class TestGraphExecution:
             value: int = param()
 
         @register_typed
-        def _realise_add(spec: AddSpec, context: Context) -> nn.Module:
+        def _realise_add(spec: AddSpec, _context: Context) -> nn.Module:
             return AddModule(spec.value)
 
         g = graph()
@@ -453,8 +453,8 @@ class TestIntegration:
 
         @register_typed
         def _realise_identity(
-            spec: IdentitySpec,
-            context: Context,
+            _spec: IdentitySpec,
+            _context: Context,
         ) -> nn.Module:
             return nn.Identity()
 

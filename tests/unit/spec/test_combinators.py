@@ -348,7 +348,7 @@ class TestConditional:
 
     def test_conditional_without_else(self):
         """Test conditional without else branch."""
-        c = cond(lambda ctx: False, MockSpec(1))
+        c = cond(lambda _ctx: False, MockSpec(1))
 
         assert c.if_false is None
         assert len(c.children()) == 1
@@ -403,7 +403,7 @@ class TestConditional:
 
     def test_children_includes_both_branches(self):
         """Test children includes both branches when present."""
-        c = cond(lambda ctx: True, MockSpec(1), MockSpec(2))
+        c = cond(lambda _ctx: True, MockSpec(1), MockSpec(2))
         children = c.children()
         assert len(children) == 2
         assert children[0].value == 1

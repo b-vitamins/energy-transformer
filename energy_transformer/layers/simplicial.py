@@ -221,7 +221,7 @@ class SimplexGenerator(ABC):
         num_vertices: int,
         max_dim: int,
         budget: float,
-        dim_weights: dict[int, float] | None = None,
+        _dim_weights: dict[int, float] | None = None,
     ) -> list[list[int]]:
         """Generate simplices according to the specific strategy.
 
@@ -251,7 +251,7 @@ class RandomSimplexGenerator(SimplexGenerator):
         num_vertices: int,
         max_dim: int,
         budget: float,
-        dim_weights: dict[int, float] | None = None,
+        _dim_weights: dict[int, float] | None = None,
     ) -> list[list[int]]:
         """Generate random simplices within budget.
 
@@ -260,7 +260,7 @@ class RandomSimplexGenerator(SimplexGenerator):
         """
         # Normalize weights
         dim_weights = SimplexBudgetManager.normalize_dimension_weights(
-            dim_weights,
+            _dim_weights,
             max_dim,
         )
 
@@ -356,7 +356,7 @@ class TopologyAwareSimplexGenerator(SimplexGenerator):
         num_vertices: int,
         max_dim: int,
         budget: float,
-        dim_weights: dict[int, float] | None = None,
+        _dim_weights: dict[int, float] | None = None,
     ) -> list[list[int]]:
         """Generate topology-aware simplices.
 

@@ -6,6 +6,7 @@ import logging
 from contextlib import redirect_stdout
 from io import StringIO
 
+import pytest
 import torch.nn as nn
 
 from energy_transformer.spec import Context
@@ -32,7 +33,8 @@ def test_debug_realisation_traces_cache(caplog) -> None:
     assert any("Cache PUT" in rec.message for rec in caplog.records)
 
 
-def test_inspect_and_clear_cache_output(capsys) -> None:
+@pytest.mark.usefixtures("capsys")
+def test_inspect_and_clear_cache_output() -> None:
     """``inspect_cache_stats`` prints stats and ``clear_cache`` empties cache."""
     cache = ModuleCache()
     _config.cache = cache

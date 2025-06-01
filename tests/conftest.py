@@ -80,6 +80,7 @@ def pytest_configure(config):
 
 def pytest_collection_modifyitems(config, items):
     """Modify test collection to skip GPU tests when appropriate."""
+    _ = config  # Unused hook argument
     if not torch.cuda.is_available():
         skip_gpu = pytest.mark.skip(reason="GPU not available")
         for item in items:

@@ -862,7 +862,7 @@ class Spec(ABC, metaclass=SpecMeta):
                         issues.append(str(e))
         return issues
 
-    def _validate_children(self, context: Context) -> list[str]:
+    def _validate_children(self, _context: Context) -> list[str]:
         """Validate child specifications.
 
         DEPRECATED: This method is now integrated into validate() for proper

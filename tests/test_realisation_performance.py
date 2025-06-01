@@ -21,7 +21,7 @@ class BenchmarkSpec(Spec):
 
 
 @register(BenchmarkSpec)
-def realise_benchmark(spec, context):
+def realise_benchmark(spec, _context):
     from torch import nn
 
     # Create a more complex module to make caching worthwhile
