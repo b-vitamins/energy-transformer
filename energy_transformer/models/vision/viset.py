@@ -253,6 +253,7 @@ def viset_tiny(**kwargs: Any) -> VisionSimplicialEnergyTransformer:
         "hopfield_hidden_dim": 768,  # 4x embed_dim
         "et_steps": 4,
         "et_alpha": 0.125,
+        "in_chans": 3,
         "use_topology": True,
         "simplex_budget": 0.15,
         "simplex_max_dim": 2,
@@ -272,6 +273,7 @@ def viset_small(**kwargs: Any) -> VisionSimplicialEnergyTransformer:
         "hopfield_hidden_dim": 1536,  # 4x embed_dim
         "et_steps": 4,
         "et_alpha": 0.125,
+        "in_chans": 3,
         "use_topology": True,
         "simplex_budget": 0.15,
         "simplex_max_dim": 2,
@@ -291,6 +293,7 @@ def viset_base(**kwargs: Any) -> VisionSimplicialEnergyTransformer:
         "hopfield_hidden_dim": 3072,  # 4x embed_dim
         "et_steps": 4,
         "et_alpha": 0.125,
+        "in_chans": 3,
         "use_topology": True,
         "simplex_budget": 0.15,
         "simplex_max_dim": 2,

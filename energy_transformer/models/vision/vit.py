@@ -139,6 +139,12 @@ class VisionTransformer(nn.Module):  # type: ignore[misc]
         """Initialize VisionTransformer."""
         super().__init__()
 
+        # Store key config values for external access
+        self.embed_dim = embed_dim
+        self.num_classes = num_classes
+        self.depth = depth
+        self.img_size = img_size
+
         # Patch embedding
         self.patch_embed = PatchEmbedding(
             img_size=img_size,
@@ -377,6 +383,7 @@ def vit_tiny(**kwargs: Any) -> VisionTransformer:
         "depth": 12,
         "num_heads": 3,
         "mlp_ratio": 4.0,
+        "in_chans": 3,
     }
     config.update(kwargs)
     return VisionTransformer(**config)
@@ -389,6 +396,7 @@ def vit_small(**kwargs: Any) -> VisionTransformer:
         "depth": 12,
         "num_heads": 6,
         "mlp_ratio": 4.0,
+        "in_chans": 3,
     }
     config.update(kwargs)
     return VisionTransformer(**config)
@@ -401,6 +409,7 @@ def vit_base(**kwargs: Any) -> VisionTransformer:
         "depth": 12,
         "num_heads": 12,
         "mlp_ratio": 4.0,
+        "in_chans": 3,
     }
     config.update(kwargs)
     return VisionTransformer(**config)
@@ -413,6 +422,7 @@ def vit_large(**kwargs: Any) -> VisionTransformer:
         "depth": 24,
         "num_heads": 16,
         "mlp_ratio": 4.0,
+        "in_chans": 3,
     }
     config.update(kwargs)
     return VisionTransformer(**config)

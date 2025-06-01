@@ -41,8 +41,6 @@ from energy_transformer.spec.library import (
     TransformerBlockSpec,
 )
 
-pytest.skip("Exhaustive model tests not implemented", allow_module_level=True)
-
 pytestmark = pytest.mark.integration
 
 
