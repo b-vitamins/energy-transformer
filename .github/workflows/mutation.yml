@@ -1,0 +1,204 @@
+name: Mutation Testing
+
+on:
+  pull_request:
+    branches: ["master", "main"]
+    paths:
+      - 'energy_transformer/**/*.py'
+      - 'tests/**/*.py'
+  workflow_dispatch:
+    inputs:
+      target_files:
+        description: 'Specific files to test (space-separated)'
+        required: false
+        default: ''
+      test_category:
+        description: 'Test category to run'
+        required: false
+        type: choice
+        options:
+          - 'all'
+          - 'unit'
+          - 'integration'
+          - 'functional'
+          - 'security'
+          - 'regression'
+        default: 'all'
+      run_all:
+        description: 'Run on all files (very slow)'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  mutation-test:
+    name: Mutation Testing
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: latest
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-mutation-${{ hashFiles('**/poetry.lock') }}
+          restore-keys: |
+            venv-${{ runner.os }}-mutation-
+
+      - name: Install dependencies
+        run: |
+          poetry install --no-interaction --with dev
+
+      - name: Determine files to test
+        id: files
+        run: |
+          if [ "${{ inputs.run_all }}" = "true" ]; then
+            echo "Testing all files (this will take a long time)..."
+            echo "mode=all" >> $GITHUB_OUTPUT
+          elif [ -n "${{ inputs.target_files }}" ]; then
+            echo "Testing specific files: ${{ inputs.target_files }}"
+            echo "mode=specific" >> $GITHUB_OUTPUT
+            echo "files=${{ inputs.target_files }}" >> $GITHUB_OUTPUT
+          else
+            echo "Testing changed files..."
+            echo "mode=changed" >> $GITHUB_OUTPUT
+            BASE_BRANCH=${{ github.event.pull_request.base.ref || 'main' }}
+            CHANGED_FILES=$(git diff --name-only $BASE_BRANCH..HEAD | grep -E "^energy_transformer/.*\.py$" | grep -v __init__.py || true)
+            if [ -z "$CHANGED_FILES" ]; then
+              echo "No Python files changed in energy_transformer/"
+              echo "skip=true" >> $GITHUB_OUTPUT
+            else
+              echo "Changed files:"
+              echo "$CHANGED_FILES"
+              echo "files<<EOF" >> $GITHUB_OUTPUT
+              echo "$CHANGED_FILES" >> $GITHUB_OUTPUT
+              echo "EOF" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Run mutation testing
+        if: steps.files.outputs.skip != 'true'
+        run: |
+          CATEGORY_ARG=""
+          if [ "${{ inputs.test_category }}" != "all" ] && [ -n "${{ inputs.test_category }}" ]; then
+            CATEGORY_ARG="--category ${{ inputs.test_category }}"
+          fi
+          if [ "${{ steps.files.outputs.mode }}" = "all" ]; then
+            poetry run python scripts/run_mutation_tests.py --all --timeout 600 --suggest $CATEGORY_ARG
+          elif [ "${{ steps.files.outputs.mode }}" = "specific" ]; then
+            poetry run python scripts/run_mutation_tests.py --files ${{ steps.files.outputs.files }} --timeout 600 --suggest $CATEGORY_ARG
+          else
+            FILES=$(echo "${{ steps.files.outputs.files }}" | tr '\n' ' ')
+            poetry run python scripts/run_mutation_tests.py --files $FILES --timeout 600 --suggest $CATEGORY_ARG
+          fi
+
+      - name: Generate mutation report
+        if: always() && steps.files.outputs.skip != 'true'
+        run: |
+          poetry run mutmut results > mutation-report.txt || true
+          poetry run mutmut html || true
+          cat > mutation-summary.md << 'EOF'
+          # Mutation Testing Results
+
+          ## Test Categories Used
+          EOF
+          if [ "${{ inputs.test_category }}" = "all" ] || [ -z "${{ inputs.test_category }}" ]; then
+            echo "- ✅ Unit tests" >> mutation-summary.md
+            echo "- ✅ Integration tests" >> mutation-summary.md
+            echo "- ✅ Functional tests" >> mutation-summary.md
+            echo "- ✅ Security tests" >> mutation-summary.md
+            echo "- ✅ Regression tests" >> mutation-summary.md
+          else
+            echo "- ✅ ${{ inputs.test_category }} tests only" >> mutation-summary.md
+          fi
+          echo "" >> mutation-summary.md
+          if [ -f mutation-report.txt ]; then
+            echo "## Summary" >> mutation-summary.md
+            grep -E "(killed|survived|timeout|suspicious)" mutation-report.txt >> mutation-summary.md || true
+            echo "" >> mutation-summary.md
+            SURVIVED=$(grep -o "survived" mutation-report.txt | wc -l || echo "0")
+            TOTAL=$(grep -o -E "(killed|survived|timeout)" mutation-report.txt | wc -l || echo "0")
+            if [ "$SURVIVED" -gt "0" ]; then
+              SURVIVAL_RATE=$((SURVIVED * 100 / TOTAL))
+              echo "⚠️ **$SURVIVED mutants survived ($SURVIVAL_RATE%)!** Your tests may not be catching all bugs." >> mutation-summary.md
+              echo "" >> mutation-summary.md
+              echo "### Next Steps" >> mutation-summary.md
+              echo "1. Run \`mutmut show <id>\` locally to see surviving mutants" >> mutation-summary.md
+              echo "2. Add tests to kill the mutants (see documentation)" >> mutation-summary.md
+              echo "3. Focus on boundary conditions and error cases" >> mutation-summary.md
+            else
+              echo "✅ **All mutants were killed!** Your tests are effectively catching bugs." >> mutation-summary.md
+            fi
+          fi
+          echo "" >> mutation-summary.md
+          echo "### What is Mutation Testing?" >> mutation-summary.md
+          echo "Mutation testing modifies your code in small ways (mutations) and checks if tests fail." >> mutation-summary.md
+          echo "If tests still pass with modified code, it means they might not catch real bugs." >> mutation-summary.md
+          echo "" >> mutation-summary.md
+          echo "📖 [View Mutation Testing Guide](docs/mutation-testing.md)" >> mutation-summary.md
+
+      - name: Upload mutation testing results
+        if: always() && steps.files.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-testing-results
+          path: |
+            mutation-report.txt
+            mutation-summary.md
+            html/
+
+      - name: Comment PR with results
+        if: github.event_name == 'pull_request' && steps.files.outputs.skip != 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const fs = require('fs');
+            let comment = '# Mutation Testing Results\n\nNo mutation report generated.';
+            if (fs.existsSync('mutation-summary.md')) {
+              comment = fs.readFileSync('mutation-summary.md', 'utf8');
+            }
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const botComment = comments.data.find(comment =>
+              comment.user.type === 'Bot' &&
+              comment.body.includes('Mutation Testing Results')
+            );
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: comment
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: comment
+              });
+            }

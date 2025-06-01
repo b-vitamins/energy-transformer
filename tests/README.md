@@ -176,6 +176,14 @@ GitHub Actions workflow runs:
 6. **Mock External Dependencies**: Don't rely on external services or files
 7. **Test Edge Cases**: Include tests for error conditions and boundary values
 8. **Document Complex Tests**: Add docstrings explaining non-obvious test logic
+9. **Run Mutation Testing**: Ensure tests actually catch bugs:
+   ```bash
+   # Test your changes
+   python scripts/run_mutation_tests.py --files path/to/your/file.py
+
+   # View surviving mutants
+   mutmut show 1
+   ```
 
 ## Debugging Tests
 
