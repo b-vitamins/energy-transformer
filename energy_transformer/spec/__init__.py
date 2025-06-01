@@ -38,7 +38,7 @@ Example
 """
 
 from collections.abc import Callable
-from typing import TypeAlias
+from typing import Any, TypeAlias
 
 # Combinators
 from .combinators import (
@@ -130,7 +130,7 @@ _LIBRARY_SPECS = [
 ]
 
 
-def __getattr__(name: str):
+def __getattr__(name: str) -> Any:
     """Lazy load library specifications."""
     if name in _LIBRARY_SPECS:
         from . import library
@@ -214,7 +214,7 @@ SpecLike: TypeAlias = Spec | Sequential | Parallel | Conditional | Residual
 
 # NO GLOBAL CONFIGURATION ON IMPORT!
 # Users must explicitly configure if they want non-defaults
-def initialize_defaults():
+def initialize_defaults() -> None:
     """Initialize default configuration.
 
     This must be called explicitly by users who want default settings.
@@ -280,44 +280,44 @@ def export_patterns() -> dict[str, Callable[..., Spec]]:
     """Return common architectural patterns ready to use."""
     from . import library
 
-    PatchEmbedSpec = library.PatchEmbedSpec
-    CLSTokenSpec = library.CLSTokenSpec
-    PosEmbedSpec = library.PosEmbedSpec
-    ETBlockSpec = library.ETBlockSpec
-    LayerNormSpec = library.LayerNormSpec
-    MHEASpec = library.MHEASpec
-    HNSpec = library.HNSpec
+    patch_embed_spec = library.PatchEmbedSpec
+    cls_token_spec = library.CLSTokenSpec
+    pos_embed_spec = library.PosEmbedSpec
+    et_block_spec = library.ETBlockSpec
+    layer_norm_spec = library.LayerNormSpec
+    mheaspec = library.MHEASpec
+    hnspec = library.HNSpec
 
     return {
         "vit_tiny": lambda **kwargs: seq(
-            PatchEmbedSpec(
+            patch_embed_spec(
                 img_size=224, patch_size=16, embed_dim=192, **kwargs
             ),
-            CLSTokenSpec(),
-            PosEmbedSpec(include_cls=True),
+            cls_token_spec(),
+            pos_embed_spec(include_cls=True),
             loop(
-                ETBlockSpec(
-                    attention=MHEASpec(num_heads=3, head_dim=64),
-                    hopfield=HNSpec(),
+                et_block_spec(
+                    attention=mheaspec(num_heads=3, head_dim=64),
+                    hopfield=hnspec(),
                 ),
                 times=12,
             ),
-            LayerNormSpec(),
+            layer_norm_spec(),
         ),
         "vit_base": lambda **kwargs: seq(
-            PatchEmbedSpec(
+            patch_embed_spec(
                 img_size=224, patch_size=16, embed_dim=768, **kwargs
             ),
-            CLSTokenSpec(),
-            PosEmbedSpec(include_cls=True),
+            cls_token_spec(),
+            pos_embed_spec(include_cls=True),
             loop(
-                ETBlockSpec(
-                    attention=MHEASpec(num_heads=12, head_dim=64),
-                    hopfield=HNSpec(),
+                et_block_spec(
+                    attention=mheaspec(num_heads=12, head_dim=64),
+                    hopfield=hnspec(),
                 ),
                 times=12,
             ),
-            LayerNormSpec(),
+            layer_norm_spec(),
         ),
     }
 

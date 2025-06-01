@@ -150,6 +150,7 @@ class Dimension:
         for match in token_regex.finditer(formula):
             kind = match.lastgroup
             value = match.group()
+            assert kind is not None
             if kind == "WHITESPACE":
                 continue
             elif kind == "INVALID":
@@ -225,15 +226,15 @@ class Dimension:
 
         elif token_type == "LPAREN":
             pos += 1  # Skip '('
-            value, pos = self._parse_expression(tokens, pos, variables)
+            expr_value, pos = self._parse_expression(tokens, pos, variables)
             if pos >= len(tokens) or tokens[pos][0] != "RPAREN":
                 raise ValueError("Missing closing parenthesis")
-            return value, pos + 1  # Skip ')'
+            return expr_value, pos + 1  # Skip ')'
 
         elif token_type == "MINUS":
             pos += 1  # Skip unary minus
-            value, pos = self._parse_factor(tokens, pos, variables)
-            return -value, pos
+            factor_val, pos = self._parse_factor(tokens, pos, variables)
+            return -factor_val, pos
 
         else:
             raise ValueError(f"Unexpected token: {token_value}")

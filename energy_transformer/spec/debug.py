@@ -1,6 +1,7 @@
 """Debug utilities for the realisation system."""
 
 import logging
+from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
 
@@ -13,7 +14,7 @@ def debug_realisation(
     break_on_error: bool = False,
     trace_cache: bool = True,
     trace_imports: bool = True,
-):
+) -> Iterator[None]:
     """Context manager for debugging realisation issues."""
     logger = logging.getLogger("energy_transformer.spec")
     old_level = logger.level
@@ -46,8 +47,8 @@ def debug_realisation(
             logger.debug(f"Cache PUT: {spec.__class__.__name__}")
             original_put(spec, context, module)
 
-        _config.cache.get = traced_get
-        _config.cache.put = traced_put
+        _config.cache.get = traced_get  # type: ignore[method-assign]
+        _config.cache.put = traced_put  # type: ignore[method-assign]
 
     try:
         yield
@@ -63,8 +64,8 @@ def debug_realisation(
         _config.warnings = old_warnings
 
         if trace_cache:
-            _config.cache.get = original_get
-            _config.cache.put = original_put
+            _config.cache.get = original_get  # type: ignore[method-assign]
+            _config.cache.put = original_put  # type: ignore[method-assign]
 
 
 def inspect_cache_stats() -> None:
