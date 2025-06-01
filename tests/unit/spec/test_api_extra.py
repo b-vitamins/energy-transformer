@@ -61,13 +61,12 @@ def test_export_patterns_create_specs() -> None:
 class NeedsFooSpec(Spec):
     """Spec requiring a dimension that will be missing."""
 
-    pass
-
 
 def test_validate_spec_tree_detects_issue() -> None:
     """``validate_spec_tree`` returns issues for invalid trees."""
     issues = et_spec.validate_spec_tree(NeedsFooSpec())
-    assert issues and "foo" in issues[0]
+    assert issues
+    assert "foo" in issues[0]
 
 
 def test_validate_spec_tree_verbose(capsys) -> None:

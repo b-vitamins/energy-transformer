@@ -18,7 +18,8 @@ def test_module_cache_etblock_key() -> None:
         hopfield=library.HNSpec(),
     )
     key = cache._make_key(spec, Context())
-    assert key[0] == "nocache" and key[1] == id(spec)
+    assert key[0] == "nocache"
+    assert key[1] == id(spec)
 
 
 def test_debug_realisation_break_on_error(monkeypatch) -> None:
@@ -30,9 +31,8 @@ def test_debug_realisation_break_on_error(monkeypatch) -> None:
         "pdb.post_mortem",
         lambda: called.setdefault("pdb", True),
     )
-    with pytest.raises(RuntimeError):
-        with debug_realisation(break_on_error=True):
-            raise RuntimeError("boom")
+    with pytest.raises(RuntimeError), debug_realisation(break_on_error=True):
+        raise RuntimeError("boom")
     assert called.get("pdb")
 
 
@@ -75,5 +75,5 @@ def test_apply_edge_transform_variants() -> None:
         gm._apply_edge_transform(t, "sigmoid"),
         torch.sigmoid(t),
     )
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="unknown"):
         gm._apply_edge_transform(t, "unknown")

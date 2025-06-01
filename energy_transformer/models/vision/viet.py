@@ -56,13 +56,16 @@ from typing import Any
 
 from torch import Tensor, nn
 
-from ...layers.attention import MultiHeadEnergyAttention
-from ...layers.embeddings import PatchEmbedding, PositionalEmbedding2D
-from ...layers.heads import ClassificationHead
-from ...layers.hopfield import HopfieldNetwork
-from ...layers.layer_norm import LayerNorm
-from ...layers.tokens import CLSToken
-from ...models.base import EnergyTransformer
+from energy_transformer.layers.attention import MultiHeadEnergyAttention
+from energy_transformer.layers.embeddings import (
+    PatchEmbedding,
+    PositionalEmbedding2D,
+)
+from energy_transformer.layers.heads import ClassificationHead
+from energy_transformer.layers.hopfield import HopfieldNetwork
+from energy_transformer.layers.layer_norm import LayerNorm
+from energy_transformer.layers.tokens import CLSToken
+from energy_transformer.models.base import EnergyTransformer
 
 
 class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]

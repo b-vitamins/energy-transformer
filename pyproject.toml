@@ -90,6 +90,11 @@ select = [
     "ISC",
     "ICN",
     "G",
+    "PIE",
+    "PT",
+    "RET",
+    "SIM",
+    "TID",
 ]
 ignore = [
     "E203",

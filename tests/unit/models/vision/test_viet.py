@@ -83,7 +83,7 @@ def test_process_blocks_with_energy_info() -> None:
 def test_forward_raises_for_wrong_image_size() -> None:
     model = _make_model()
     img = torch.zeros(1, 3, 2, 4)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Input size"):
         model(img)
 
 

@@ -232,8 +232,8 @@ class TestCacheStateRestoration:
             class BadSpec(Spec):
                 pass
 
+            realiser = Realiser()
             with pytest.raises(RuntimeError) as exc_info:
-                realiser = Realiser()
                 realiser._realise_unrolled_independent(
                     loop(BadSpec(), times=1),
                     times=1,
@@ -276,12 +276,14 @@ class TestCacheStateRestoration:
         initial_state = _config.cache.enabled
         assert initial_state
 
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(
+            RealisationError,
+            match="Intentional failure",
+        ):
             realise(
                 loop(FailingSpec(), times=3, unroll=True, share_weights=False),
             )
 
-        assert "Intentional failure" in str(exc_info.value)
         assert _config.cache.enabled == initial_state, (
             "Cache state was not restored!"
         )

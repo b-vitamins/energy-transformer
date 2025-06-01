@@ -247,11 +247,10 @@ class HNSpec(Spec):
         """Validate with proper hidden_dim handling."""
         issues = super().validate(context)
 
-        if self.hidden_dim is None:
-            if context.get_dim("embed_dim") is None:
-                issues.append(
-                    "Cannot compute hidden_dim: embed_dim not available in context",
-                )
+        if self.hidden_dim is None and context.get_dim("embed_dim") is None:
+            issues.append(
+                "Cannot compute hidden_dim: embed_dim not available in context",
+            )
 
         return issues
 
