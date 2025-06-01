@@ -13,39 +13,40 @@ maintainers = [
 ]
 readme = "README.md"
 license = "Apache-2.0"
-repository = "https://github.com/bvitsadze-riseup/energy-transformer"
+repository = "https://github.com/b-vitamins/energy-transformer"
 keywords = ["deep-learning", "transformers", "energy-based-models", "hopfield-networks", "simplicial-complexes"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "License :: OSI Approved :: Apache Software License",
 ]
 
 [tool.poetry.dependencies]
 python = "^3.11"
-torch = "^2.0"
-einops = "^0.6"
-numpy = "^2.2.5"
-scipy = "^1.10"
+torch = "2.7.0"
+einops = "0.8.1"
+numpy = "1.26.2"
+scipy = "1.12.0"
 
 [tool.poetry.group.dev.dependencies]
-pytest = "^7.0"
-pytest-cov = "^4.0"
-pytest-xdist = "^3.0"
-mypy = "^1.10"
-ruff = "^0.4.0"
-types-PyYAML = "^6.0"
-PyYAML = "^6.0"
+pytest = "8.3.3"
+pytest-cov = "6.0.0"
+pytest-xdist = "3.6.1"
+mypy = "1.13.0"
+ruff = "0.9.3"
+types-PyYAML = "6.0.12.20240311"
+PyYAML = "6.0.1"
 
 [tool.poetry.group.examples]
 optional = true
 
 [tool.poetry.group.examples.dependencies]
-torchvision = "^0.20"
-matplotlib = "^3.5"
-pillow = "^9.0"
+torchvision = "0.22.0"
+matplotlib = "3.8.2"
+pillow = "11.1.0"
 
 [build-system]
 requires = ["poetry-core"]
@@ -54,7 +55,19 @@ build-backend = "poetry.core.masonry.api"
 [tool.ruff]
 line-length = 80
 target-version = "py311"
-exclude = [".venv", "build", "dist", "__pycache__"]
+# Explicitly exclude .git and other non-Python directories
+exclude = [
+    ".venv",
+    "build",
+    "dist",
+    "__pycache__",
+    ".git",
+    ".github",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    "*.egg-info",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "N", "D", "C90", "W"]
@@ -73,6 +86,8 @@ max-complexity = 10
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
 
 [tool.mypy]
 python_version = "3.11"
