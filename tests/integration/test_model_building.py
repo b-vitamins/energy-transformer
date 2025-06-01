@@ -45,20 +45,16 @@ class TestCompleteWorkflows:
 
     def test_custom_model_workflow(self):
         """Test building a custom model with mixed components."""
-        from energy_transformer.spec import loop, parallel
+        from energy_transformer.spec import loop
         from energy_transformer.spec.library import (
+            ETBlockSpec,
             HNSpec,
-            LayerNormSpec,
             MHEASpec,
         )
 
-        custom_block = seq(
-            LayerNormSpec(),
-            parallel(
-                MHEASpec(num_heads=8, head_dim=64),
-                HNSpec(multiplier=2),
-                merge="add",
-            ),
+        custom_block = ETBlockSpec(
+            attention=MHEASpec(num_heads=8, head_dim=64),
+            hopfield=HNSpec(multiplier=2),
         )
 
         model_spec = loop(custom_block, times=3)
@@ -79,6 +75,10 @@ class TestCompleteWorkflows:
         model = realise(deep_spec, embed_dim=768)
 
         num_blocks = len(
-            [m for m in model.modules() if "ETBlock" in str(type(m))],
+            [
+                m
+                for m in model.modules()
+                if m.__class__.__name__ == "EnergyTransformer"
+            ],
         )
         assert num_blocks >= 24

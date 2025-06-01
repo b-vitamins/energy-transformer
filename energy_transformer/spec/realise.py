@@ -661,7 +661,7 @@ class Realiser:
         except ImportError as e:
             if config.warnings:
                 logger.warning(
-                    "Failed to import %s for %s: %s. Is the module installed? Try: pip install energy-transformer",
+                    "Failed to import %s for %s: %s. Is the module installed? Try: pip install energy-transformer[all]",
                     module_path,
                     spec_name,
                     e,
@@ -689,14 +689,59 @@ class Realiser:
             return None
 
         try:
-            kwargs = {}
-            for field_name, field_info in spec.__dataclass_fields__.items():
+            spec_any = cast(Any, spec)
+            kwargs: dict[str, Any] = {}
+            for field_name, field_info in spec_any.__dataclass_fields__.items():
                 if field_name.startswith("_"):
                     continue
-                value = getattr(spec, field_name)
+                value = getattr(spec_any, field_name)
                 if callable(field_info.default) or value == field_info.default:
                     continue
                 kwargs[field_name] = value
+
+            # Special handling based on spec type
+            if spec_name == "MHEASpec":
+                if embed_dim := self.context.get_dim("embed_dim"):
+                    kwargs["in_dim"] = embed_dim
+
+            elif spec_name == "HNSpec":
+                if embed_dim := self.context.get_dim("embed_dim"):
+                    kwargs["in_dim"] = embed_dim
+                    if spec_any.hidden_dim is None and hasattr(
+                        spec_any, "multiplier"
+                    ):
+                        kwargs["hidden_dim"] = int(
+                            embed_dim * spec_any.multiplier
+                        )
+                        kwargs.pop("multiplier", None)
+
+            elif spec_name == "SHNSpec":
+                if embed_dim := self.context.get_dim("embed_dim"):
+                    kwargs["in_dim"] = embed_dim
+                    if spec_any.hidden_dim is None and hasattr(
+                        spec_any, "multiplier"
+                    ):
+                        pass
+                if (
+                    "num_vertices" not in kwargs
+                    and spec_any.num_vertices is None
+                    and (
+                        vertices := self.context.get_dim("simplicial_vertices")
+                    )
+                ):
+                    kwargs["num_vertices"] = vertices
+
+            elif spec_name == "LayerNormSpec" and (
+                embed_dim := self.context.get_dim("embed_dim")
+            ):
+                eps = kwargs.pop("eps", 1e-5)
+                return nn.LayerNorm(normalized_shape=embed_dim, eps=eps)
+
+            kwargs = {
+                k: v
+                for k, v in kwargs.items()
+                if v is not None and k not in ["_type", "_version"]
+            }
 
             if config.warnings and logger.isEnabledFor(logging.DEBUG):
                 logger.debug(
@@ -1547,23 +1592,35 @@ from . import library  # noqa: E402
 
 
 @register(library.ETBlockSpec)
-def realise_et_block(
-    _spec: library.ETBlockSpec, _context: Context
-) -> nn.Module:
-    """Realise an :class:`ETBlockSpec` into a dummy ETBlock module."""
+def realise_et_block(spec: library.ETBlockSpec, context: Context) -> nn.Module:
+    """Realise ``ETBlockSpec`` into an :class:`EnergyTransformer`."""
+    from typing import cast
 
-    class ETBlock(nn.Module):
-        def forward(self, x: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
-            return x
+    from energy_transformer.layers.base import (
+        BaseEnergyAttention,
+        BaseHopfieldNetwork,
+        BaseLayerNorm,
+    )
+    from energy_transformer.models import EnergyTransformer
 
-    # Disable cache for this realisation to ensure unique blocks
-    config = _get_config()
-    previous = config.cache.enabled
-    config.cache.enabled = False
-    try:
-        return ETBlock()
-    finally:
-        config.cache.enabled = previous
+    realiser = Realiser(context)
+
+    context = spec.layer_norm.apply_context(context)
+    layer_norm = cast(BaseLayerNorm, realiser.realise(spec.layer_norm))
+
+    context = spec.attention.apply_context(context)
+    attention = cast(BaseEnergyAttention, realiser.realise(spec.attention))
+
+    context = spec.hopfield.apply_context(context)
+    hopfield = cast(BaseHopfieldNetwork, realiser.realise(spec.hopfield))
+
+    return EnergyTransformer(
+        layer_norm=layer_norm,
+        attention=attention,
+        hopfield=hopfield,
+        steps=spec.steps,
+        alpha=spec.alpha,
+    )
 
 
 @register(library.CLSTokenSpec)
@@ -1606,22 +1663,18 @@ def realise_layer_norm(
     spec: library.LayerNormSpec,
     context: Context,
 ) -> nn.Module:
-    """Realise layer normalization with embed dimension."""
+    """Realise layer normalization using custom implementation."""
+    from energy_transformer.layers import LayerNorm
+
     embed_dim = context.get_dim("embed_dim")
-    assert embed_dim is not None
-    return nn.LayerNorm(embed_dim, eps=spec.eps)
+    if embed_dim is None:
+        raise RealisationError(
+            "LayerNormSpec requires 'embed_dim' in context",
+            spec=spec,
+            context=context,
+        )
 
-
-@register(library.MHEASpec)
-def realise_mhea(_spec: library.MHEASpec, _context: Context) -> nn.Module:
-    """Realise multi-head energy attention as identity."""
-    return nn.Identity()
-
-
-@register(library.HNSpec)
-def realise_hn(_spec: library.HNSpec, _context: Context) -> nn.Module:
-    """Realise Hopfield network as identity."""
-    return nn.Identity()
+    return LayerNorm(in_dim=embed_dim, eps=spec.eps)
 
 
 @register(library.ClassificationHeadSpec)
