@@ -26,14 +26,14 @@ pytestmark = pytest.mark.integration
 class SimpleSpec(Spec):
     """Simple spec for testing."""
 
-    value: int = param(default=1)  # noqa: RUF009
+    value: int = param(default=1)
 
 
 @dataclass(frozen=True)
 class DeepSpec(Spec):
     """Spec that creates deep nesting."""
 
-    depth: int = param(default=10)  # noqa: RUF009
+    depth: int = param(default=10)
 
     def children(self) -> list[Spec]:
         if self.depth > 0:
@@ -98,7 +98,7 @@ class TestCacheKeyGeneration:
 
         @dataclass(frozen=True)
         class ComplexSpec(Spec):
-            data: dict = param(default_factory=dict)  # noqa: RUF009
+            data: dict = param(default_factory=dict)
 
         spec = ComplexSpec(
             data={

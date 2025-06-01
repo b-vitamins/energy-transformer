@@ -33,14 +33,14 @@ pytestmark = pytest.mark.regression
 class SimpleSpec(Spec):
     """Simple spec for testing."""
 
-    value: int = param(default=1)  # noqa: RUF009
+    value: int = param(default=1)
 
 
 @dataclass(frozen=True)
 class DeepSpec(Spec):
     """Spec that creates deep nesting."""
 
-    depth: int = param(default=10)  # noqa: RUF009
+    depth: int = param(default=10)
 
     def children(self) -> list[Spec]:
         if self.depth > 0:
@@ -94,7 +94,7 @@ class TestRecursionDepth:
     def test_circular_dependency_detection(self):
         @dataclass(frozen=True)
         class CircularSpec(Spec):
-            name: str = param()  # noqa: RUF009
+            name: str = param()
 
             def children(self) -> list[Spec]:
                 if self.name == "A":

@@ -26,14 +26,14 @@ pytestmark = pytest.mark.regression
 class SimpleSpec(Spec):
     """Simple spec for testing."""
 
-    value: int = param(default=1)  # noqa: RUF009
+    value: int = param(default=1)
 
 
 @dataclass(frozen=True)
 class DeepSpec(Spec):
     """Spec that creates deep nesting."""
 
-    depth: int = param(default=10)  # noqa: RUF009
+    depth: int = param(default=10)
 
     def children(self) -> list[Spec]:
         if self.depth > 0:
@@ -47,7 +47,7 @@ class TestRealisationErrorContext:
     def test_error_context_preserved(self):
         @dataclass(frozen=True)
         class FailSpec(Spec):
-            message: str = param(default="Test failure")  # noqa: RUF009
+            message: str = param(default="Test failure")
 
         @register(FailSpec)
         def realise_fail(spec, _context):
@@ -66,7 +66,7 @@ class TestRealisationErrorContext:
     def test_nested_error_context(self):
         @dataclass(frozen=True)
         class Level1Spec(Spec):
-            child: Spec = param()  # noqa: RUF009
+            child: Spec = param()
 
             def children(self) -> list[Spec]:
                 return [self.child]

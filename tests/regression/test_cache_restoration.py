@@ -33,14 +33,14 @@ pytestmark = pytest.mark.regression
 class SimpleSpec(Spec):
     """Simple spec for testing."""
 
-    value: int = param(default=1)  # noqa: RUF009
+    value: int = param(default=1)
 
 
 @dataclass(frozen=True)
 class DeepSpec(Spec):
     """Spec that creates deep nesting."""
 
-    depth: int = param(default=10)  # noqa: RUF009
+    depth: int = param(default=10)
 
     def children(self) -> list[Spec]:
         if self.depth > 0:
@@ -61,7 +61,7 @@ class TestCacheStateRestoration:
 
         @dataclass(frozen=True)
         class FailingSpec(Spec):
-            fail_on_iteration: int = param(default=2)  # noqa: RUF009
+            fail_on_iteration: int = param(default=2)
 
         attempt_count = 0
 
@@ -96,7 +96,7 @@ class TestCacheStateRestoration:
 
         @dataclass(frozen=True)
         class OuterSpec(Spec):
-            inner: Spec = param()  # noqa: RUF009
+            inner: Spec = param()
 
             def children(self) -> list[Spec]:
                 return [self.inner]

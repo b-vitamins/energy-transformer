@@ -21,7 +21,7 @@ pytestmark = pytest.mark.benchmark
 class BenchmarkSpec(Spec):
     """Simple spec for benchmarking."""
 
-    size: int = param(default=100)  # noqa: RUF009
+    size: int = param(default=100)
 
 
 @register(BenchmarkSpec)

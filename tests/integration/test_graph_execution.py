@@ -37,7 +37,7 @@ pytestmark = pytest.mark.integration
 class ProviderSpec(Spec):
     """Spec that provides a dimension."""
 
-    value: int = param(default=128)  # noqa: RUF009
+    value: int = param(default=128)
 
     def apply_context(self, context: Context) -> Context:
         context = super().apply_context(context)
@@ -50,7 +50,7 @@ class ProviderSpec(Spec):
 class ConsumerSpec(Spec):
     """Spec that requires a dimension."""
 
-    multiplier: int = param(default=2)  # noqa: RUF009
+    multiplier: int = param(default=2)
 
     def validate(self, context: Context) -> list[str]:
         issues = super().validate(context)
@@ -195,7 +195,7 @@ class TestGraphExecution:
 
         @dataclass(frozen=True)
         class AddSpec(Spec):
-            value: int = param()  # noqa: RUF009
+            value: int = param()
 
         @register_typed
         def _realise_add(spec: AddSpec, _context: Context) -> nn.Module:

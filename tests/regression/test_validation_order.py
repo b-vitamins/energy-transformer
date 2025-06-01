@@ -37,7 +37,7 @@ from energy_transformer.spec.realise import GraphModule
 class ProviderSpec(Spec):
     """Spec that provides a dimension."""
 
-    value: int = param(default=128)  # noqa: RUF009
+    value: int = param(default=128)
 
     def apply_context(self, context: Context) -> Context:
         context = super().apply_context(context)
@@ -50,7 +50,7 @@ class ProviderSpec(Spec):
 class ConsumerSpec(Spec):
     """Spec that requires a dimension."""
 
-    multiplier: int = param(default=2)  # noqa: RUF009
+    multiplier: int = param(default=2)
 
     def validate(self, context: Context) -> list[str]:
         issues = super().validate(context)
@@ -196,7 +196,7 @@ class TestGraphExecution:
 
         @dataclass(frozen=True)
         class AddSpec(Spec):
-            value: int = param()  # noqa: RUF009
+            value: int = param()
 
         @register_typed
         def _realise_add(spec: AddSpec, _context: Context) -> nn.Module:
@@ -301,7 +301,7 @@ class TestValidationOrder:
         @dataclass(frozen=True)
         @provides("embed_dim", "test_dim")
         class ParentSpec(Spec):
-            children_list: list[Spec] = param(default_factory=list)  # noqa: RUF009
+            children_list: list[Spec] = param(default_factory=list)
 
             def apply_context(self, context: Context) -> Context:
                 context = super().apply_context(context)
@@ -325,7 +325,7 @@ class TestValidationOrder:
         @provides("computed_dim")
         @requires("base_dim")
         class ComputeSpec(Spec):
-            formula: str = param(default="base_dim * 4")  # noqa: RUF009
+            formula: str = param(default="base_dim * 4")
 
             def apply_context(self, context: Context) -> Context:
                 context = super().apply_context(context)
@@ -367,7 +367,7 @@ class TestParallelMergeValidation:
         @dataclass(frozen=True)
         @provides("embed_dim")
         class DimSpec(Spec):
-            dim: int = param()  # noqa: RUF009
+            dim: int = param()
 
             def apply_context(self, context: Context) -> Context:
                 context = super().apply_context(context)
@@ -385,7 +385,7 @@ class TestParallelMergeValidation:
         @dataclass(frozen=True)
         @provides("embed_dim")
         class DimSpec(Spec):
-            dim: int = param()  # noqa: RUF009
+            dim: int = param()
 
             def apply_context(self, context: Context) -> Context:
                 context = super().apply_context(context)
@@ -494,7 +494,7 @@ class TestIntegration:
         @dataclass(frozen=True)
         @provides("test_dim", "embed_dim")
         class BothProvider(Spec):
-            value: int = param(default=64)  # noqa: RUF009
+            value: int = param(default=64)
 
             def apply_context(self, context: Context) -> Context:
                 context = super().apply_context(context)

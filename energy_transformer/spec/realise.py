@@ -24,7 +24,6 @@ from dataclasses import dataclass, field
 from typing import (
     TYPE_CHECKING,
     Any,
-    Optional,
     Protocol,
     TypeVar,
     cast,
@@ -216,7 +215,9 @@ class ModuleCache:
         key_hash = hashlib.sha256(key_str.encode()).hexdigest()
         return (type(spec).__name__, key_hash)
 
-    def _serialize_spec(self, spec: Spec, max_depth: int = 10) -> dict[str, Any]:
+    def _serialize_spec(
+        self, spec: Spec, max_depth: int = 10
+    ) -> dict[str, Any]:
         """Serialize a spec to a dictionary for hashing."""
         if max_depth <= 0:
             return {"__truncated__": True}
@@ -1256,7 +1257,9 @@ class GraphModule(nn.Module):  # type: ignore[misc]
                 return tensor[tuple(indices)]
             raise ValueError(f"Unsupported indexing format: {transform}")
 
-        transform_registry: dict[str, Callable[[torch.Tensor], torch.Tensor]] = {
+        transform_registry: dict[
+            str, Callable[[torch.Tensor], torch.Tensor]
+        ] = {
             "sigmoid": torch.sigmoid,
             "relu": torch.relu,
             "tanh": torch.tanh,

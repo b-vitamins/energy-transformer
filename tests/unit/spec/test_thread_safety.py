@@ -3,13 +3,19 @@
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
-from energy_transformer.spec import configure_realisation, realise, Context
 from dataclasses import dataclass
 
 from torch import nn
 
-from energy_transformer.spec import ModuleCache, param, register, Spec
+from energy_transformer.spec import (
+    Context,
+    ModuleCache,
+    Spec,
+    configure_realisation,
+    param,
+    realise,
+    register,
+)
 
 
 @dataclass(frozen=True)
