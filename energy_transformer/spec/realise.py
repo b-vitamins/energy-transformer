@@ -177,14 +177,14 @@ class ModuleCache:
         self._hit_count = 0
         self._miss_count = 0
 
-    def _make_key(self, spec: Spec, context: Context) -> tuple[Any, ...]:
+    def _make_key(self, spec: Spec, context: Context) -> tuple[Any, ...]:  # noqa: C901
         """Create cache key from spec and context.
 
         This implementation performs deep sorting of nested structures and
         handles cycles gracefully to ensure deterministic keys.
         """
 
-        def make_hashable(obj: Any, seen: set[int] | None = None) -> Any:
+        def make_hashable(obj: Any, seen: set[int] | None = None) -> Any:  # noqa: C901
             """Recursively convert ``obj`` into a hashable form."""
             if seen is None:
                 seen = set()
@@ -650,7 +650,7 @@ class Realiser:
                         )
         return None
 
-    def _try_auto_import(self, spec: Spec) -> nn.Module | None:
+    def _try_auto_import(self, spec: Spec) -> nn.Module | None:  # noqa: C901
         """Try to automatically import and instantiate a module.
 
         All failures are logged when warnings are enabled to aid debugging.
@@ -950,7 +950,9 @@ class ParallelModule(nn.Module):  # type: ignore[misc]
         self.merge = merge
         self.weights = weights
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:  # noqa: C901
+    def forward(
+        self, x: torch.Tensor
+    ) -> torch.Tensor | tuple[torch.Tensor, ...]:  # noqa: C901
         """Execute branches and merge outputs."""
         outputs: list[torch.Tensor] = [branch(x) for branch in self.branches]
 
@@ -994,7 +996,9 @@ class ResidualModule(nn.Module):  # type: ignore[misc]
         self.merge = merge
         self.scale = scale
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:  # noqa: C901
+    def forward(
+        self, x: torch.Tensor
+    ) -> torch.Tensor | tuple[torch.Tensor, ...]:  # noqa: C901
         """Apply inner module with residual connection."""
         residual = x
         out: torch.Tensor = self.inner(x)
@@ -1032,7 +1036,9 @@ class GraphModule(nn.Module):  # type: ignore[misc]
         self.inputs = inputs
         self.outputs = outputs
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:  # noqa: C901
+    def forward(
+        self, x: torch.Tensor
+    ) -> torch.Tensor | tuple[torch.Tensor, ...]:  # noqa: C901
         """Execute graph computation with proper data flow.
 
         This method executes nodes in topological order, ensuring each node
@@ -1055,9 +1061,13 @@ class GraphModule(nn.Module):  # type: ignore[misc]
         """
         from collections import defaultdict, deque
 
-        adjacency = defaultdict(list)
-        in_degree = defaultdict(int)
-        incoming_edges = defaultdict(list)
+        adjacency: defaultdict[str, list[tuple[str, str | None]]] = defaultdict(
+            list
+        )
+        in_degree: defaultdict[str, int] = defaultdict(int)
+        incoming_edges: defaultdict[str, list[tuple[str, str | None]]] = (
+            defaultdict(list)
+        )
 
         for edge in self.edges:
             if len(edge) == 2:
@@ -1156,7 +1166,9 @@ class GraphModule(nn.Module):  # type: ignore[misc]
         else:
             if transform.startswith("[") and transform.endswith("]"):
                 try:
-                    return eval(f"tensor{transform}")
+                    from typing import cast
+
+                    return cast(torch.Tensor, eval(f"tensor{transform}"))
                 except Exception:
                     pass
             raise ValueError(f"Unknown edge transformation: {transform}")
@@ -1427,7 +1439,7 @@ def from_yaml(yaml_str: str) -> Spec:
     return Spec.from_dict(data)
 
 
-from . import library
+from . import library  # noqa: E402
 
 
 @register(library.ETBlockSpec)
@@ -1456,6 +1468,7 @@ def realise_cls_token(
     from energy_transformer.layers.tokens import CLSToken
 
     embed_dim = context.get_dim("embed_dim")
+    assert embed_dim is not None
     return CLSToken(embed_dim)
 
 
@@ -1468,8 +1481,9 @@ def realise_pos_embed(
 
     num_patches = context.get_dim("num_patches")
     if spec.include_cls:
-        num_patches -= 1
+        num_patches = (num_patches or 0) - 1
     embed_dim = context.get_dim("embed_dim")
+    assert embed_dim is not None and num_patches is not None
     return PositionalEmbedding2D(
         num_patches,
         embed_dim,
@@ -1484,6 +1498,7 @@ def realise_layer_norm(
 ) -> nn.Module:
     """Realise layer normalization with embed dimension."""
     embed_dim = context.get_dim("embed_dim")
+    assert embed_dim is not None
     return nn.LayerNorm(embed_dim, eps=spec.eps)
 
 
@@ -1507,6 +1522,7 @@ def realise_cls_head(
     from energy_transformer.layers.heads import ClassificationHead
 
     embed_dim = context.get_dim("embed_dim")
+    assert embed_dim is not None
     return ClassificationHead(
         embed_dim,
         num_classes=spec.num_classes,

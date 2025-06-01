@@ -15,8 +15,7 @@ For visualization and optional features:
 >>> from energy_transformer.models import viet_base  # Loads full models
 """
 
-import sys
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 __version__ = "0.3.1"
 __author__ = "Ayan Das <bvits@riseup.net>"
@@ -43,24 +42,24 @@ _LAZY_IMPORTS = {
 
 # For static type checking, import everything
 if TYPE_CHECKING:  # pragma: no cover
-    from .models import EnergyTransformer
+    from .models import EnergyTransformer  # noqa: F401
     from .spec import (
-        Context,
-        RealisationError,
-        Spec,
-        ValidationError,
-        cond,
-        configure_realisation,
-        loop,
-        parallel,
-        realise,
-        register,
-        seq,
-        visualize,
+        Context,  # noqa: F401
+        RealisationError,  # noqa: F401
+        Spec,  # noqa: F401
+        ValidationError,  # noqa: F401
+        cond,  # noqa: F401
+        configure_realisation,  # noqa: F401
+        loop,  # noqa: F401
+        parallel,  # noqa: F401
+        realise,  # noqa: F401
+        register,  # noqa: F401
+        seq,  # noqa: F401
+        visualize,  # noqa: F401
     )
 
 
-def __getattr__(name: str):
+def __getattr__(name: str) -> Any:
     """Lazy load modules and attributes.
 
     This implements PEP 562 for lazy loading. Attributes are only
@@ -90,7 +89,7 @@ def __getattr__(name: str):
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-def __dir__():
+def __dir__() -> list[str]:
     """List available attributes for tab completion."""
     return list(_LAZY_IMPORTS.keys()) + [
         "__version__",

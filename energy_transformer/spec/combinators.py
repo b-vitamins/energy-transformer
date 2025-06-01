@@ -282,17 +282,17 @@ class Parallel(Spec):
 
         elif self.merge == "concat":
             if self.merge_dim:
-                dims = []
+                concat_dims: list[int] = []
                 for _i, branch in enumerate(self.branches):
                     branch_ctx = branch.apply_context(context.child())
                     dim_value = branch_ctx.get_dim(self.merge_dim)
                     if dim_value:
-                        dims.append(dim_value)
+                        concat_dims.append(dim_value)
 
-                if dims and max(dims) > min(dims) * 10:
+                if concat_dims and max(concat_dims) > min(concat_dims) * 10:
                     issues.append(
                         f"Warning: Large dimension disparity in concat merge: "
-                        f"min={min(dims)}, max={max(dims)}"
+                        f"min={min(concat_dims)}, max={max(concat_dims)}"
                     )
 
         # Validate weights if provided
