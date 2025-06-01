@@ -58,6 +58,8 @@ class TestRecursionDepth:
 
         @register(SimpleSpec)
         def realise_simple(spec, context):
+            if spec.value == 0:
+                return nn.Identity()
             return nn.Linear(spec.value, spec.value)
 
         specs = [SimpleSpec(value=i) for i in range(20)]
