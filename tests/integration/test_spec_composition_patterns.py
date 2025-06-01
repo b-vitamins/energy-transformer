@@ -21,10 +21,6 @@ from energy_transformer.spec.library import (
     PatchEmbedSpec,
 )
 
-pytest.skip(
-    "Composition pattern tests not implemented", allow_module_level=True
-)
-
 pytestmark = pytest.mark.integration
 
 
