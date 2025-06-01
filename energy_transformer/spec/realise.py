@@ -49,6 +49,7 @@ from .primitives import Context, Spec, SpecMeta, ValidationError
 EDGE_TUPLE_SIZE: int = 2
 MAX_STACK_PREVIEW: int = 5
 FULL_EDGE_SIZE: int = 3
+UNROLL_LIMIT: int = 4
 
 # Default mappings for auto-importing modules based on Spec names
 module_mappings = {
@@ -885,6 +886,16 @@ class Realiser:
                 context=self.context,
                 suggestion="Loop count must be positive",
             )
+
+        from . import library  # Local import to avoid circular dependency
+
+        if (
+            not spec.unroll
+            and isinstance(spec.body, library.ETBlockSpec)
+            and isinstance(times, int)
+            and times <= UNROLL_LIMIT
+        ):
+            return self._realise_unrolled_independent(spec, times)
 
         if spec.unroll:
             if spec.share_weights:

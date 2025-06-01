@@ -441,7 +441,6 @@ class Residual(Spec):
         return issues
 
 
-@dataclass(frozen=True)
 class Graph(Spec):
     """Graph-based composition for complex architectures.
 
@@ -461,14 +460,21 @@ class Graph(Spec):
         Output node names
     """
 
-    nodes: dict[str, Spec] = field(default_factory=dict)
-    edges: list[tuple[str, str, str | None]] = field(default_factory=list)
-    inputs: list[str] = field(default_factory=list)
-    outputs: list[str] = field(default_factory=list)
+    def __init__(
+        self,
+        nodes: dict[str, Spec] | None = None,
+        edges: list[tuple[str, str, str | None]] | None = None,
+        inputs: list[str] | None = None,
+        outputs: list[str] | None = None,
+    ) -> None:
+        self.nodes = nodes or {}
+        self.edges = edges or []
+        self.inputs = inputs or []
+        self.outputs = outputs or []
+        self.__post_init__()
 
     def __post_init__(self) -> None:
         """Validate graph structure immediately after creation."""
-        super().__post_init__()
         try:
             has_cycle = self._has_cycle()
         except Exception as e:
