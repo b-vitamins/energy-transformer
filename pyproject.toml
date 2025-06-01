@@ -109,6 +109,7 @@ ignore = [
     "N999",
     "S101",
     "PLR0913",
+    "TRY003",
 ]
 
 [tool.ruff.lint.pydocstyle]
