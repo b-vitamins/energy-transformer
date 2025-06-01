@@ -16,7 +16,7 @@ from torch import Tensor, nn
 
 try:
     import numpy as np
-    from scipy.spatial import Delaunay, cKDTree
+    from scipy.spatial import Delaunay, QhullError, cKDTree
 
     HAS_SCIPY = True
 except ImportError:
@@ -67,7 +67,7 @@ class SimplexValidator:
         for simplex in simplices:
             if len(simplex) < 2:
                 raise ValueError(
-                    "Simplices of size <2 are not allowed (no self-loops)."
+                    "Simplices of size <2 are not allowed (no self-loops).",
                 )
 
             canonical = SimplexValidator._canonicalize_simplex(simplex)
@@ -91,11 +91,11 @@ class SimplexValidator:
                 v_int = int(v)
             except (ValueError, TypeError) as err:
                 raise TypeError(
-                    f"Vertex indices must be integers; got {type(v).__name__}"
+                    f"Vertex indices must be integers; got {type(v).__name__}",
                 ) from err
             if v_int < 0:
                 raise ValueError(
-                    f"Vertex indices must be non-negative; got {v_int}"
+                    f"Vertex indices must be non-negative; got {v_int}",
                 )
             canonical.append(v_int)
 
@@ -127,7 +127,8 @@ class SimplexBudgetManager:
 
     @staticmethod
     def normalize_dimension_weights(
-        dim_weights: dict[int, float] | None, max_dim: int
+        dim_weights: dict[int, float] | None,
+        max_dim: int,
     ) -> dict[int, float]:
         """Normalize dimension weights to sum to 1.
 
@@ -158,7 +159,7 @@ class SimplexBudgetManager:
         if not weights:
             raise ValueError(
                 "dim_weights must assign positive weight to at least one "
-                f"dimension <= {max_dim}."
+                f"dimension <= {max_dim}.",
             )
 
         weight_sum = sum(weights.values())
@@ -212,7 +213,7 @@ class SimplexGenerator(ABC):
 
     def __init__(self, rng: random.Random | None = None) -> None:
         """Initialize generator with optional random number generator."""
-        self.rng = rng or random.Random()
+        self.rng = rng or random.Random()  # noqa: S311
 
     @abstractmethod
     def generate(
@@ -259,12 +260,15 @@ class RandomSimplexGenerator(SimplexGenerator):
         """
         # Normalize weights
         dim_weights = SimplexBudgetManager.normalize_dimension_weights(
-            dim_weights, max_dim
+            dim_weights,
+            max_dim,
         )
 
         # Generate all candidate simplices
         candidates_by_size = self._generate_candidates(
-            num_vertices, max_dim, dim_weights
+            num_vertices,
+            max_dim,
+            dim_weights,
         )
 
         # Convert budget fraction to integer edge count if needed
@@ -278,7 +282,9 @@ class RandomSimplexGenerator(SimplexGenerator):
 
         # Allocate budget to generate simplices
         simplices, remaining = SimplexBudgetManager.allocate_budget(
-            edge_budget, dim_weights, candidates_by_size
+            edge_budget,
+            dim_weights,
+            candidates_by_size,
         )
 
         # Use remaining budget for edges if available
@@ -305,7 +311,7 @@ class RandomSimplexGenerator(SimplexGenerator):
                 continue
 
             all_combinations = list(
-                combinations(range(num_vertices), simplex_size)
+                combinations(range(num_vertices), simplex_size),
             )
             self.rng.shuffle(all_combinations)
             candidates[simplex_size] = all_combinations
@@ -339,7 +345,7 @@ class TopologyAwareSimplexGenerator(SimplexGenerator):
         super().__init__(rng)
         if not HAS_SCIPY:
             raise ImportError(
-                "scipy is required for topology-aware simplex generation"
+                "scipy is required for topology-aware simplex generation",
             )
         self.coordinates = np.array(coordinates)
         self.k_neighbors = k_neighbors
@@ -361,7 +367,7 @@ class TopologyAwareSimplexGenerator(SimplexGenerator):
         if len(self.coordinates) != num_vertices:
             raise ValueError(
                 f"Number of coordinates ({len(self.coordinates)}) must match "
-                f"num_vertices ({num_vertices})."
+                f"num_vertices ({num_vertices}).",
             )
 
         simplices = []
@@ -416,7 +422,9 @@ class TopologyAwareSimplexGenerator(SimplexGenerator):
         return edges
 
     def _add_delaunay_simplices(
-        self, simplices: list[list[int]], max_dim: int
+        self,
+        simplices: list[list[int]],
+        max_dim: int,
     ) -> None:
         """Add Delaunay triangulation simplices."""
         try:
@@ -436,9 +444,14 @@ class TopologyAwareSimplexGenerator(SimplexGenerator):
                     for r in range(2, min(len(simplex), max_dim + 2)):
                         for subset in combinations(simplex, r):
                             simplices.append(sorted(subset))
-        except Exception:
+        except QhullError as exc:
             # Delaunay might fail for degenerate configurations
-            pass
+            import logging
+
+            logging.getLogger(__name__).debug(
+                "Delaunay failed due to degenerate configuration",
+                exc_info=exc,
+            )
 
     @staticmethod
     def _remove_duplicates(simplices: list[list[int]]) -> list[list[int]]:
@@ -479,7 +492,9 @@ class SimplexFactory:
         """
         if coordinates is not None and HAS_SCIPY:
             return TopologyAwareSimplexGenerator(
-                coordinates, include_delaunay=True, rng=rng
+                coordinates,
+                include_delaunay=True,
+                rng=rng,
             )
         return RandomSimplexGenerator(rng)
 
@@ -546,7 +561,10 @@ def _autogen_simps(
     else:
         # For random generation, twiddle is used as budget fraction
         simplices = generator.generate(
-            num_vertices, max_dim, twiddle, dim_weights
+            num_vertices,
+            max_dim,
+            twiddle,
+            dim_weights,
         )
 
     if not simplices:
@@ -625,7 +643,7 @@ class SimplicialHopfieldNetwork(BaseHopfieldNetwork):
         if simplices is None:
             if num_vertices is None:
                 raise ValueError(
-                    "Must specify num_vertices when simplices=None."
+                    "Must specify num_vertices when simplices=None.",
                 )
             simplices = _autogen_simps(
                 num_vertices,
@@ -703,7 +721,7 @@ class SimplicialHopfieldNetwork(BaseHopfieldNetwork):
         if num_tokens <= self.max_vertex:
             raise ValueError(
                 f"Input has {num_tokens} tokens but complex references "
-                f"vertex {self.max_vertex}."
+                f"vertex {self.max_vertex}.",
             )
 
         # Linear transformation: (..., n_tokens, hidden_dim)

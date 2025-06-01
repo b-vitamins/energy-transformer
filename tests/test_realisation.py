@@ -207,8 +207,11 @@ class TestCacheStateRestoration:
 
         nested = OuterSpec(
             inner=loop(
-                InnerFailSpec(), times=2, unroll=True, share_weights=False
-            )
+                InnerFailSpec(),
+                times=2,
+                unroll=True,
+                share_weights=False,
+            ),
         )
 
         initial_state = _config.cache.enabled
@@ -221,7 +224,7 @@ class TestCacheStateRestoration:
             type(mock_cache).enabled = property(
                 lambda self: True,
                 lambda self, v: (_ for _ in ()).throw(
-                    RuntimeError("Cache restore failed")
+                    RuntimeError("Cache restore failed"),
                 ),
             )
 
@@ -232,7 +235,8 @@ class TestCacheStateRestoration:
             with pytest.raises(RuntimeError) as exc_info:
                 realiser = Realiser()
                 realiser._realise_unrolled_independent(
-                    loop(BadSpec(), times=1), times=1
+                    loop(BadSpec(), times=1),
+                    times=1,
                 )
             assert "Multiple errors" in str(exc_info.value)
 
@@ -274,7 +278,7 @@ class TestCacheStateRestoration:
 
         with pytest.raises(Exception) as exc_info:
             realise(
-                loop(FailingSpec(), times=3, unroll=True, share_weights=False)
+                loop(FailingSpec(), times=3, unroll=True, share_weights=False),
             )
 
         assert "Intentional failure" in str(exc_info.value)
@@ -352,7 +356,7 @@ class TestCacheKeyGeneration:
                 "lists": [[1, 2], [3, 4]],
                 "sets": {1, 2, 3},
                 "mixed": {"a": [{"x": 1}, {"y": 2}], "b": {(1, 2), (3, 4)}},
-            }
+            },
         )
         ctx = Context()
         key = cache._make_key(spec, ctx)
@@ -362,7 +366,7 @@ class TestCacheKeyGeneration:
                 "mixed": {"b": {(3, 4), (1, 2)}, "a": [{"x": 1}, {"y": 2}]},
                 "sets": {3, 2, 1},
                 "lists": [[1, 2], [3, 4]],
-            }
+            },
         )
         key2 = cache._make_key(spec2, ctx)
         assert key == key2
@@ -374,10 +378,12 @@ class TestCacheKeyGeneration:
         from energy_transformer.spec.realise import _config
 
         ctx1 = Context(
-            dimensions={"a": 1, "b": 2}, metadata={"nested": {"x": 1, "y": 2}}
+            dimensions={"a": 1, "b": 2},
+            metadata={"nested": {"x": 1, "y": 2}},
         )
         ctx2 = Context(
-            dimensions={"b": 2, "a": 1}, metadata={"nested": {"y": 2, "x": 1}}
+            dimensions={"b": 2, "a": 1},
+            metadata={"nested": {"y": 2, "x": 1}},
         )
 
         spec = IdentitySpec()
@@ -404,7 +410,8 @@ class TestAutoImportLogging:
     def test_import_failure_logged(self, caplog):
         configure_realisation(warnings=True)
         caplog.set_level(
-            logging.DEBUG, logger="energy_transformer.spec.realise"
+            logging.DEBUG,
+            logger="energy_transformer.spec.realise",
         )
 
         @dataclass(frozen=True)
@@ -420,7 +427,8 @@ class TestAutoImportLogging:
     def test_missing_module_logged(self, caplog):
         configure_realisation(warnings=True)
         caplog.set_level(
-            logging.WARNING, logger="energy_transformer.spec.realise"
+            logging.WARNING,
+            logger="energy_transformer.spec.realise",
         )
         with patch.dict(
             "energy_transformer.spec.realise.module_mappings",
@@ -440,7 +448,8 @@ class TestAutoImportLogging:
     def test_missing_class_logged(self, caplog):
         configure_realisation(warnings=True)
         caplog.set_level(
-            logging.WARNING, logger="energy_transformer.spec.realise"
+            logging.WARNING,
+            logger="energy_transformer.spec.realise",
         )
         with patch.dict(
             "energy_transformer.spec.realise.module_mappings",
@@ -460,7 +469,8 @@ class TestAutoImportLogging:
     def test_instantiation_failure_logged(self, caplog):
         configure_realisation(warnings=True)
         caplog.set_level(
-            logging.WARNING, logger="energy_transformer.spec.realise"
+            logging.WARNING,
+            logger="energy_transformer.spec.realise",
         )
         with patch.dict(
             "energy_transformer.spec.realise.module_mappings",

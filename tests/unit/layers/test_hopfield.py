@@ -20,7 +20,10 @@ def test_hopfield_custom_energy_function() -> None:
         return h.sum()
 
     net = HopfieldNetwork(
-        in_dim=2, hidden_dim=2, multiplier=1.0, energy_fn=custom_fn
+        in_dim=2,
+        hidden_dim=2,
+        multiplier=1.0,
+        energy_fn=custom_fn,
     )
     with torch.no_grad():
         net.ξ.fill_(1.0)
@@ -59,7 +62,7 @@ def test_hopfield_forward_with_batch_dims() -> None:
         [
             [[1.0, 2.0], [0.0, -1.0], [3.0, 0.5]],
             [[-1.0, 1.0], [2.0, 0.0], [0.5, 0.5]],
-        ]
+        ],
     )
     energy = net(g)
     h = torch.matmul(g, net.ξ.t())

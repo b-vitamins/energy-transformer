@@ -51,7 +51,10 @@ def test_positional_embedding_adds_values() -> None:
 
 def test_patch_embedding_num_patches_and_conv_params() -> None:
     patch = PatchEmbedding(
-        img_size=(4, 6), patch_size=(2, 3), in_chans=1, embed_dim=4
+        img_size=(4, 6),
+        patch_size=(2, 3),
+        in_chans=1,
+        embed_dim=4,
     )
     assert patch.num_patches == 4
     assert patch.proj.kernel_size == (2, 3)
@@ -60,7 +63,10 @@ def test_patch_embedding_num_patches_and_conv_params() -> None:
 
 def test_patch_embedding_non_square_image_and_patch() -> None:
     patch = PatchEmbedding(
-        img_size=(4, 6), patch_size=(2, 3), in_chans=1, embed_dim=5
+        img_size=(4, 6),
+        patch_size=(2, 3),
+        in_chans=1,
+        embed_dim=5,
     )
     x = torch.randn(2, 1, 4, 6)
     out = patch(x)
@@ -69,17 +75,25 @@ def test_patch_embedding_non_square_image_and_patch() -> None:
 
 def test_patch_embedding_bias_optional() -> None:
     patch = PatchEmbedding(
-        img_size=2, patch_size=1, in_chans=1, embed_dim=3, bias=False
+        img_size=2,
+        patch_size=1,
+        in_chans=1,
+        embed_dim=3,
+        bias=False,
     )
     assert patch.proj.bias is None
 
 
 def test_positional_embedding_parameter_shapes() -> None:
     pos_no_cls = PositionalEmbedding2D(
-        num_patches=3, embed_dim=2, include_cls=False
+        num_patches=3,
+        embed_dim=2,
+        include_cls=False,
     )
     pos_with_cls = PositionalEmbedding2D(
-        num_patches=3, embed_dim=2, include_cls=True
+        num_patches=3,
+        embed_dim=2,
+        include_cls=True,
     )
     assert pos_no_cls.pos_embed.shape == (1, 3, 2)
     assert pos_with_cls.pos_embed.shape == (1, 4, 2)

@@ -77,7 +77,7 @@ class TestCompleteWorkflows:
         model = realise(deep_spec, embed_dim=768)
 
         num_blocks = len(
-            [m for m in model.modules() if "ETBlock" in str(type(m))]
+            [m for m in model.modules() if "ETBlock" in str(type(m))],
         )
         assert num_blocks >= 24
 
@@ -123,7 +123,7 @@ class TestImportPerformance:
 
         code = """import time\nstart = time.perf_counter()\nimport energy_transformer\nelapsed = time.perf_counter() - start\nprint(f'{elapsed:.3f}')"""
 
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: S603
             [sys.executable, "-c", code],
             capture_output=True,
             text=True,
@@ -142,7 +142,7 @@ class TestImportPerformance:
 
         code = """import sys\nimport energy_transformer\nassert 'scipy' not in sys.modules, 'scipy was loaded on import!'\nassert 'matplotlib' not in sys.modules, 'matplotlib was loaded on import!'\nassert 'energy_transformer.models' not in sys.modules, 'models loaded early!'\nfrom energy_transformer import EnergyTransformer\nassert 'energy_transformer.models' in sys.modules, 'models not loaded when needed!'\nprint('SUCCESS')"""
 
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: S603
             [sys.executable, "-c", code],
             capture_output=True,
             text=True,
@@ -169,7 +169,7 @@ elapsed = time.perf_counter() - start
 print(elapsed)
 """
 
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: S603
             [sys.executable, "-c", code],
             capture_output=True,
             text=True,
@@ -211,7 +211,7 @@ assert 'energy_transformer.models' in sys.modules, "models should load when acce
 print("SUCCESS")
 """
 
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: S603
             [sys.executable, "-c", code],
             capture_output=True,
             text=True,
@@ -251,7 +251,7 @@ assert _config.strict == initial_strict, "strict mode changed on import!"
 print("SUCCESS: No side effects detected")
 """
 
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: S603
             [sys.executable, "-c", code],
             capture_output=True,
             text=True,

@@ -18,7 +18,9 @@ from energy_transformer.models.vision.vit import vit_tiny_cifar
 
 
 def quick_test(
-    model_name: str = "viset", epochs: int = 10, subset: float = 0.1
+    model_name: str = "viset",
+    epochs: int = 10,
+    subset: float = 0.1,
 ) -> None:
     """Quick model test."""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -49,13 +51,17 @@ def quick_test(
         [
             transforms.ToTensor(),
             transforms.Normalize(
-                (0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)
+                (0.5071, 0.4867, 0.4408),
+                (0.2675, 0.2565, 0.2761),
             ),
-        ]
+        ],
     )
 
     train_dataset = datasets.CIFAR100(
-        "./data", train=True, download=True, transform=tx
+        "./data",
+        train=True,
+        download=True,
+        transform=tx,
     )
     test_dataset = datasets.CIFAR100("./data", train=False, transform=tx)
 
@@ -67,7 +73,10 @@ def quick_test(
         test_dataset = Subset(test_dataset, range(test_size))
 
     train_loader = DataLoader(
-        train_dataset, batch_size=128, shuffle=True, num_workers=2
+        train_dataset,
+        batch_size=128,
+        shuffle=True,
+        num_workers=2,
     )
     test_loader = DataLoader(test_dataset, batch_size=256, num_workers=2)
 
@@ -120,7 +129,7 @@ def quick_test(
 
         print(
             f"Epoch {epoch:2d}/{epochs} | "
-            f"Train: {train_acc:5.1f}% | Test: {test_acc:5.1f}%"
+            f"Train: {train_acc:5.1f}% | Test: {test_acc:5.1f}%",
         )
 
     elapsed = time.time() - start_time
@@ -182,10 +191,15 @@ def main() -> None:
     )
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument(
-        "--subset", type=float, default=0.1, help="Fraction of data to use"
+        "--subset",
+        type=float,
+        default=0.1,
+        help="Fraction of data to use",
     )
     parser.add_argument(
-        "--memory", action="store_true", help="Test memory usage"
+        "--memory",
+        action="store_true",
+        help="Test memory usage",
     )
 
     args = parser.parse_args()

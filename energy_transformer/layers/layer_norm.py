@@ -64,7 +64,7 @@ class LayerNorm(BaseLayerNorm):
         # Store log(γ) and apply softplus to ensure γ > 0
         # Initialize to make softplus(logγ) = 1.0
         self.logγ = nn.Parameter(
-            torch.tensor(math.log(math.exp(1.0) - 1))
+            torch.tensor(math.log(math.exp(1.0) - 1)),
         )  # shape: scalar
 
         # δ ∈ ℝᴰ
@@ -119,7 +119,10 @@ class LayerNorm(BaseLayerNorm):
         # More efficient variance computation using torch.var
         # 1/D·∑ⱼ(xⱼ - x̄)² computed in-kernel
         var = torch.var(
-            x, dim=-1, unbiased=False, keepdim=True
+            x,
+            dim=-1,
+            unbiased=False,
+            keepdim=True,
         )  # shape: [..., 1]
 
         # xᵢ - x̄
@@ -151,7 +154,9 @@ class LayerNorm(BaseLayerNorm):
         """
         # Create standard LayerNorm
         standard_ln = nn.LayerNorm(
-            normalized_shape=self.in_dim, eps=self.eps, elementwise_affine=True
+            normalized_shape=self.in_dim,
+            eps=self.eps,
+            elementwise_affine=True,
         )
 
         # Copy the learned parameters
@@ -198,7 +203,10 @@ class LayerNorm(BaseLayerNorm):
 
         # Compute variance term: 1/D·∑ⱼ(xⱼ - x̄)²
         var = torch.var(
-            x, dim=-1, unbiased=False, keepdim=False
+            x,
+            dim=-1,
+            unbiased=False,
+            keepdim=False,
         )  # shape: [...]
 
         # First term: D·γ·√(1/D·∑ⱼ(xⱼ - x̄)² + ε)
@@ -219,7 +227,10 @@ class LayerNorm(BaseLayerNorm):
 
 # Utility function for TorchInductor optimization preparation
 def _functional_layernorm_energy(
-    x: Tensor, logγ: Tensor, δ: Tensor, eps: float = 1e-5
+    x: Tensor,
+    logγ: Tensor,
+    δ: Tensor,
+    eps: float = 1e-5,
 ) -> Tensor:
     """Functional version of energy LayerNorm for compilation optimization.
 

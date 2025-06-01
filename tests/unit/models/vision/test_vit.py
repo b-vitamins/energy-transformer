@@ -30,7 +30,11 @@ def test_patch_embedding() -> None:
 
 def test_attention_zero_weights_identity() -> None:
     attn = Attention(
-        dim=4, num_heads=2, qkv_bias=False, attn_drop=0.0, proj_drop=0.0
+        dim=4,
+        num_heads=2,
+        qkv_bias=False,
+        attn_drop=0.0,
+        proj_drop=0.0,
     )
     with torch.no_grad():
         attn.qkv.weight.zero_()

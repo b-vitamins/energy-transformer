@@ -136,7 +136,7 @@ class PatchEmbedSpec(Spec):
         if patch_h > img_h or patch_w > img_w:
             issues.append(
                 f"Patch size ({patch_h}, {patch_w}) cannot be larger than "
-                f"image size ({img_h}, {img_w})"
+                f"image size ({img_h}, {img_w})",
             )
 
         return issues
@@ -223,7 +223,8 @@ class HNSpec(Spec):
     hidden_dim: Dimension | None = param(default=None, dimension=True)
     multiplier: float = param(default=4.0, validator=lambda x: 0 < x <= 8)
     energy_fn: str = param(
-        default="relu_squared", choices=["relu_squared", "softmax", "tanh"]
+        default="relu_squared",
+        choices=["relu_squared", "softmax", "tanh"],
     )
 
     def apply_context(self, context: Context) -> Context:
@@ -249,7 +250,7 @@ class HNSpec(Spec):
         if self.hidden_dim is None:
             if context.get_dim("embed_dim") is None:
                 issues.append(
-                    "Cannot compute hidden_dim: embed_dim not available in context"
+                    "Cannot compute hidden_dim: embed_dim not available in context",
                 )
 
         return issues
@@ -285,7 +286,8 @@ class SHNSpec(Spec):
     # Simplicial complex parameters
     simplices: list[list[int]] | None = param(default=None)
     num_vertices: int | None = param(
-        default=None, validator=lambda x: x is None or x > 0
+        default=None,
+        validator=lambda x: x is None or x > 0,
     )
     max_dim: int = param(default=1, validator=lambda x: 1 <= x <= 3)
     budget: float = param(default=0.1, validator=lambda x: 0 < x <= 1)

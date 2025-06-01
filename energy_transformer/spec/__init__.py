@@ -38,7 +38,7 @@ Example
 """
 
 from collections.abc import Callable
-from typing import Any, TypeAlias
+from typing import TypeAlias
 
 # Combinators
 from .combinators import (
@@ -130,7 +130,7 @@ _LIBRARY_SPECS = [
 ]
 
 
-def __getattr__(name: str) -> Any:
+def __getattr__(name: str) -> object:
     """Lazy load library specifications."""
     if name in _LIBRARY_SPECS:
         from . import library
@@ -139,7 +139,7 @@ def __getattr__(name: str) -> Any:
             return getattr(library, name)
         except AttributeError:  # pragma: no cover - unexpected
             raise AttributeError(
-                f"energy_transformer.spec.library has no spec {name!r}"
+                f"energy_transformer.spec.library has no spec {name!r}",
             ) from None
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
@@ -291,7 +291,10 @@ def export_patterns() -> dict[str, Callable[..., Spec]]:
     return {
         "vit_tiny": lambda **kwargs: seq(
             patch_embed_spec(
-                img_size=224, patch_size=16, embed_dim=192, **kwargs
+                img_size=224,
+                patch_size=16,
+                embed_dim=192,
+                **kwargs,
             ),
             cls_token_spec(),
             pos_embed_spec(include_cls=True),
@@ -306,7 +309,10 @@ def export_patterns() -> dict[str, Callable[..., Spec]]:
         ),
         "vit_base": lambda **kwargs: seq(
             patch_embed_spec(
-                img_size=224, patch_size=16, embed_dim=768, **kwargs
+                img_size=224,
+                patch_size=16,
+                embed_dim=768,
+                **kwargs,
             ),
             cls_token_spec(),
             pos_embed_spec(include_cls=True),
@@ -359,7 +365,8 @@ def validate_spec_tree(spec: Spec, verbose: bool = False) -> list[str]:
 
 
 def benchmark_realisation(
-    spec: Spec, iterations: int = 100
+    spec: Spec,
+    iterations: int = 100,
 ) -> dict[str, float]:
     """Benchmark specification realisation performance.
 

@@ -132,7 +132,9 @@ class TestPatchEmbedSpec:
     def test_tuple_sizes(self):
         """Test non-square image and patch sizes."""
         pe = PatchEmbedSpec(
-            img_size=(224, 336), patch_size=(16, 24), embed_dim=768
+            img_size=(224, 336),
+            patch_size=(16, 24),
+            embed_dim=768,
         )
         assert pe.img_size == (224, 336)
         assert pe.patch_size == (16, 24)
@@ -147,7 +149,9 @@ class TestPatchEmbedSpec:
 
         # Non-square
         pe2 = PatchEmbedSpec(
-            img_size=(224, 112), patch_size=(16, 16), embed_dim=512
+            img_size=(224, 112),
+            patch_size=(16, 16),
+            embed_dim=512,
         )
         ctx2 = pe2.apply_context(Context())
         assert ctx2.get_dim("num_patches") == 98  # (224/16) * (112/16)
@@ -505,7 +509,9 @@ class TestETBlockSpec:
     def test_nested_validation(self):
         """Test that nested specs are validated."""
         et = ETBlockSpec(
-            layer_norm=LayerNormSpec(), attention=MHEASpec(), hopfield=HNSpec()
+            layer_norm=LayerNormSpec(),
+            attention=MHEASpec(),
+            hopfield=HNSpec(),
         )
 
         # All nested specs require embed_dim
@@ -618,7 +624,10 @@ class TestVisionEmbeddingSpec:
     def test_patch_calculation_with_cls(self):
         """Test patch calculation includes CLS token."""
         ve = VisionEmbeddingSpec(
-            img_size=224, patch_size=16, embed_dim=768, use_cls_token=True
+            img_size=224,
+            patch_size=16,
+            embed_dim=768,
+            use_cls_token=True,
         )
 
         ctx = ve.apply_context(Context())
@@ -628,7 +637,10 @@ class TestVisionEmbeddingSpec:
     def test_patch_calculation_without_cls(self):
         """Test patch calculation without CLS token."""
         ve = VisionEmbeddingSpec(
-            img_size=224, patch_size=16, embed_dim=768, use_cls_token=False
+            img_size=224,
+            patch_size=16,
+            embed_dim=768,
+            use_cls_token=False,
         )
 
         ctx = ve.apply_context(Context())
@@ -638,7 +650,10 @@ class TestVisionEmbeddingSpec:
         """Test parameter validation."""
         # Valid
         ve = VisionEmbeddingSpec(
-            img_size=224, patch_size=16, embed_dim=768, drop_rate=0.1
+            img_size=224,
+            patch_size=16,
+            embed_dim=768,
+            drop_rate=0.1,
         )
         issues = ve.validate(Context())
         assert len(issues) == 0
@@ -652,7 +667,10 @@ class TestVisionEmbeddingSpec:
 
         with pytest.raises(ValidationError):
             VisionEmbeddingSpec(
-                img_size=224, patch_size=16, embed_dim=768, drop_rate=1.5
+                img_size=224,
+                patch_size=16,
+                embed_dim=768,
+                drop_rate=1.5,
             )
 
     def test_provides_dimensions(self):
@@ -674,7 +692,10 @@ class TestMHASpec:
         assert attn.proj_drop == 0.0
 
         attn2 = MHASpec(
-            num_heads=16, qkv_bias=False, attn_drop=0.1, proj_drop=0.2
+            num_heads=16,
+            qkv_bias=False,
+            attn_drop=0.1,
+            proj_drop=0.2,
         )
         assert attn2.num_heads == 16
         assert attn2.qkv_bias is False
@@ -721,7 +742,10 @@ class TestMLPSpec:
         assert mlp.drop == 0.0
 
         mlp2 = MLPSpec(
-            hidden_features=3072, out_features=768, activation="relu", drop=0.1
+            hidden_features=3072,
+            out_features=768,
+            activation="relu",
+            drop=0.1,
         )
         assert mlp2.hidden_features == 3072
         assert mlp2.out_features == 768
@@ -895,7 +919,10 @@ class TestComplexCompositions:
     def test_vision_embedding_equivalent(self):
         """Test VisionEmbeddingSpec produces similar results."""
         ve = VisionEmbeddingSpec(
-            img_size=224, patch_size=16, embed_dim=768, use_cls_token=True
+            img_size=224,
+            patch_size=16,
+            embed_dim=768,
+            use_cls_token=True,
         )
 
         ctx = ve.apply_context(Context())
@@ -948,7 +975,9 @@ class TestComplexCompositions:
             # Output head
             LayerNormSpec(),
             ClassificationHeadSpec(
-                num_classes=1000, drop_rate=0.1, use_cls_token=True
+                num_classes=1000,
+                drop_rate=0.1,
+                use_cls_token=True,
             ),
         )
 

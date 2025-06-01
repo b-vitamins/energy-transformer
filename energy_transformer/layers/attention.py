@@ -87,13 +87,13 @@ class MultiHeadEnergyAttention(BaseEnergyAttention):
         # W^K ∈ ℝʸˣᴴˣᴰ
         # Note: [H, Y, D] for computational efficiency in PyTorch
         self.w_k = nn.Parameter(
-            torch.empty(num_heads, head_dim, in_dim)
+            torch.empty(num_heads, head_dim, in_dim),
         )  # shape: [H, Y, D]
 
         # W^Q ∈ ℝʸˣᴴˣᴰ
         # Note: [H, Y, D] for computational efficiency in PyTorch
         self.w_q = nn.Parameter(
-            torch.empty(num_heads, head_dim, in_dim)
+            torch.empty(num_heads, head_dim, in_dim),
         )  # shape: [H, Y, D]
 
         # Optional bias terms
@@ -169,12 +169,16 @@ class MultiHeadEnergyAttention(BaseEnergyAttention):
 
         # Kₐₕᴮ = ∑ⱼ W^K_ₐₕⱼ·gⱼᴮ,    K ∈ ℝʸˣᴴˣᴺ
         k = torch.einsum(
-            "...nd,hyd->...nhy", g, w_k_cast
+            "...nd,hyd->...nhy",
+            g,
+            w_k_cast,
         )  # shape: [..., N, H, Y]
 
         # Qₐₕᶜ = ∑ⱼ W^Q_ₐₕⱼ·gⱼᶜ,    Q ∈ ℝʸˣᴴˣᴺ
         q = torch.einsum(
-            "...nd,hyd->...nhy", g, w_q_cast
+            "...nd,hyd->...nhy",
+            g,
+            w_q_cast,
         )  # shape: [..., N, H, Y]
 
         # Add bias if present
@@ -192,7 +196,8 @@ class MultiHeadEnergyAttention(BaseEnergyAttention):
             # ∑ᴮ≠ᶜ - Create mask for self-attention exclusion
             diag_mask = torch.eye(seq_len, device=g.device, dtype=torch.bool)
             diag_mask = diag_mask[
-                None, None
+                None,
+                None,
             ]  # Broadcast for heads [..., 1, 1, N, N]
             a = a.masked_fill(diag_mask, float("-inf"))  # shape: [..., H, N, N]
 
