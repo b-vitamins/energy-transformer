@@ -46,10 +46,25 @@ from .combinators import (
 )
 from .primitives import Context, Spec, SpecMeta, ValidationError
 
-EDGE_TUPLE_SIZE: int = 2
-MAX_STACK_PREVIEW: int = 5
-FULL_EDGE_SIZE: int = 3
-UNROLL_LIMIT: int = 12
+
+@dataclass
+class RealisationConstants:
+    """Configuration constants for the realisation system."""
+
+    # Stack and recursion limits
+    MAX_RECURSION: int = 100
+    MAX_STACK_PREVIEW: int = 5
+
+    # Graph processing
+    EDGE_TUPLE_SIZE: int = 2
+    FULL_EDGE_SIZE: int = 3
+
+    # Loop unrolling
+    UNROLL_LIMIT: int = 12
+
+    # Cache settings
+    DEFAULT_CACHE_SIZE: int = 128
+
 
 # Default mappings for auto-importing modules based on Spec names
 module_mappings = {
@@ -188,7 +203,13 @@ class ModuleCache:
         enabled : bool
             Whether caching is enabled
         """
-        self.max_size = max_size
+        if hasattr(_thread_local, "config"):
+            config = _get_config()
+            default_size = config.constants.DEFAULT_CACHE_SIZE
+        else:
+            default_size = RealisationConstants.DEFAULT_CACHE_SIZE
+
+        self.max_size = max_size if max_size != 128 else default_size
         self.enabled = enabled
         self._cache: dict[tuple[Any, ...], nn.Module] = {}
         self._access_order: list[tuple[Any, ...]] = []
@@ -375,7 +396,10 @@ class RealiserConfig:
     warnings: bool = True
     auto_import: bool = True
     optimizations: bool = True
-    max_recursion: int = 100
+    max_recursion: int = 100  # Keep for backward compatibility
+    constants: RealisationConstants = field(
+        default_factory=RealisationConstants
+    )
 
 
 # Thread-local configuration
@@ -395,7 +419,14 @@ def configure_realisation(**kwargs: Any) -> None:
     Parameters
     ----------
     **kwargs : Any
-        Configuration options to set
+        Configuration options to set. Can include:
+        - cache: ModuleCache instance
+        - strict: bool for strict validation
+        - warnings: bool for warning messages
+        - auto_import: bool for automatic imports
+        - optimizations: bool for spec optimizations
+        - max_recursion: int for recursion limit
+        - constants: RealisationConstants for all constants
 
     Raises
     ------
@@ -403,6 +434,27 @@ def configure_realisation(**kwargs: Any) -> None:
         If unknown configuration option
     """
     config = _get_config()
+
+    # Handle constants specially
+    if "constants" in kwargs:
+        config.constants = kwargs.pop("constants")
+
+    constant_overrides = {}
+    for key in list(kwargs.keys()):
+        if hasattr(config.constants, key):
+            constant_overrides[key] = kwargs.pop(key)
+    if "max_recursion" in kwargs:
+        constant_overrides["MAX_RECURSION"] = kwargs.pop("max_recursion")
+
+    if constant_overrides:
+        current = config.constants
+        new_constants = RealisationConstants(
+            **{k: getattr(current, k) for k in current.__dataclass_fields__}
+        )
+        for k, v in constant_overrides.items():
+            setattr(new_constants, k, v)
+        config.constants = new_constants
+
     for key, value in kwargs.items():
         if hasattr(config, key):
             setattr(config, key, value)
@@ -473,10 +525,10 @@ class Realiser:
                 return cached
 
         # Enforce recursion limit only for uncached specs
-        if self._recursion_depth >= config.max_recursion:
+        if self._recursion_depth >= config.constants.MAX_RECURSION:
             stack_summary = self._get_stack_summary()
             raise RealisationError(
-                f"Maximum recursion depth ({config.max_recursion}) exceeded",
+                f"Maximum recursion depth ({config.constants.MAX_RECURSION}) exceeded",
                 spec=spec,
                 context=self.context,
                 suggestion=(
@@ -532,10 +584,11 @@ class Realiser:
         if not self._realiser_stack:
             return "Empty"
 
-        recent = self._realiser_stack[-MAX_STACK_PREVIEW:]
+        config = _get_config()
+        recent = self._realiser_stack[-config.constants.MAX_STACK_PREVIEW :]
         summary = " -> ".join(spec.__class__.__name__ for spec in recent)
-        if len(self._realiser_stack) > MAX_STACK_PREVIEW:
-            summary = f"... ({len(self._realiser_stack) - MAX_STACK_PREVIEW} more) -> {summary}"
+        if len(self._realiser_stack) > config.constants.MAX_STACK_PREVIEW:
+            summary = f"... ({len(self._realiser_stack) - config.constants.MAX_STACK_PREVIEW} more) -> {summary}"
         return summary
 
     def _get_cycle_path(self, target_spec: Spec) -> list[str]:
@@ -915,7 +968,7 @@ class Realiser:
             not spec.unroll
             and isinstance(spec.body, library.ETBlockSpec)
             and isinstance(times, int)
-            and times <= UNROLL_LIMIT
+            and times <= config.constants.UNROLL_LIMIT
         ):
             return self._realise_unrolled_independent(spec, times)
 
@@ -1156,6 +1209,8 @@ class GraphModule(nn.Module):  # type: ignore[misc]
         """Construct adjacency and dependency data for the graph."""
         from collections import defaultdict
 
+        config = _get_config()
+
         adjacency: defaultdict[str, list[tuple[str, str | None]]] = defaultdict(
             list,
         )
@@ -1167,7 +1222,11 @@ class GraphModule(nn.Module):  # type: ignore[misc]
         for edge in self.edges:
             source = edge[0]
             target = edge[1]
-            transform = edge[2] if len(edge) == FULL_EDGE_SIZE else None
+            transform = (
+                edge[2]
+                if len(edge) == config.constants.FULL_EDGE_SIZE
+                else None
+            )
 
             if source in self.nodes or source in self.inputs:
                 adjacency[source].append((target, transform))
