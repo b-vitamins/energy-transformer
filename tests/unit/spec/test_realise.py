@@ -12,6 +12,7 @@ import pytest
 import torch
 from torch import nn
 
+from energy_transformer.spec import library
 from energy_transformer.spec.combinators import (
     Graph,
     Identity,
@@ -212,6 +213,17 @@ class TestModuleCache:
         cache.put(spec3, ctx, module2)
         assert cache.get(spec3, ctx) is module2
         assert cache.get(spec3, ctx) is not module1
+
+    def test_etblockspec_key_uses_id(self):
+        """ETBlockSpec instances use their id in cache keys."""
+        cache = ModuleCache()
+        spec = library.ETBlockSpec(
+            attention=library.MHEASpec(num_heads=1, head_dim=16),
+            hopfield=library.HNSpec(),
+        )
+        key = cache._make_key(spec, Context())
+        assert key[0] == "nocache"
+        assert key[1] == id(spec)
 
 
 class TestRealisationError:
@@ -1171,6 +1183,37 @@ class TestModuleImplementations:
         y = gm(x)
         assert isinstance(y, torch.Tensor)
 
+    def test_graph_module_errors(self):
+        """GraphModule raises helpful errors on invalid graphs."""
+        nodes = {"a": nn.Identity(), "b": nn.Identity()}
+        gm_cycle = GraphModule(
+            nodes,
+            [("a", "b"), ("b", "a")],
+            inputs=["x"],
+            outputs=["a"],
+        )
+        with pytest.raises(RuntimeError, match="cycles"):
+            gm_cycle(torch.randn(1, 1))
+
+        gm_missing = GraphModule(
+            nodes, [("a", "b")], inputs=["x"], outputs=["b"]
+        )
+        with pytest.raises(RuntimeError, match="no inputs"):
+            gm_missing(torch.randn(1, 1))
+
+    def test_apply_edge_transform_variants(self):
+        """``_apply_edge_transform`` handles known and unknown transforms."""
+        gm = GraphModule({}, [], [], [])
+        t = torch.ones(1)
+        assert torch.allclose(
+            gm._apply_edge_transform(t, "relu"), torch.relu(t)
+        )
+        assert torch.allclose(
+            gm._apply_edge_transform(t, "sigmoid"), torch.sigmoid(t)
+        )
+        with pytest.raises(ValueError, match="unknown"):
+            gm._apply_edge_transform(t, "unknown")
+
 
 class TestAutoImport:
     """Test automatic import functionality."""
@@ -1212,6 +1255,17 @@ class TestAutoImport:
                 realiser.realise(UnregisteredSpec())
         finally:
             configure_realisation(auto_import=True)
+
+
+def test_validate_spec_tree_verbose_no_issues_again(capsys) -> None:
+    """Verbose validation prints success and recurses."""
+    import energy_transformer.spec as et_spec
+
+    spec = et_spec.seq(et_spec.IdentitySpec(), et_spec.IdentitySpec())
+    issues = et_spec.validate_spec_tree(spec, verbose=True)
+    out = capsys.readouterr().out
+    assert "No issues found" in out
+    assert issues == []
 
 
 # Module cleanup
