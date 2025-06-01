@@ -38,7 +38,7 @@ Example
 """
 
 from collections.abc import Callable
-from typing import TypeAlias
+from typing import Any, TypeAlias
 
 # Combinators
 from .combinators import (
@@ -65,6 +65,7 @@ from .combinators import (
     # Architectural patterns
     transformer_block,
 )
+from .metrics import MetricsCollector, RealisationMetrics
 
 # Core primitives
 from .primitives import (
@@ -144,6 +145,24 @@ def __getattr__(name: str) -> object:
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
+def get_realisation_metrics() -> dict[str, Any]:
+    """Get current realisation metrics."""
+    from .realise import _get_config
+
+    config = _get_config()
+    if config.metrics_collector.enabled:
+        return config.metrics_collector.get_metrics().get_summary()
+    return {}
+
+
+def reset_metrics() -> None:
+    """Reset realisation metrics."""
+    from .realise import _get_config
+
+    config = _get_config()
+    config.metrics_collector.reset()
+
+
 __all__ = [
     "REQUIRED",
     "AsyncSpec",
@@ -156,22 +175,22 @@ __all__ = [
     "Identity",
     "Lambda",
     "Loop",
+    "MetricsCollector",
     "ModuleCache",
     "Parallel",
     "RealisationError",
+    "RealisationMetrics",
     "Realiser",
     "RealiserPlugin",
     "Residual",
-    # --- Combinators ---
-    # Classes
     "Sequential",
-    # --- Core Primitives ---
     "Spec",
     "Switch",
     "ValidationError",
     "cond",
     "configure_realisation",
     "from_yaml",
+    "get_realisation_metrics",
     "graph",
     "loop",
     "mixture_of_experts",
@@ -181,18 +200,16 @@ __all__ = [
     "parallel",
     "param",
     "provides",
-    # --- Realisation ---
     "realise",
     "register",
     "register_typed",
     "requires",
+    "reset_metrics",
     "residual",
-    # Factory functions
     "seq",
     "spec",
     "switch",
     "to_yaml",
-    # Patterns
     "transformer_block",
     "validate_field",
     "visualize",
