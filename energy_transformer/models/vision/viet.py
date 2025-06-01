@@ -226,11 +226,12 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
         block_trajectories = []
 
         for et_block in self.et_blocks:
+            track_arg = et_kwargs.get("track", "both")
+            kw = {k: v for k, v in et_kwargs.items() if k != "track"}
             result = et_block(
                 x,
-                return_energy=True,
-                return_trajectory=True,
-                **et_kwargs,
+                track=track_arg,
+                **kw,
             )
             if hasattr(result, "tokens"):
                 x = result.tokens
@@ -330,6 +331,7 @@ def viet_tiny(**kwargs: Any) -> VisionEnergyTransformer:
         "hopfield_hidden_dim": 768,  # 4x embed_dim
         "et_steps": 4,
         "et_alpha": 0.125,
+        "in_chans": 3,
     }
     config.update(kwargs)
     return VisionEnergyTransformer(**config)
@@ -345,6 +347,7 @@ def viet_small(**kwargs: Any) -> VisionEnergyTransformer:
         "hopfield_hidden_dim": 1536,  # 4x embed_dim
         "et_steps": 4,
         "et_alpha": 0.125,
+        "in_chans": 3,
     }
     config.update(kwargs)
     return VisionEnergyTransformer(**config)
@@ -360,6 +363,7 @@ def viet_base(**kwargs: Any) -> VisionEnergyTransformer:
         "hopfield_hidden_dim": 3072,  # 4x embed_dim
         "et_steps": 4,
         "et_alpha": 0.125,
+        "in_chans": 3,
     }
     config.update(kwargs)
     return VisionEnergyTransformer(**config)
@@ -375,6 +379,7 @@ def viet_large(**kwargs: Any) -> VisionEnergyTransformer:
         "hopfield_hidden_dim": 4096,  # 4x embed_dim
         "et_steps": 4,
         "et_alpha": 0.125,
+        "in_chans": 3,
     }
     config.update(kwargs)
     return VisionEnergyTransformer(**config)

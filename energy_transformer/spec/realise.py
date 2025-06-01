@@ -49,7 +49,7 @@ from .primitives import Context, Spec, SpecMeta, ValidationError
 EDGE_TUPLE_SIZE: int = 2
 MAX_STACK_PREVIEW: int = 5
 FULL_EDGE_SIZE: int = 3
-UNROLL_LIMIT: int = 4
+UNROLL_LIMIT: int = 12
 
 # Default mappings for auto-importing modules based on Spec names
 module_mappings = {
