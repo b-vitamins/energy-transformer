@@ -21,6 +21,8 @@ import warnings
 from collections import defaultdict, deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
+import dataclasses
+import logging
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -97,6 +99,212 @@ module_mappings = {
     "DropoutSpec": ("torch.nn", "Dropout"),
     "IdentitySpec": ("torch.nn", "Identity"),
 }
+
+
+class AutoImporter:
+    """Handles automatic module importing for specs."""
+
+    def __init__(self, context: Context, warnings_enabled: bool = True) -> None:
+        self.context = context
+        self.warnings_enabled = warnings_enabled
+        self.logger = logging.getLogger(__name__)
+
+    def try_import(self, spec: Spec) -> nn.Module | None:
+        """Try to automatically import and instantiate a module."""
+        spec_name = spec.__class__.__name__
+        mapping = module_mappings.get(spec_name)
+
+        if not mapping:
+            if self.warnings_enabled:
+                self.logger.debug(
+                    "No auto-import mapping for %s. Available mappings: %s",
+                    spec_name,
+                    list(module_mappings.keys()),
+                )
+            return None
+
+        module_path, class_name = mapping
+        module = self._import_module(module_path)
+        if not module:
+            return None
+
+        cls = self._get_class(module, module_path, class_name)
+        if not cls:
+            return None
+
+        kwargs = self._extract_kwargs(spec, spec_name)
+        if kwargs is None:
+            return None
+
+        return self._instantiate(cls, class_name, kwargs)
+
+    def _import_module(self, module_path: str) -> Any:
+        """Import a module by path."""
+        try:
+            return importlib.import_module(module_path)
+        except ImportError as e:
+            if self.warnings_enabled:
+                self.logger.warning(
+                    "Failed to import %s for auto-import: %s. "
+                    "Is the module installed? Try: pip install energy-transformer[all]",
+                    module_path,
+                    e,
+                )
+            return None
+        except Exception as e:  # pragma: no cover - unexpected
+            if self.warnings_enabled:
+                self.logger.exception(
+                    "Unexpected error importing %s: %s",
+                    module_path,
+                    type(e).__name__,
+                )
+            return None
+
+    def _get_class(self, module: Any, module_path: str, class_name: str) -> Any:
+        """Get a class from a module."""
+        try:
+            return getattr(module, class_name)
+        except AttributeError:
+            if self.warnings_enabled:
+                available = [a for a in dir(module) if not a.startswith("_")]
+                self.logger.warning(
+                    "Module %s has no attribute %s. Available attributes: %s",
+                    module_path,
+                    class_name,
+                    available[:10],
+                )
+            return None
+
+    def _extract_kwargs(self, spec: Any, spec_name: str) -> dict[str, Any] | None:
+        """Extract kwargs from spec based on spec type."""
+        try:
+            kwargs = self._get_base_kwargs(spec)
+            self._apply_spec_specific_logic(spec, spec_name, kwargs)
+            return self._clean_kwargs(kwargs)
+        except Exception as e:  # pragma: no cover - unexpected
+            if self.warnings_enabled:
+                self.logger.exception(
+                    "Failed to extract kwargs from %s: %s",
+                    spec_name,
+                    type(e).__name__,
+                )
+            return None
+
+    def _get_base_kwargs(self, spec: Any) -> dict[str, Any]:
+        """Extract base kwargs from dataclass fields."""
+        kwargs: dict[str, Any] = {}
+
+        if hasattr(spec, "__dataclass_fields__"):
+            for field_name, field_info in spec.__dataclass_fields__.items():
+                if field_name.startswith("_"):
+                    continue
+                value = getattr(spec, field_name)
+                if self._is_default_value(value, field_info):
+                    continue
+                kwargs[field_name] = value
+
+        return kwargs
+
+    def _is_default_value(self, value: Any, field_info: Any) -> bool:
+        """Check if a value is the default for a field."""
+        if (
+            hasattr(field_info, "default_factory")
+            and field_info.default_factory is not dataclasses.MISSING
+        ):
+            return False
+
+        if hasattr(field_info, "default") and field_info.default is not dataclasses.MISSING:
+            return value == field_info.default
+
+        return False
+
+    def _apply_spec_specific_logic(
+        self, spec: Any, spec_name: str, kwargs: dict[str, Any]
+    ) -> None:
+        """Apply spec-specific parameter transformation logic."""
+        handler_name = f"_handle_{spec_name}"
+        handler = getattr(self, handler_name, None)
+        if handler:
+            handler(spec, kwargs)
+
+    def _handle_MHEASpec(self, spec: Any, kwargs: dict[str, Any]) -> None:
+        if embed_dim := self.context.get_dim("embed_dim"):
+            kwargs["in_dim"] = embed_dim
+
+    def _handle_MHASpec(self, spec: Any, kwargs: dict[str, Any]) -> None:
+        if embed_dim := self.context.get_dim("embed_dim"):
+            kwargs["embed_dim"] = embed_dim
+
+    def _handle_HNSpec(self, spec: Any, kwargs: dict[str, Any]) -> None:
+        if embed_dim := self.context.get_dim("embed_dim"):
+            kwargs["in_dim"] = embed_dim
+            if spec.hidden_dim is None and hasattr(spec, "multiplier"):
+                kwargs["hidden_dim"] = int(embed_dim * spec.multiplier)
+                kwargs.pop("multiplier", None)
+
+    def _handle_SHNSpec(self, spec: Any, kwargs: dict[str, Any]) -> None:
+        if embed_dim := self.context.get_dim("embed_dim"):
+            kwargs["in_dim"] = embed_dim
+            if spec.hidden_dim is None and hasattr(spec, "multiplier"):
+                pass
+
+        if (
+            "num_vertices" not in kwargs
+            and spec.num_vertices is None
+            and (vertices := self.context.get_dim("simplicial_vertices"))
+        ):
+            kwargs["num_vertices"] = vertices
+
+    def _clean_kwargs(self, kwargs: dict[str, Any]) -> dict[str, Any]:
+        cleaned = {
+            k: v
+            for k, v in kwargs.items()
+            if v is not None and k not in ["_type", "_version"]
+        }
+
+        if self.warnings_enabled and self.logger.isEnabledFor(logging.DEBUG):
+            self.logger.debug("Auto-import kwargs after cleaning: %s", cleaned)
+
+        return cleaned
+
+    def _instantiate(self, cls: type, class_name: str, kwargs: dict[str, Any]) -> nn.Module | None:
+        try:
+            instance = cls(**kwargs)
+            if not isinstance(instance, nn.Module):
+                if self.warnings_enabled:
+                    self.logger.warning(
+                        "Auto-imported %s is not an nn.Module, got %s",
+                        class_name,
+                        type(instance),
+                    )
+                return None
+
+            if self.warnings_enabled:
+                self.logger.info(
+                    "Successfully auto-imported %s as %s",
+                    class_name,
+                    instance.__class__.__name__,
+                )
+
+            return instance
+        except TypeError as e:
+            if self.warnings_enabled:
+                self.logger.warning(
+                    "Failed to instantiate %s: %s. Provided kwargs: %s. "
+                    "This usually means the spec and module have incompatible parameters.",
+                    class_name,
+                    str(e),
+                    list(kwargs.keys()),
+                )
+            return None
+        except Exception as e:  # pragma: no cover - unexpected
+            if self.warnings_enabled:
+                self.logger.exception(
+                    "Failed to instantiate %s: %s",
+                    class_name,
+                    type(e).__name__,
+                )
+            return None
 
 if TYPE_CHECKING:
     pass
@@ -694,167 +902,11 @@ class Realiser:
                         )
         return None
 
-    def _try_auto_import(self, spec: Spec) -> nn.Module | None:  # noqa: C901, PLR0911, PLR0912, PLR0915
-        """Try to automatically import and instantiate a module.
-
-        All failures are logged when warnings are enabled to aid debugging.
-        """
-        import logging
-
+    def _try_auto_import(self, spec: Spec) -> nn.Module | None:
+        """Try to automatically import and instantiate a module."""
         config = _get_config()
-
-        logger = logging.getLogger(__name__)
-
-        spec_name = spec.__class__.__name__
-
-        mapping = module_mappings.get(spec_name)
-        if not mapping:
-            if config.warnings:
-                logger.debug(
-                    "No auto-import mapping for %s. Available mappings: %s",
-                    spec_name,
-                    list(module_mappings.keys()),
-                )
-            return None
-
-        module_path, class_name = mapping
-
-        try:
-            module = importlib.import_module(module_path)
-        except ImportError as e:
-            if config.warnings:
-                logger.warning(
-                    "Failed to import %s for %s: %s. Is the module installed? Try: pip install energy-transformer[all]",
-                    module_path,
-                    spec_name,
-                    e,
-                )
-            return None
-        except Exception as e:
-            if config.warnings:
-                logger.exception(
-                    "Unexpected error importing %s: %s",
-                    module_path,
-                    type(e).__name__,
-                )
-            return None
-
-        try:
-            cls = getattr(module, class_name)
-        except AttributeError:
-            if config.warnings:
-                logger.warning(
-                    "Module %s has no attribute %s. Available attributes: %s",
-                    module_path,
-                    class_name,
-                    [a for a in dir(module) if not a.startswith("_")],
-                )
-            return None
-
-        try:
-            spec_any = cast(Any, spec)
-            kwargs: dict[str, Any] = {}
-            for field_name, field_info in spec_any.__dataclass_fields__.items():
-                if field_name.startswith("_"):
-                    continue
-                value = getattr(spec_any, field_name)
-                if callable(field_info.default) or value == field_info.default:
-                    continue
-                kwargs[field_name] = value
-
-            # Special handling based on spec type
-
-            if spec_name == "MHEASpec":
-                if embed_dim := self.context.get_dim("embed_dim"):
-                    kwargs["in_dim"] = embed_dim
-
-            elif spec_name == "MHASpec":
-                if embed_dim := self.context.get_dim("embed_dim"):
-                    kwargs["embed_dim"] = embed_dim
-
-            elif spec_name == "HNSpec":
-                if embed_dim := self.context.get_dim("embed_dim"):
-                    kwargs["in_dim"] = embed_dim
-                    if spec_any.hidden_dim is None and hasattr(
-                        spec_any, "multiplier"
-                    ):
-                        kwargs["hidden_dim"] = int(
-                            embed_dim * spec_any.multiplier
-                        )
-                        kwargs.pop("multiplier", None)
-
-            elif spec_name == "SHNSpec":
-                if embed_dim := self.context.get_dim("embed_dim"):
-                    kwargs["in_dim"] = embed_dim
-                    if spec_any.hidden_dim is None and hasattr(
-                        spec_any, "multiplier"
-                    ):
-                        pass
-                if (
-                    "num_vertices" not in kwargs
-                    and spec_any.num_vertices is None
-                    and (
-                        vertices := self.context.get_dim("simplicial_vertices")
-                    )
-                ):
-                    kwargs["num_vertices"] = vertices
-
-            kwargs = {
-                k: v
-                for k, v in kwargs.items()
-                if v is not None and k not in ["_type", "_version"]
-            }
-
-            if config.warnings and logger.isEnabledFor(logging.DEBUG):
-                logger.debug(
-                    "Auto-importing %s with kwargs: %s",
-                    class_name,
-                    kwargs,
-                )
-        except Exception as e:
-            if config.warnings:
-                logger.exception(
-                    "Failed to extract kwargs from %s: %s",
-                    spec_name,
-                    type(e).__name__,
-                )
-            return None
-
-        try:
-            instance = cls(**kwargs)
-            if not isinstance(instance, nn.Module):
-                if config.warnings:
-                    logger.warning(
-                        "Auto-imported %s is not an nn.Module, got %s",
-                        class_name,
-                        type(instance),
-                    )
-                return None
-
-            if config.warnings:
-                logger.info(
-                    "Successfully auto-imported %s as %s",
-                    spec_name,
-                    class_name,
-                )
-        except TypeError as e:
-            if config.warnings:
-                error_msg = str(e)
-                logger.warning(
-                    "Failed to instantiate %s: %s. Provided kwargs: %s. This usually means the spec and module have incompatible parameters.",
-                    class_name,
-                    error_msg,
-                    list(kwargs.keys()),
-                )
-            return None
-        except Exception as e:
-            if config.warnings:
-                logger.exception(
-                    "Failed to instantiate %s: %s", class_name, type(e).__name__
-                )
-            return None
-        else:
-            return instance
+        importer = AutoImporter(self.context, config.warnings)
+        return importer.try_import(spec)
 
     def _realise_sequential(self, spec: Sequential) -> nn.Module:
         """Realise sequential composition."""

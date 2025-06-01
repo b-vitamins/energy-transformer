@@ -471,9 +471,9 @@ class Graph(Spec):
         self.edges = edges or []
         self.inputs = inputs or []
         self.outputs = outputs or []
-        self.__post_init__()
+        self._validate_graph_structure()
 
-    def __post_init__(self) -> None:
+    def _validate_graph_structure(self) -> None:
         """Validate graph structure immediately after creation."""
         try:
             has_cycle = self._has_cycle()
