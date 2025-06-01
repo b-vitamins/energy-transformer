@@ -706,9 +706,14 @@ class Realiser:
                 kwargs[field_name] = value
 
             # Special handling based on spec type
+
             if spec_name == "MHEASpec":
                 if embed_dim := self.context.get_dim("embed_dim"):
                     kwargs["in_dim"] = embed_dim
+
+            elif spec_name == "MHASpec":
+                if embed_dim := self.context.get_dim("embed_dim"):
+                    kwargs["embed_dim"] = embed_dim
 
             elif spec_name == "HNSpec":
                 if embed_dim := self.context.get_dim("embed_dim"):
@@ -1709,4 +1714,27 @@ def realise_cls_head(
         representation_size=spec.representation_size,
         drop_rate=spec.drop_rate,
         use_cls_token=spec.use_cls_token,
+    )
+
+
+@register(library.MHASpec)
+def realise_mha(
+    spec: library.MHASpec,
+    context: Context,
+) -> nn.Module:
+    """Realise ``MHASpec`` into a standard ``nn.MultiheadAttention``."""
+    embed_dim = context.get_dim("embed_dim")
+    if embed_dim is None:
+        raise RealisationError(
+            "MHASpec requires 'embed_dim' in context",
+            spec=spec,
+            context=context,
+        )
+
+    return nn.MultiheadAttention(
+        embed_dim=embed_dim,
+        num_heads=spec.num_heads,
+        dropout=spec.attn_drop,
+        bias=spec.qkv_bias,
+        batch_first=True,
     )

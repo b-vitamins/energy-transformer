@@ -39,8 +39,6 @@ from energy_transformer.spec.primitives import ValidationError
 
 pytestmark = pytest.mark.integration
 
-pytest.skip("Exhaustive spec tests not implemented", allow_module_level=True)
-
 
 class TestLayerSpecs:
     """Test all layer specifications."""
