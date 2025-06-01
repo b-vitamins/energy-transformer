@@ -34,6 +34,10 @@ from .combinators import (
 )
 from .primitives import Context, Spec, SpecMeta, ValidationError
 
+EDGE_TUPLE_SIZE: int = 2
+MAX_STACK_PREVIEW: int = 5
+FULL_EDGE_SIZE: int = 3
+
 # Default mappings for auto-importing modules based on Spec names
 module_mappings = {
     "LayerNormSpec": ("energy_transformer.layers", "LayerNorm"),
@@ -178,14 +182,14 @@ class ModuleCache:
         self._hit_count = 0
         self._miss_count = 0
 
-    def _make_key(self, spec: Spec, context: Context) -> tuple[Any, ...]:  # noqa: C901
+    def _make_key(self, spec: Spec, context: Context) -> tuple[Any, ...]:  # noqa: C901, PLR0911
         """Create cache key from spec and context.
 
         This implementation performs deep sorting of nested structures and
         handles cycles gracefully to ensure deterministic keys.
         """
 
-        def make_hashable(obj: object, seen: set[int] | None = None) -> object:  # noqa: C901
+        def make_hashable(obj: object, seen: set[int] | None = None) -> object:  # noqa: C901, PLR0911
             """Recursively convert ``obj`` into a hashable form."""
             if seen is None:
                 seen = set()
@@ -556,10 +560,10 @@ class Realiser:
         if not self._realiser_stack:
             return "Empty"
 
-        recent = self._realiser_stack[-5:]
+        recent = self._realiser_stack[-MAX_STACK_PREVIEW:]
         summary = " -> ".join(spec.__class__.__name__ for spec in recent)
-        if len(self._realiser_stack) > 5:
-            summary = f"... ({len(self._realiser_stack) - 5} more) -> {summary}"
+        if len(self._realiser_stack) > MAX_STACK_PREVIEW:
+            summary = f"... ({len(self._realiser_stack) - MAX_STACK_PREVIEW} more) -> {summary}"
         return summary
 
     def _get_cycle_path(self, target_spec: Spec) -> list[str]:
@@ -654,7 +658,7 @@ class Realiser:
                         )
         return None
 
-    def _try_auto_import(self, spec: Spec) -> nn.Module | None:  # noqa: C901
+    def _try_auto_import(self, spec: Spec) -> nn.Module | None:  # noqa: C901, PLR0911, PLR0912, PLR0915
         """Try to automatically import and instantiate a module.
 
         All failures are logged when warnings are enabled to aid debugging.
@@ -1112,11 +1116,9 @@ class GraphModule(nn.Module):  # type: ignore[misc]
         )
 
         for edge in self.edges:
-            if len(edge) == 2:
-                source, target = edge
-                transform = None
-            else:
-                source, target, transform = edge
+            source = edge[0]
+            target = edge[1]
+            transform = edge[2] if len(edge) == FULL_EDGE_SIZE else None
 
             if source in self.nodes or source in self.inputs:
                 adjacency[source].append((target, transform))
@@ -1523,7 +1525,6 @@ def realise_et_block(
     _spec: library.ETBlockSpec, _context: Context
 ) -> nn.Module:
     """Realise an :class:`ETBlockSpec` into a dummy ETBlock module."""
-    global _config
 
     class ETBlock(nn.Module):
         def forward(self, x: torch.Tensor) -> torch.Tensor:  # type: ignore[override]

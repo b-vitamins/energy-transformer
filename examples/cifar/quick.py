@@ -94,8 +94,8 @@ def quick_test(
         model.train()
         train_loss, train_correct = 0, 0
 
-        for data, target in train_loader:
-            data, target = data.to(device), target.to(device)
+        for data_cpu, target_cpu in train_loader:
+            data, target = data_cpu.to(device), target_cpu.to(device)
             optimizer.zero_grad()
 
             output = (
@@ -115,8 +115,8 @@ def quick_test(
         test_correct = 0
 
         with torch.no_grad():
-            for data, target in test_loader:
-                data, target = data.to(device), target.to(device)
+            for data_cpu, target_cpu in test_loader:
+                data, target = data_cpu.to(device), target_cpu.to(device)
                 output = (
                     model(data, et_kwargs={"detach": True})
                     if is_et

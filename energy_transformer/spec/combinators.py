@@ -39,6 +39,8 @@ __all__ = [
     "transformer_block",
 ]
 
+EPS: float = 1e-6
+
 T = TypeVar("T", bound=Spec)
 S = TypeVar("S", bound=Spec)
 
@@ -234,7 +236,7 @@ class Parallel(Spec):
         """Return all branches as children."""
         return list(self.branches)
 
-    def validate(self, context: Context) -> list[str]:  # noqa: C901
+    def validate(self, context: Context) -> list[str]:  # noqa: C901, PLR0912
         """Validate all branches and merge compatibility.
 
         Parameters
@@ -306,7 +308,7 @@ class Parallel(Spec):
             if not all(isinstance(w, int | float) for w in self.weights):
                 issues.append("All weights must be numeric")
 
-            if self.merge == "add" and abs(sum(self.weights) - 1.0) > 1e-6:
+            if self.merge == "add" and abs(sum(self.weights) - 1.0) > EPS:
                 issues.append(
                     f"Warning: Weights sum to {sum(self.weights)}, not 1.0. "
                     f"This may cause unexpected scaling.",

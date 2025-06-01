@@ -106,8 +106,8 @@ class MultiHeadEnergyAttention(BaseEnergyAttention):
             self.register_parameter("b_k", None)
             self.register_parameter("b_q", None)
 
-        # β – same default as the original ET implementation
-        self.β = beta if beta is not None else 1.0 / math.sqrt(head_dim)
+        # beta – same default as the original ET implementation
+        self.beta = beta if beta is not None else 1.0 / math.sqrt(head_dim)
 
         # Store initialization std for reset_parameters
         self.init_std = init_std
@@ -207,11 +207,11 @@ class MultiHeadEnergyAttention(BaseEnergyAttention):
             a = a + attn_mask  # shape: [..., H, N, N]
 
         # β·Aₕᴮᶜ - Scale attention matrix by temperature
-        βa = self.β * a  # shape: [..., H, N, N]
+        beta_a = self.beta * a  # shape: [..., H, N, N]
 
         # log(∑ᴮ exp(β·Aₕᴮᶜ)) - LogSumExp over keys dimension
-        lse = torch.logsumexp(βa, dim=-2)  # shape: [..., H, N]
+        lse = torch.logsumexp(beta_a, dim=-2)  # shape: [..., H, N]
 
         # E^ATT = -(1/β)·∑ₕ₌₁ᴴ·∑ᶜ₌₁ᴺ·log(∑ᴮ exp(β·Aₕᴮᶜ))
-        β_inv = 1.0 / self.β
-        return -(β_inv * lse).sum()  # scalar
+        beta_inv = 1.0 / self.beta
+        return -(beta_inv * lse).sum()  # scalar

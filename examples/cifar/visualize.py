@@ -8,6 +8,8 @@ from typing import Any
 import matplotlib.pyplot as plt
 import numpy as np
 
+MIN_VISET_RESULTS = 3
+
 DATA_HOME = (
     Path.home() / ".local" / "share" / "energy-transformer" / "experiments"
 )
@@ -80,7 +82,7 @@ def plot_results(results: list[dict[str, Any]], save_dir: Path) -> None:
 
     # Topology analysis if available
     viset_results = {r["name"]: r for r in results if "ViSET" in r["name"]}
-    if len(viset_results) >= 3:
+    if len(viset_results) >= MIN_VISET_RESULTS:
         fig, ax = plt.subplots(1, 1, figsize=(8, 6))
 
         # Extract different configurations

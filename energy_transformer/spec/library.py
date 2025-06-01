@@ -45,6 +45,11 @@ __all__ = [
     "validate_probability",
 ]
 
+MAX_DIM: int = 65536
+MAX_MULTIPLIER: float = 8.0
+MAX_COMPLEX_DIM: int = 3
+MAX_STEPS: int = 50
+
 
 # Utility functions
 def to_pair(x: int | tuple[int, int]) -> tuple[int, int]:
@@ -66,7 +71,7 @@ def validate_probability(x: float) -> bool:
 
 def validate_dimension(x: int) -> bool:
     """Validate dimension is positive and reasonable."""
-    return 0 < x <= 65536  # Reasonable upper bound
+    return 0 < x <= MAX_DIM  # Reasonable upper bound
 
 
 # Core Energy Transformer layer specifications
@@ -221,7 +226,9 @@ class HNSpec(Spec):
     """
 
     hidden_dim: Dimension | None = param(default=None, dimension=True)
-    multiplier: float = param(default=4.0, validator=lambda x: 0 < x <= 8)
+    multiplier: float = param(
+        default=4.0, validator=lambda x: 0 < x <= MAX_MULTIPLIER
+    )
     energy_fn: str = param(
         default="relu_squared",
         choices=["relu_squared", "softmax", "tanh"],
@@ -288,14 +295,18 @@ class SHNSpec(Spec):
         default=None,
         validator=lambda x: x is None or x > 0,
     )
-    max_dim: int = param(default=1, validator=lambda x: 1 <= x <= 3)
+    max_dim: int = param(
+        default=1, validator=lambda x: 1 <= x <= MAX_COMPLEX_DIM
+    )
     budget: float = param(default=0.1, validator=lambda x: 0 < x <= 1)
     dim_weights: dict[int, float] | None = param(default=None)
     coordinates: list[tuple[float, float]] | None = param(default=None)
 
     # Network parameters
     hidden_dim: Dimension | None = param(default=None, dimension=True)
-    multiplier: float = param(default=4.0, validator=lambda x: 0 < x <= 8)
+    multiplier: float = param(
+        default=4.0, validator=lambda x: 0 < x <= MAX_MULTIPLIER
+    )
     temperature: float = param(default=0.5, validator=validate_positive)
 
     def apply_context(self, context: Context) -> Context:
@@ -341,7 +352,7 @@ class ETBlockSpec(Spec):
         Hopfield network specification (standard or simplicial)
     """
 
-    steps: int = param(default=12, validator=lambda x: 0 < x <= 50)
+    steps: int = param(default=12, validator=lambda x: 0 < x <= MAX_STEPS)
     alpha: float = param(default=0.125, validator=validate_positive)
     layer_norm: LayerNormSpec = param(default_factory=LayerNormSpec)
     attention: MHEASpec = param(default_factory=MHEASpec)
