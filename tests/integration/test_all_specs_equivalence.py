@@ -59,6 +59,7 @@ class TestLayerSpecs:
             from_spec = realise(spec, ctx)
 
             assert isinstance(from_spec, LayerNorm)
+            assert type(from_spec) is type(direct)
             assert from_spec.in_dim == direct.in_dim
             assert from_spec.eps == direct.eps
 
