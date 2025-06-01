@@ -5,28 +5,29 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
+import Path
 import torch
 
 from energy_transformer.models.vision import (
-    vit_tiny,
+    viet_base,
     viet_tiny,
+    viset_base,
     viset_tiny,
     vit_base,
-    viet_base,
-    viset_base,
+    vit_tiny,
 )
-from memory_utils import MemoryProfiler, analyze_memory_scaling
+
+from .memory_utils import MemoryProfiler, analyze_memory_scaling
 
 
 def profile_model_memory(
     model_name: str,
     model_factory,
-    model_config: Dict[str, Any],
+    model_config: dict[str, Any],
     device: torch.device,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Profile detailed memory usage of a model."""
     profiler = MemoryProfiler(device)
 
@@ -159,7 +160,7 @@ def main() -> None:
                 f"  Peak GPU: {result['inference_memory']['peak_gpu_mb']:.1f} MB"
             )
 
-    with open(args.output, "w") as f:
+    with Path.open(args.output, "w") as f:
         json.dump(results, f, indent=2)
 
     print(f"\nDetailed results saved to {args.output}")

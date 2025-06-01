@@ -5,21 +5,17 @@ from __future__ import annotations
 import numpy as np
 import pytest
 import torch
-from typing import Dict, List, Tuple
 
+from energy_transformer.layers import (
+    HopfieldNetwork,
+    LayerNorm,
+    MultiHeadEnergyAttention,
+    SimplicialHopfieldNetwork,
+)
 from energy_transformer.models.vision import (
-    vit_tiny,
     viet_tiny,
     viset_tiny,
-    vit_base,
-    viet_base,
-    viset_base,
-)
-from energy_transformer.layers import (
-    MultiHeadEnergyAttention,
-    HopfieldNetwork,
-    SimplicialHopfieldNetwork,
-    LayerNorm,
+    vit_tiny,
 )
 
 from .memory_utils import MemoryProfiler, analyze_memory_scaling
@@ -166,7 +162,7 @@ class TestModelMemory:
         }
 
         profiler = MemoryProfiler(device)
-        results: Dict[str, int] = {}
+        results: dict[str, int] = {}
 
         for name, factory in models.items():
             model = (
@@ -241,7 +237,7 @@ class TestComponentMemory:
             .eval()
         )
 
-        results: List[Dict[str, float]] = []
+        results: list[dict[str, float]] = []
 
         for seq_len in [64, 128, 256, 512]:
             x = torch.randn(batch_size, seq_len, embed_dim, device=device)

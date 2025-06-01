@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import gc
 import os
+from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Any
 
 import psutil
 import torch
-import tracemalloc
 
 
 @dataclass
@@ -23,7 +23,7 @@ class MemorySnapshot:
     gpu_reserved_mb: float
     gpu_max_allocated_mb: float
 
-    def __sub__(self, other: "MemorySnapshot") -> "MemorySnapshot":
+    def __sub__(self, other: MemorySnapshot) -> MemorySnapshot:
         """Calculate memory difference."""
         return MemorySnapshot(
             cpu_rss_mb=self.cpu_rss_mb - other.cpu_rss_mb,
@@ -99,7 +99,7 @@ class MemoryProfiler:
         num_runs: int = 1,
         return_output: bool = False,
         **kwargs: Any,
-    ) -> Tuple[MemorySnapshot, Any]:
+    ) -> tuple[MemorySnapshot, Any]:
         """Profile memory usage of a function."""
         self.clean_memory()
 
@@ -130,11 +130,11 @@ class MemoryProfiler:
 
 def analyze_memory_scaling(
     model_factory: Callable[..., Any],
-    model_kwargs: Dict[str, Any],
-    batch_sizes: List[int],
-    input_size: Tuple[int, ...],
+    model_kwargs: dict[str, Any],
+    batch_sizes: list[int],
+    input_size: tuple[int, ...],
     device: torch.device,
-) -> Dict[str, List[Tuple[int, float]]]:
+) -> dict[str, list[tuple[int, float]]]:
     """Analyze how memory scales with batch size."""
     profiler = MemoryProfiler(device)
     results = {

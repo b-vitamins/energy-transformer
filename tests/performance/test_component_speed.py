@@ -2,18 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Dict
-
-import numpy as np
 import pytest
 import torch
 
 from energy_transformer.layers import (
-    MultiHeadEnergyAttention,
     HopfieldNetwork,
-    SimplicialHopfieldNetwork,
     LayerNorm,
+    MultiHeadEnergyAttention,
     PatchEmbedding,
+    SimplicialHopfieldNetwork,
 )
 from energy_transformer.models.base import EnergyTransformer
 
@@ -225,7 +222,7 @@ class TestLayerPerformance:
         image_sizes = [224, 384]
         patch_sizes = [16, 32]
 
-        results: list[Dict[str, float]] = []
+        results: list[dict[str, float]] = []
 
         for img_size in image_sizes:
             for patch_size in patch_sizes:
