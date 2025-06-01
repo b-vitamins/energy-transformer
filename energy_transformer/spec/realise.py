@@ -171,7 +171,9 @@ class AutoImporter:
                 )
             return None
 
-    def _extract_kwargs(self, spec: Spec, spec_name: str) -> dict[str, Any] | None:
+    def _extract_kwargs(
+        self, spec: Spec, spec_name: str
+    ) -> dict[str, Any] | None:
         """Extract kwargs from spec based on spec type."""
         try:
             kwargs = self._get_base_kwargs(spec)
@@ -201,7 +203,9 @@ class AutoImporter:
 
         return kwargs
 
-    def _is_default_value(self, value: object, field_info: dataclasses.Field[object]) -> bool:
+    def _is_default_value(
+        self, value: object, field_info: dataclasses.Field[object]
+    ) -> bool:
         """Check if a value is the default for a field."""
         if (
             hasattr(field_info, "default_factory")
@@ -209,7 +213,10 @@ class AutoImporter:
         ):
             return False
 
-        if hasattr(field_info, "default") and field_info.default is not dataclasses.MISSING:
+        if (
+            hasattr(field_info, "default")
+            and field_info.default is not dataclasses.MISSING
+        ):
             return value == field_info.default
 
         return False
@@ -304,6 +311,7 @@ class AutoImporter:
                 )
 
             return instance
+
 
 if TYPE_CHECKING:
     from .library import HNSpec, MHEASpec, SHNSpec

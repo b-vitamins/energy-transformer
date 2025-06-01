@@ -21,7 +21,7 @@ class TestAutoImporter:
         context = Context(dimensions={"embed_dim": 768})
         importer = AutoImporter(context, warnings_enabled=False)
 
-        with patch('importlib.import_module') as mock_import:
+        with patch("importlib.import_module") as mock_import:
             mock_module = Mock()
             mock_class = Mock(return_value=Mock(spec=nn.Module))
             mock_module.MultiHeadEnergyAttention = mock_class
@@ -37,7 +37,7 @@ class TestAutoImporter:
         context = Context(dimensions={"embed_dim": 768})
         importer = AutoImporter(context, warnings_enabled=False)
 
-        with patch('importlib.import_module') as mock_import:
+        with patch("importlib.import_module") as mock_import:
             mock_import.side_effect = ImportError("Module not found")
             result = importer.try_import(spec)
             assert result is None
