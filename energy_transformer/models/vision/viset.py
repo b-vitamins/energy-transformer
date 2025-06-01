@@ -63,11 +63,11 @@ from typing import Any
 
 from torch import nn
 
-from ...layers.attention import MultiHeadEnergyAttention
-from ...layers.layer_norm import LayerNorm
-from ...layers.simplicial import SimplicialHopfieldNetwork
-from ...models.base import EnergyTransformer
-from .viet import VisionEnergyTransformer
+from energy_transformer.layers.attention import MultiHeadEnergyAttention
+from energy_transformer.layers.layer_norm import LayerNorm
+from energy_transformer.layers.simplicial import SimplicialHopfieldNetwork
+from energy_transformer.models.base import EnergyTransformer
+from energy_transformer.models.vision.viet import VisionEnergyTransformer
 
 
 class VisionSimplicialEnergyTransformer(VisionEnergyTransformer):

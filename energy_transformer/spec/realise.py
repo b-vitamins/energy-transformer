@@ -586,9 +586,8 @@ class Realiser:
             return module
 
         # Try auto-import if enabled
-        if _config.auto_import:
-            if module := self._try_auto_import(spec):
-                return module
+        if _config.auto_import and (module := self._try_auto_import(spec)):
+            return module
 
         # No realiser found
         raise RealisationError(

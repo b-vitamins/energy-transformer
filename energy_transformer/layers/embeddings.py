@@ -125,9 +125,11 @@ class PatchEmbedding(nn.Module):  # type: ignore[misc]
         b, c, h, w = x.shape
 
         # Validate input dimensions
-        assert h == self.img_size[0] and w == self.img_size[1], (
-            f"Input size ({h}*{w}) doesn't match model "
-            f"({self.img_size[0]}*{self.img_size[1]})"
+        assert h == self.img_size[0], (
+            f"Input height {h} does not match expected {self.img_size[0]}"
+        )
+        assert w == self.img_size[1], (
+            f"Input width {w} does not match expected {self.img_size[1]}"
         )
 
         # Extract patches and project to embedding space

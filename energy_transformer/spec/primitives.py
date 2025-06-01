@@ -704,22 +704,24 @@ class Spec(ABC, metaclass=SpecMeta):
                 )
 
             # Run field validator
-            if validator := field_info.metadata.get("validator"):
-                if not validator(value):
-                    raise ValidationError(
-                        f"Validation failed for {value!r}",
-                        spec=self,
-                        field_name=field_info.name,
-                    )
+            if (
+                validator := field_info.metadata.get("validator")
+            ) and not validator(value):
+                raise ValidationError(
+                    f"Validation failed for {value!r}",
+                    spec=self,
+                    field_name=field_info.name,
+                )
 
             # Check choices
-            if choices := field_info.metadata.get("choices"):
-                if value not in choices:
-                    raise ValidationError(
-                        f"Value {value!r} not in allowed choices {choices}",
-                        spec=self,
-                        field_name=field_info.name,
-                    )
+            if (
+                choices := field_info.metadata.get("choices")
+            ) and value not in choices:
+                raise ValidationError(
+                    f"Value {value!r} not in allowed choices {choices}",
+                    spec=self,
+                    field_name=field_info.name,
+                )
 
                 if choices:
                     choice_types = {type(c) for c in choices}
@@ -806,12 +808,14 @@ class Spec(ABC, metaclass=SpecMeta):
         list[str]
             Version-related validation issues
         """
-        if hasattr(context, "spec_version"):
-            if context.spec_version not in self._compatible_versions:
-                return [
-                    f"Version mismatch: context has {context.spec_version}, "
-                    f"spec supports {self._compatible_versions}",
-                ]
+        if (
+            hasattr(context, "spec_version")
+            and context.spec_version not in self._compatible_versions
+        ):
+            return [
+                f"Version mismatch: context has {context.spec_version}, "
+                f"spec supports {self._compatible_versions}",
+            ]
         return []
 
     def _validate_required_dimensions(self, context: Context) -> list[str]:
@@ -895,9 +899,10 @@ class Spec(ABC, metaclass=SpecMeta):
                 value = getattr(self, dim)
                 if isinstance(value, int):
                     context.set_dim(dim, value)
-                elif isinstance(value, Dimension):
-                    if resolved := value.resolve(context):
-                        context.set_dim(dim, resolved)
+                elif isinstance(value, Dimension) and (
+                    resolved := value.resolve(context)
+                ):
+                    context.set_dim(dim, resolved)
 
         return context
 

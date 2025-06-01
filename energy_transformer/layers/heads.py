@@ -124,12 +124,7 @@ class ClassificationHead(nn.Module):  # type: ignore[misc]
             Classification logits of shape (B, num_classes).
         """
         # Extract global representation
-        if self.use_cls_token:
-            # Use CLS token (first token in sequence)
-            x = x[:, 0]  # (B, D)
-        else:
-            # Use global average pooling over all tokens
-            x = x.mean(dim=1)  # (B, D)
+        x = x[:, 0] if self.use_cls_token else x.mean(dim=1)  # (B, D)
 
         # Apply pre-logits processing
         x = self.pre_logits(x)  # (B, representation_size) or (B, D)

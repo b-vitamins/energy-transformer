@@ -65,7 +65,7 @@ def test_simplex_budget_manager_normalize_dimension_weights() -> None:
     )
     assert weights == {1: 0.5, 2: 0.5}
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="dim_weights"):
         simplicial.SimplexBudgetManager.normalize_dimension_weights({3: -1}, 2)
 
 
@@ -88,7 +88,7 @@ def test_random_simplex_generator_generate() -> None:
     # Should generate some simplices respecting budget
     assert len(simplices) > 0
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Budget too small"):
         gen.generate(3, 1, budget=0.0)
 
 
@@ -201,13 +201,13 @@ def test_autogen_simps_uses_generator(monkeypatch: pytest.MonkeyPatch) -> None:
     simplices = simplicial._autogen_simps(2, max_dim=1, twiddle=1.0)
     assert simplices == [[0, 1]]
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="at least 2"):
         simplicial._autogen_simps(1, max_dim=1, twiddle=1.0)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="max_dim"):
         simplicial._autogen_simps(3, max_dim=0, twiddle=1.0)
 
     monkeypatch.setattr(DummyGen, "generate", lambda *a, **k: [])
-    with pytest.raises(RuntimeError):
+    with pytest.raises(RuntimeError, match="Auto-generation"):
         simplicial._autogen_simps(3, max_dim=1, twiddle=1.0)
 
 
@@ -234,7 +234,7 @@ def test_shn_forward_raises_for_few_tokens() -> None:
         simplices=[[0, 1]],
         hidden_dim=1,
     )
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Input has"):
         simp_net(torch.zeros(1, 1, 1))
 
 
