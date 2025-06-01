@@ -6,14 +6,14 @@ This module verifies:
 3. Choice validation type safety
 """
 
-import os
 import sys
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 # Add parent directory to path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from energy_transformer.spec.library import (
     validate_dimension,
@@ -224,7 +224,8 @@ class TestChoiceValidation:
         assert spec.mode == "manual"
         assert spec.size == 4
 
-    def test_choices_with_mixed_types_warns(self, caplog):
+    @pytest.mark.usefixtures("caplog")
+    def test_choices_with_mixed_types_warns(self):
         import logging
         from dataclasses import dataclass
 

@@ -186,7 +186,7 @@ class TestSpecMeta:
             pass
 
         @SpecMeta.register_realiser(CustomSpec)
-        def realise_custom(spec, context):
+        def realise_custom(_spec, _context):
             return "custom_module"
 
         assert SpecMeta.get_realiser(CustomSpec) is realise_custom

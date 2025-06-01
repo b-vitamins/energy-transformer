@@ -1407,7 +1407,7 @@ def register_typed(
     return fn
 
 
-def visualize(spec: Spec, out_format: str = "svg") -> str:
+def visualize(spec: Spec, _out_format: str = "svg") -> str:
     """Generate visual representation of specification.
 
     Parameters
@@ -1519,7 +1519,9 @@ from . import library  # noqa: E402
 
 
 @register(library.ETBlockSpec)
-def realise_et_block(spec: library.ETBlockSpec, context: Context) -> nn.Module:
+def realise_et_block(
+    _spec: library.ETBlockSpec, _context: Context
+) -> nn.Module:
     """Realise an :class:`ETBlockSpec` into a dummy ETBlock module."""
     global _config
 
@@ -1538,7 +1540,7 @@ def realise_et_block(spec: library.ETBlockSpec, context: Context) -> nn.Module:
 
 @register(library.CLSTokenSpec)
 def realise_cls_token(
-    spec: library.CLSTokenSpec,
+    _spec: library.CLSTokenSpec,
     context: Context,
 ) -> nn.Module:
     """Realise a CLS token using context embed dimension."""
@@ -1583,13 +1585,13 @@ def realise_layer_norm(
 
 
 @register(library.MHEASpec)
-def realise_mhea(spec: library.MHEASpec, context: Context) -> nn.Module:
+def realise_mhea(_spec: library.MHEASpec, _context: Context) -> nn.Module:
     """Realise multi-head energy attention as identity."""
     return nn.Identity()
 
 
 @register(library.HNSpec)
-def realise_hn(spec: library.HNSpec, context: Context) -> nn.Module:
+def realise_hn(_spec: library.HNSpec, _context: Context) -> nn.Module:
     """Realise Hopfield network as identity."""
     return nn.Identity()
 

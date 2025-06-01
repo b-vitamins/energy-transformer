@@ -1,15 +1,15 @@
 """Test realisation system robustness."""
 
 import logging
-import os
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 from torch import nn
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from energy_transformer.spec import (
     Context,
@@ -57,10 +57,10 @@ class TestRecursionDepth:
         configure_realisation(max_recursion=5)
 
         @register(SimpleSpec)
-        def realise_simple(spec, context):
-            if spec.value == 0:
+        def realise_simple(_spec, _context):
+            if _spec.value == 0:
                 return nn.Identity()
-            return nn.Linear(spec.value, spec.value)
+            return nn.Linear(_spec.value, _spec.value)
 
         specs = [SimpleSpec(value=i) for i in range(20)]
         deep_spec = seq(*specs)
@@ -78,7 +78,7 @@ class TestRecursionDepth:
         configure_realisation(max_recursion=3, optimizations=False)
 
         @register(SimpleSpec)
-        def realise_simple(spec, context):
+        def realise_simple(spec, _context):
             return nn.Linear(spec.value, spec.value)
 
         spec = SimpleSpec(1)
@@ -108,7 +108,7 @@ class TestRecursionDepth:
         realiser = Realiser()
 
         @register(CircularSpec)
-        def realise_circular(spec, context):
+        def realise_circular(spec, _context):
             return (
                 realiser.realise(spec.children()[0])
                 if spec.children()
@@ -152,7 +152,7 @@ class TestCacheStateRestoration:
         assert _config.cache.enabled
 
         @register(SimpleSpec)
-        def realise_simple(spec, context):
+        def realise_simple(_spec, _context):
             return nn.Identity()
 
         @dataclass(frozen=True)
@@ -162,7 +162,7 @@ class TestCacheStateRestoration:
         attempt_count = 0
 
         @register(FailingSpec)
-        def realise_failing(spec, context):
+        def realise_failing(spec, _context):
             nonlocal attempt_count
             attempt_count += 1
             if attempt_count == spec.fail_on_iteration:
@@ -202,7 +202,7 @@ class TestCacheStateRestoration:
             pass
 
         @register(InnerFailSpec)
-        def realise_inner_fail(spec, context):
+        def realise_inner_fail(_spec, _context):
             raise RuntimeError("Inner failure")
 
         nested = OuterSpec(
@@ -222,8 +222,8 @@ class TestCacheStateRestoration:
     def test_multiple_cache_errors_handled(self):
         with patch.object(_config, "cache") as mock_cache:
             type(mock_cache).enabled = property(
-                lambda self: True,
-                lambda self, v: (_ for _ in ()).throw(
+                lambda _self: True,
+                lambda _self, _value: (_ for _ in ()).throw(
                     RuntimeError("Cache restore failed"),
                 ),
             )
@@ -265,7 +265,7 @@ class TestCacheStateRestoration:
         call_count = 0
 
         @register(FailingSpec)
-        def realise_failing(spec, context):
+        def realise_failing(_spec, _context):
             nonlocal call_count
             call_count += 1
             if call_count == 2:
@@ -520,7 +520,7 @@ class TestRealisationErrorContext:
             message: str = param(default="Test failure")
 
         @register(FailSpec)
-        def realise_fail(spec, context):
+        def realise_fail(spec, _context):
             raise ValueError(spec.message)
 
         spec = FailSpec(message="Original error message")
@@ -546,11 +546,11 @@ class TestRealisationErrorContext:
             pass
 
         @register(Level2Spec)
-        def realise_level2(spec, context):
+        def realise_level2(_spec, _context):
             raise RuntimeError("Deep error")
 
         @register(Level1Spec)
-        def realise_level1(spec, context):
+        def realise_level1(spec, _context):
             return realise(spec.child)
 
         nested = Level1Spec(child=Level2Spec())
