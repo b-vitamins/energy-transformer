@@ -129,10 +129,12 @@ _LIBRARY_SPECS = [
     "TransformerBlockSpec",
 ]
 
+
 def __getattr__(name: str):
     """Lazy load library specifications."""
     if name in _LIBRARY_SPECS:
         from . import library
+
         try:
             return getattr(library, name)
         except AttributeError:  # pragma: no cover - unexpected
@@ -140,6 +142,7 @@ def __getattr__(name: str):
                 f"energy_transformer.spec.library has no spec {name!r}"
             ) from None
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     # --- Core Primitives ---
@@ -196,7 +199,6 @@ __all__ = [
 ]
 
 
-
 # Version information
 __version__ = "0.2.0-alpha1"
 
@@ -208,6 +210,7 @@ Rep = loop
 
 # Type aliases for better IDE support
 SpecLike: TypeAlias = Spec | Sequential | Parallel | Conditional | Residual
+
 
 # NO GLOBAL CONFIGURATION ON IMPORT!
 # Users must explicitly configure if they want non-defaults
@@ -221,7 +224,7 @@ def initialize_defaults():
     >>> import energy_transformer.spec as et_spec
     >>> et_spec.initialize_defaults()  # Explicit initialization
     """
-    from .realise import configure_realisation, ModuleCache
+    from .realise import ModuleCache, configure_realisation
 
     configure_realisation(
         cache=ModuleCache(max_size=128, enabled=True),

@@ -36,14 +36,29 @@ from .primitives import Context, Spec, SpecMeta, ValidationError
 # Default mappings for auto-importing modules based on Spec names
 module_mappings = {
     "LayerNormSpec": ("energy_transformer.layers", "LayerNorm"),
-    "PatchEmbedSpec": ("energy_transformer.layers.embeddings", "PatchEmbedding"),
+    "PatchEmbedSpec": (
+        "energy_transformer.layers.embeddings",
+        "PatchEmbedding",
+    ),
     "CLSTokenSpec": ("energy_transformer.layers.tokens", "CLSToken"),
-    "PosEmbedSpec": ("energy_transformer.layers.embeddings", "PositionalEmbedding2D"),
-    "MHEASpec": ("energy_transformer.layers.attention", "MultiHeadEnergyAttention"),
+    "PosEmbedSpec": (
+        "energy_transformer.layers.embeddings",
+        "PositionalEmbedding2D",
+    ),
+    "MHEASpec": (
+        "energy_transformer.layers.attention",
+        "MultiHeadEnergyAttention",
+    ),
     "MHASpec": ("torch.nn", "MultiheadAttention"),
     "HNSpec": ("energy_transformer.layers.hopfield", "HopfieldNetwork"),
-    "SHNSpec": ("energy_transformer.layers.simplicial", "SimplicialHopfieldNetwork"),
-    "ClassificationHeadSpec": ("energy_transformer.layers.heads", "ClassificationHead"),
+    "SHNSpec": (
+        "energy_transformer.layers.simplicial",
+        "SimplicialHopfieldNetwork",
+    ),
+    "ClassificationHeadSpec": (
+        "energy_transformer.layers.heads",
+        "ClassificationHead",
+    ),
     "FeatureHeadSpec": ("energy_transformer.layers.heads", "FeatureHead"),
     "MLPSpec": ("energy_transformer.layers.mlp", "MLP"),
     "DropoutSpec": ("torch.nn", "Dropout"),
@@ -171,7 +186,6 @@ class ModuleCache:
 
         def make_hashable(obj: Any, seen: set[int] | None = None) -> Any:
             """Recursively convert ``obj`` into a hashable form."""
-
             if seen is None:
                 seen = set()
 
@@ -179,11 +193,11 @@ class ModuleCache:
                 return None
 
             obj_id = id(obj)
-            if isinstance(obj, (dict, list, set)) and obj_id in seen:
+            if isinstance(obj, dict | list | set) and obj_id in seen:
                 return f"<cycle:{obj_id}>"
 
             try:
-                if isinstance(obj, (str, int, float, bool)):
+                if isinstance(obj, str | int | float | bool):
                     return (type(obj).__name__, obj)
 
                 elif isinstance(obj, tuple):
@@ -204,7 +218,10 @@ class ModuleCache:
 
                 elif isinstance(obj, list):
                     seen.add(obj_id)
-                    result = ("list", tuple(make_hashable(i, seen) for i in obj))
+                    result = (
+                        "list",
+                        tuple(make_hashable(i, seen) for i in obj),
+                    )
                     seen.discard(obj_id)
                     return result
 
@@ -236,7 +253,9 @@ class ModuleCache:
                 import logging
 
                 logger = logging.getLogger(__name__)
-                logger.debug(f"Cache key generation failed for {type(obj)}: {e}")
+                logger.debug(
+                    f"Cache key generation failed for {type(obj)}: {e}"
+                )
                 return (type(obj).__name__, "<error>")
 
         try:
@@ -463,7 +482,6 @@ class Realiser:
         The realisation process performs caching, optimization, recursion
         depth tracking and circular dependency detection.
         """
-
         # Cache lookup first to avoid unnecessary recursion
         if cached := _config.cache.get(spec, self.context):
             return cached
@@ -671,7 +689,7 @@ class Realiser:
 
         try:
             cls = getattr(module, class_name)
-        except AttributeError as e:
+        except AttributeError:
             if _config.warnings:
                 logger.warning(
                     f"Module {module_path} has no attribute {class_name}. Available attributes: {[a for a in dir(module) if not a.startswith('_')]}"
@@ -684,14 +702,16 @@ class Realiser:
                 if field_name.startswith("_"):
                     continue
                 value = getattr(spec, field_name)
-                if hasattr(field_info.default, "__call__"):
+                if callable(field_info.default):
                     continue
                 elif value == field_info.default:
                     continue
                 kwargs[field_name] = value
 
             if _config.warnings and logger.isEnabledFor(logging.DEBUG):
-                logger.debug(f"Auto-importing {class_name} with kwargs: {kwargs}")
+                logger.debug(
+                    f"Auto-importing {class_name} with kwargs: {kwargs}"
+                )
         except Exception as e:
             if _config.warnings:
                 logger.error(
@@ -710,7 +730,9 @@ class Realiser:
                 return None
 
             if _config.warnings:
-                logger.info(f"Successfully auto-imported {spec_name} as {class_name}")
+                logger.info(
+                    f"Successfully auto-imported {spec_name} as {class_name}"
+                )
 
             return instance
         except TypeError as e:
@@ -797,7 +819,6 @@ class Realiser:
 
     def _realise_loop(self, spec: Loop) -> nn.Module:
         """Realise loop structure with proper cache handling."""
-
         # Resolve loop count from context if needed
         if isinstance(spec.times, str):
             times = self.context.get_dim(spec.times)
@@ -832,9 +853,10 @@ class Realiser:
             body = self.realise(spec.body)
             return LoopModule(body, times)
 
-    def _realise_unrolled_independent(self, spec: Loop, times: int) -> nn.Module:
+    def _realise_unrolled_independent(
+        self, spec: Loop, times: int
+    ) -> nn.Module:
         """Realise unrolled loop with independent weights."""
-
         bodies: list[nn.Module] = []
         original_cache_enabled = _config.cache.enabled
         cache_error: Exception | None = None
@@ -843,21 +865,23 @@ class Realiser:
             _config.cache.enabled = False
             for i in range(times):
                 try:
-                    child_realiser = Realiser(self.context.child(), self._recursion_depth)
+                    child_realiser = Realiser(
+                        self.context.child(), self._recursion_depth
+                    )
                     child_realiser.context.metadata["loop_iteration"] = i
                     body = child_realiser.realise(spec.body)
                     bodies.append(body)
                 except Exception as e:
                     if isinstance(e, RealisationError):
                         e.suggestion = (
-                            f"Failed at loop iteration {i+1}/{times}\n{e.suggestion}"
+                            f"Failed at loop iteration {i + 1}/{times}\n{e.suggestion}"
                             if e.suggestion
-                            else f"Failed at loop iteration {i+1}/{times}"
+                            else f"Failed at loop iteration {i + 1}/{times}"
                         )
                         raise
                     else:
                         raise RealisationError(
-                            f"Loop iteration {i+1}/{times} failed",
+                            f"Loop iteration {i + 1}/{times} failed",
                             spec=spec.body,
                             context=self.context,
                             cause=e,
@@ -872,7 +896,8 @@ class Realiser:
 
                 logger = logging.getLogger(__name__)
                 logger.critical(
-                    f"Failed to restore cache state: {restore_error}", exc_info=True
+                    f"Failed to restore cache state: {restore_error}",
+                    exc_info=True,
                 )
                 if cache_error:
                     raise RuntimeError(
@@ -1114,7 +1139,9 @@ class GraphModule(nn.Module):  # type: ignore[misc]
         else:
             return tuple(output_tensors)
 
-    def _apply_edge_transform(self, tensor: torch.Tensor, transform: str) -> torch.Tensor:
+    def _apply_edge_transform(
+        self, tensor: torch.Tensor, transform: str
+    ) -> torch.Tensor:
         """Apply named transformation to tensor on graph edge."""
         if transform == "detach":
             return tensor.detach()
@@ -1402,6 +1429,7 @@ def from_yaml(yaml_str: str) -> Spec:
 
 from . import library
 
+
 @register(library.ETBlockSpec)
 def realise_et_block(spec: library.ETBlockSpec, context: Context) -> nn.Module:
     """Realise an :class:`ETBlockSpec` into a dummy ETBlock module."""
@@ -1421,7 +1449,9 @@ def realise_et_block(spec: library.ETBlockSpec, context: Context) -> nn.Module:
 
 
 @register(library.CLSTokenSpec)
-def realise_cls_token(spec: library.CLSTokenSpec, context: Context) -> nn.Module:
+def realise_cls_token(
+    spec: library.CLSTokenSpec, context: Context
+) -> nn.Module:
     """Realise a CLS token using context embed dimension."""
     from energy_transformer.layers.tokens import CLSToken
 
@@ -1430,7 +1460,9 @@ def realise_cls_token(spec: library.CLSTokenSpec, context: Context) -> nn.Module
 
 
 @register(library.PosEmbedSpec)
-def realise_pos_embed(spec: library.PosEmbedSpec, context: Context) -> nn.Module:
+def realise_pos_embed(
+    spec: library.PosEmbedSpec, context: Context
+) -> nn.Module:
     """Realise positional embedding with context dimensions."""
     from energy_transformer.layers.embeddings import PositionalEmbedding2D
 
@@ -1447,7 +1479,9 @@ def realise_pos_embed(spec: library.PosEmbedSpec, context: Context) -> nn.Module
 
 
 @register(library.LayerNormSpec)
-def realise_layer_norm(spec: library.LayerNormSpec, context: Context) -> nn.Module:
+def realise_layer_norm(
+    spec: library.LayerNormSpec, context: Context
+) -> nn.Module:
     """Realise layer normalization with embed dimension."""
     embed_dim = context.get_dim("embed_dim")
     return nn.LayerNorm(embed_dim, eps=spec.eps)
@@ -1466,7 +1500,9 @@ def realise_hn(spec: library.HNSpec, context: Context) -> nn.Module:
 
 
 @register(library.ClassificationHeadSpec)
-def realise_cls_head(spec: library.ClassificationHeadSpec, context: Context) -> nn.Module:
+def realise_cls_head(
+    spec: library.ClassificationHeadSpec, context: Context
+) -> nn.Module:
     """Realise classification head module."""
     from energy_transformer.layers.heads import ClassificationHead
 

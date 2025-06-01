@@ -159,7 +159,10 @@ class Dimension:
         return tokens
 
     def _parse_expression(
-        self, tokens: list[tuple[str, str]], pos: int, variables: dict[str, int | None]
+        self,
+        tokens: list[tuple[str, str]],
+        pos: int,
+        variables: dict[str, int | None],
     ) -> tuple[float, int]:
         """Parse mathematical expression recursively."""
         left, pos = self._parse_term(tokens, pos, variables)
@@ -176,7 +179,10 @@ class Dimension:
         return left, pos
 
     def _parse_term(
-        self, tokens: list[tuple[str, str]], pos: int, variables: dict[str, int | None]
+        self,
+        tokens: list[tuple[str, str]],
+        pos: int,
+        variables: dict[str, int | None],
     ) -> tuple[float, int]:
         """Parse multiplication/division term."""
         left, pos = self._parse_factor(tokens, pos, variables)
@@ -195,7 +201,10 @@ class Dimension:
         return left, pos
 
     def _parse_factor(
-        self, tokens: list[tuple[str, str]], pos: int, variables: dict[str, int | None]
+        self,
+        tokens: list[tuple[str, str]],
+        pos: int,
+        variables: dict[str, int | None],
     ) -> tuple[float, int]:
         """Parse number, variable, or parenthesized expression."""
         if pos >= len(tokens):

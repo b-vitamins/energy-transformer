@@ -1,11 +1,11 @@
 """Pytest configuration and shared fixtures."""
 
+import logging
 import sys
-import os
+from pathlib import Path
+
 import pytest
 import torch
-import logging
-from pathlib import Path
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # Configure logging for tests
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 
 
@@ -61,6 +61,7 @@ def temp_cache_dir(tmp_path):
 
 # Markers for categorizing tests
 
+
 def pytest_configure(config):
     """Register custom markers."""
     config.addinivalue_line(
@@ -69,15 +70,12 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "integration: marks tests as integration tests"
     )
-    config.addinivalue_line(
-        "markers", "gpu: marks tests that require GPU"
-    )
-    config.addinivalue_line(
-        "markers", "security: marks security-related tests"
-    )
+    config.addinivalue_line("markers", "gpu: marks tests that require GPU")
+    config.addinivalue_line("markers", "security: marks security-related tests")
 
 
 # Skip GPU tests if no GPU available
+
 
 def pytest_collection_modifyitems(config, items):
     """Modify test collection to skip GPU tests when appropriate."""

@@ -1,8 +1,8 @@
 """Debug utilities for the realisation system."""
 
 import logging
-from typing import Any
 from contextlib import contextmanager
+from typing import Any
 
 from .realise import _config
 
@@ -21,7 +21,9 @@ def debug_realisation(
 
     handler = logging.StreamHandler()
     handler.setFormatter(
-        logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
     )
     logger.addHandler(handler)
 

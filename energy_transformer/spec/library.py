@@ -499,7 +499,11 @@ class MLPSpec(Spec):
     def validate(self, context: Context) -> list[str]:
         """Validate MLP output dimension."""
         issues = super().validate(context)
-        out = self.out_features if self.out_features is not None else context.get_dim("embed_dim")
+        out = (
+            self.out_features
+            if self.out_features is not None
+            else context.get_dim("embed_dim")
+        )
         embed = context.get_dim("embed_dim")
         if out != embed:
             issues.append("Incompatible dimensions")

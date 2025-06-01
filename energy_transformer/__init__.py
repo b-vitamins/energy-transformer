@@ -7,7 +7,7 @@ Quick Start
 -----------
 >>> from energy_transformer import realise, seq
 >>> from energy_transformer.spec.library import ETBlockSpec
->>> 
+>>>
 >>> model = realise(seq(ETBlockSpec(), ETBlockSpec()))
 
 For visualization and optional features:
@@ -59,6 +59,7 @@ if TYPE_CHECKING:  # pragma: no cover
         visualize,
     )
 
+
 def __getattr__(name: str):
     """Lazy load modules and attributes.
 
@@ -68,6 +69,7 @@ def __getattr__(name: str):
     if name in _LAZY_IMPORTS:
         module_name = _LAZY_IMPORTS[name]
         import importlib
+
         try:
             module = importlib.import_module(module_name)
         except ImportError as e:  # pragma: no cover - error path

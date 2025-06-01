@@ -1,12 +1,14 @@
 """Performance tests for realisation system."""
 
 import time
-import pytest
 from dataclasses import dataclass
 
 from energy_transformer.spec import (
-    Spec, Context, param, seq, realise,
-    configure_realisation
+    Context,
+    Spec,
+    configure_realisation,
+    param,
+    realise,
 )
 from energy_transformer.spec.realise import ModuleCache, register
 
@@ -14,12 +16,14 @@ from energy_transformer.spec.realise import ModuleCache, register
 @dataclass(frozen=True)
 class BenchmarkSpec(Spec):
     """Simple spec for benchmarking."""
+
     size: int = param(default=100)
 
 
 @register(BenchmarkSpec)
 def realise_benchmark(spec, context):
     import torch.nn as nn
+
     return nn.Linear(spec.size, spec.size)
 
 
@@ -47,11 +51,11 @@ class TestCachePerformance:
             realise(spec)
         time_cache_hot = time.perf_counter() - start
 
-        print(f"\nCache Performance:")
+        print("\nCache Performance:")
         print(f"  No cache: {time_no_cache:.3f}s")
         print(f"  Cold cache: {time_cache_cold:.3f}s")
         print(f"  Hot cache: {time_cache_hot:.3f}s")
-        print(f"  Speedup: {time_no_cache/time_cache_hot:.1f}x")
+        print(f"  Speedup: {time_no_cache / time_cache_hot:.1f}x")
 
         assert time_cache_hot < time_no_cache * 0.4
 
