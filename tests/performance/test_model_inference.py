@@ -25,39 +25,39 @@ pytestmark = [pytest.mark.performance, pytest.mark.inference_bench]
 MODEL_FACTORIES = {
     "vit_tiny": (
         vit_tiny,
-        {"img_size": 224, "patch_size": 16, "num_classes": 1000},
+        {"img_size": 224, "patch_size": 16, "in_chans": 3, "num_classes": 1000},
     ),
     "vit_small": (
         vit_small,
-        {"img_size": 224, "patch_size": 16, "num_classes": 1000},
+        {"img_size": 224, "patch_size": 16, "in_chans": 3, "num_classes": 1000},
     ),
     "vit_base": (
         vit_base,
-        {"img_size": 224, "patch_size": 16, "num_classes": 1000},
+        {"img_size": 224, "patch_size": 16, "in_chans": 3, "num_classes": 1000},
     ),
     "viet_tiny": (
         viet_tiny,
-        {"img_size": 224, "patch_size": 16, "num_classes": 1000},
+        {"img_size": 224, "patch_size": 16, "in_chans": 3, "num_classes": 1000},
     ),
     "viet_small": (
         viet_small,
-        {"img_size": 224, "patch_size": 16, "num_classes": 1000},
+        {"img_size": 224, "patch_size": 16, "in_chans": 3, "num_classes": 1000},
     ),
     "viet_base": (
         viet_base,
-        {"img_size": 224, "patch_size": 16, "num_classes": 1000},
+        {"img_size": 224, "patch_size": 16, "in_chans": 3, "num_classes": 1000},
     ),
     "viset_tiny": (
         viset_tiny,
-        {"img_size": 224, "patch_size": 16, "num_classes": 1000},
+        {"img_size": 224, "patch_size": 16, "in_chans": 3, "num_classes": 1000},
     ),
     "viset_small": (
         viset_small,
-        {"img_size": 224, "patch_size": 16, "num_classes": 1000},
+        {"img_size": 224, "patch_size": 16, "in_chans": 3, "num_classes": 1000},
     ),
     "viset_base": (
         viset_base,
-        {"img_size": 224, "patch_size": 16, "num_classes": 1000},
+        {"img_size": 224, "patch_size": 16, "in_chans": 3, "num_classes": 1000},
     ),
     "vit_tiny_cifar": (vit_tiny_cifar, {"num_classes": 100}),
     "viet_2l_cifar": (viet_2l_cifar, {"num_classes": 100}),
@@ -159,6 +159,7 @@ class TestModelInference:
                 factory(
                     img_size=32,
                     patch_size=4,
+                    in_chans=3,
                     num_classes=100,
                     et_steps=et_steps,
                     et_alpha=0.125,
@@ -209,7 +210,9 @@ class TestModelInference:
             model = factory(**kwargs).to(device).eval()
 
             et_kwargs = (
-                {"et_kwargs": {"detach": True}} if "vi" in model_name else {}
+                {"et_kwargs": {"detach": True}}
+                if "viet" in model_name or "viset" in model_name
+                else {}
             )
 
             best_throughput = 0.0
@@ -279,8 +282,13 @@ class TestBatchScaling:
         """Test that larger batches are more efficient per sample."""
         factory, kwargs = MODEL_FACTORIES[model_name]
 
-        if "_cifar" not in model_name:
-            kwargs = {"img_size": 32, "patch_size": 4, "num_classes": 100}
+        # Override with CIFAR settings for efficiency test
+        kwargs = {
+            "img_size": 32,
+            "patch_size": 4,
+            "in_chans": 3,
+            "num_classes": 100,
+        }
 
         model = factory(**kwargs).to(device).eval()
         et_kwargs = (
@@ -299,7 +307,7 @@ class TestBatchScaling:
 
             benchmark.pedantic(run, rounds=10, iterations=5, warmup_rounds=3)
 
-            time_per_sample = benchmark.stats.stats.mean / batch_size
+            time_per_sample = benchmark.stats.mean / batch_size
             times_per_sample.append((batch_size, time_per_sample))
 
         for i in range(1, len(times_per_sample)):

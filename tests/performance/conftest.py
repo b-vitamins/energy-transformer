@@ -127,16 +127,22 @@ def assert_performance(
     thresholds: dict[str, float],
 ) -> None:
     """Assert performance meets requirements and check for regressions."""
-    stats = benchmark.stats.stats.__dict__
+    # Access benchmark stats correctly
+    stats_dict = {
+        "mean": benchmark.stats.mean,
+        "stddev": benchmark.stats.stddev,
+        "min": benchmark.stats.min,
+        "max": benchmark.stats.max,
+    }
     full_name = f"{test_name}_{device_type}"
 
     if device_type in thresholds:
-        assert stats["mean"] < thresholds[device_type], (
-            f"Performance threshold exceeded: {stats['mean']:.3f}s > {thresholds[device_type]}s"
+        assert stats_dict["mean"] < thresholds[device_type], (
+            f"Performance threshold exceeded: {stats_dict['mean']:.3f}s > {thresholds[device_type]}s"
         )
 
-    if performance_tracker.check_regression(full_name, stats):
+    if performance_tracker.check_regression(full_name, stats_dict):
         pytest.fail(
             f"Performance regression detected for {full_name}: "
-            f"current={stats['mean']:.3f}s vs baseline={performance_tracker.baselines[full_name].mean:.3f}s"
+            f"current={stats_dict['mean']:.3f}s vs baseline={performance_tracker.baselines[full_name].mean:.3f}s"
         )

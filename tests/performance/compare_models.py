@@ -85,27 +85,57 @@ def main() -> None:
     models = {
         "vit_tiny": (
             vit_tiny,
-            {"img_size": 224, "patch_size": 16, "num_classes": 1000},
+            {
+                "img_size": 224,
+                "patch_size": 16,
+                "in_chans": 3,
+                "num_classes": 1000,
+            },
         ),
         "viet_tiny": (
             viet_tiny,
-            {"img_size": 224, "patch_size": 16, "num_classes": 1000},
+            {
+                "img_size": 224,
+                "patch_size": 16,
+                "in_chans": 3,
+                "num_classes": 1000,
+            },
         ),
         "viset_tiny": (
             viset_tiny,
-            {"img_size": 224, "patch_size": 16, "num_classes": 1000},
+            {
+                "img_size": 224,
+                "patch_size": 16,
+                "in_chans": 3,
+                "num_classes": 1000,
+            },
         ),
         "vit_base": (
             vit_base,
-            {"img_size": 224, "patch_size": 16, "num_classes": 1000},
+            {
+                "img_size": 224,
+                "patch_size": 16,
+                "in_chans": 3,
+                "num_classes": 1000,
+            },
         ),
         "viet_base": (
             viet_base,
-            {"img_size": 224, "patch_size": 16, "num_classes": 1000},
+            {
+                "img_size": 224,
+                "patch_size": 16,
+                "in_chans": 3,
+                "num_classes": 1000,
+            },
         ),
         "viset_base": (
             viset_base,
-            {"img_size": 224, "patch_size": 16, "num_classes": 1000},
+            {
+                "img_size": 224,
+                "patch_size": 16,
+                "in_chans": 3,
+                "num_classes": 1000,
+            },
         ),
     }
 

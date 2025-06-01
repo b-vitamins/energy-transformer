@@ -17,7 +17,9 @@ class TestLatencyConsistency:
     def test_latency_distribution(self, model_factory, device) -> None:
         """Test that inference latency has low variance."""
         model = (
-            model_factory(img_size=32, patch_size=4, num_classes=100)
+            model_factory(
+                img_size=32, patch_size=4, in_chans=3, num_classes=100
+            )
             .to(device)
             .eval()
         )
@@ -71,7 +73,9 @@ class TestLatencyConsistency:
 
         for _ in range(5):
             model = (
-                viet_tiny(img_size=32, patch_size=4, num_classes=100)
+                viet_tiny(
+                    img_size=32, patch_size=4, in_chans=3, num_classes=100
+                )
                 .to(device)
                 .eval()
             )
