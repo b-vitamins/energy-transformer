@@ -2,7 +2,7 @@
 
 import pytest
 import torch
-import torch.nn as nn
+from torch import nn
 
 from energy_transformer import realise, seq
 from energy_transformer.spec import Context
@@ -124,7 +124,10 @@ class TestImportPerformance:
         code = """import time\nstart = time.perf_counter()\nimport energy_transformer\nelapsed = time.perf_counter() - start\nprint(f'{elapsed:.3f}')"""
 
         result = subprocess.run(
-            [sys.executable, "-c", code], capture_output=True, text=True
+            [sys.executable, "-c", code],
+            capture_output=True,
+            text=True,
+            check=False,
         )
 
         import_time = float(result.stdout.strip())
@@ -140,7 +143,10 @@ class TestImportPerformance:
         code = """import sys\nimport energy_transformer\nassert 'scipy' not in sys.modules, 'scipy was loaded on import!'\nassert 'matplotlib' not in sys.modules, 'matplotlib was loaded on import!'\nassert 'energy_transformer.models' not in sys.modules, 'models loaded early!'\nfrom energy_transformer import EnergyTransformer\nassert 'energy_transformer.models' in sys.modules, 'models not loaded when needed!'\nprint('SUCCESS')"""
 
         result = subprocess.run(
-            [sys.executable, "-c", code], capture_output=True, text=True
+            [sys.executable, "-c", code],
+            capture_output=True,
+            text=True,
+            check=False,
         )
 
         assert result.returncode == 0, f"Failed: {result.stderr}"
@@ -168,6 +174,7 @@ print(elapsed)
             capture_output=True,
             text=True,
             timeout=5,
+            check=False,
         )
 
         assert result.returncode == 0, f"Import failed: {result.stderr}"
@@ -209,6 +216,7 @@ print("SUCCESS")
             capture_output=True,
             text=True,
             timeout=5,
+            check=False,
         )
 
         assert result.returncode == 0, (
@@ -248,6 +256,7 @@ print("SUCCESS: No side effects detected")
             capture_output=True,
             text=True,
             timeout=5,
+            check=False,
         )
 
         assert result.returncode == 0, (

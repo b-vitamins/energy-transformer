@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol, TypeVar, get_type_hints
 
 import torch
-import torch.nn as nn
+from torch import nn
 
 from .combinators import (
     Conditional,
@@ -70,17 +70,17 @@ if TYPE_CHECKING:
     pass
 
 __all__ = [
-    "realise",
-    "Realiser",
-    "register",
-    "RealisationError",
     "ModuleCache",
+    "RealisationError",
+    "Realiser",
     "RealiserPlugin",
     "configure_realisation",
-    "visualize",
-    "optimize_spec",
-    "to_yaml",
     "from_yaml",
+    "optimize_spec",
+    "realise",
+    "register",
+    "to_yaml",
+    "visualize",
 ]
 
 T = TypeVar("T", bound=nn.Module)
@@ -113,7 +113,7 @@ class RealisationError(Exception):
         context: Context | None = None,
         cause: Exception | None = None,
         suggestion: str | None = None,
-    ):
+    ) -> None:
         """Initialize RealisationError with debugging information.
 
         Parameters
@@ -161,7 +161,7 @@ class ModuleCache:
         Whether caching is enabled
     """
 
-    def __init__(self, max_size: int = 128, enabled: bool = True):
+    def __init__(self, max_size: int = 128, enabled: bool = True) -> None:
         """Initialize module cache with LRU eviction.
 
         Parameters
@@ -201,13 +201,13 @@ class ModuleCache:
                 if isinstance(obj, str | int | float | bool):
                     return (type(obj).__name__, obj)
 
-                elif isinstance(obj, tuple):
+                if isinstance(obj, tuple):
                     seen.add(obj_id)
                     result = tuple(make_hashable(item, seen) for item in obj)
                     seen.discard(obj_id)
                     return result
 
-                elif isinstance(obj, dict):
+                if isinstance(obj, dict):
                     seen.add(obj_id)
                     items = []
                     for k, v in sorted(obj.items(), key=lambda x: str(x[0])):
@@ -217,7 +217,7 @@ class ModuleCache:
                     seen.discard(obj_id)
                     return ("dict", tuple(items))
 
-                elif isinstance(obj, list):
+                if isinstance(obj, list):
                     seen.add(obj_id)
                     result = (
                         "list",
@@ -226,7 +226,7 @@ class ModuleCache:
                     seen.discard(obj_id)
                     return result
 
-                elif isinstance(obj, set):
+                if isinstance(obj, set):
                     seen.add(obj_id)
                     sorted_items = sorted(
                         obj, key=lambda x: (type(x).__name__, str(x))
@@ -238,7 +238,7 @@ class ModuleCache:
                     seen.discard(obj_id)
                     return result
 
-                elif isinstance(obj, Spec):
+                if isinstance(obj, Spec):
                     if obj.__class__.__name__ == "ETBlockSpec":
                         return ("spec", id(obj))
                     return (
@@ -247,8 +247,7 @@ class ModuleCache:
                         make_hashable(obj.to_dict(), seen),
                     )
 
-                else:
-                    return (type(obj).__name__, str(obj))
+                return (type(obj).__name__, str(obj))
 
             except Exception as e:  # pragma: no cover - defensive
                 import logging
@@ -450,7 +449,7 @@ class Realiser:
 
     def __init__(
         self, context: Context | None = None, _recursion_depth: int = 0
-    ):
+    ) -> None:
         """Initialize realiser with optional context.
 
         Parameters
@@ -703,9 +702,7 @@ class Realiser:
                 if field_name.startswith("_"):
                     continue
                 value = getattr(spec, field_name)
-                if callable(field_info.default):
-                    continue
-                elif value == field_info.default:
+                if callable(field_info.default) or value == field_info.default:
                     continue
                 kwargs[field_name] = value
 
@@ -800,10 +797,9 @@ class Realiser:
         # Evaluate condition at realisation time
         if spec.condition(self.context):
             return self.realise(spec.if_true)
-        elif spec.if_false:
+        if spec.if_false:
             return self.realise(spec.if_false)
-        else:
-            return nn.Identity()
+        return nn.Identity()
 
     def _realise_residual(self, spec: Residual) -> nn.Module:
         """Realise residual connection."""
@@ -848,11 +844,9 @@ class Realiser:
                 body = self.realise(spec.body)
                 modules = [body for _ in range(times)]
                 return nn.Sequential(*modules)
-            else:
-                return self._realise_unrolled_independent(spec, times)
-        else:
-            body = self.realise(spec.body)
-            return LoopModule(body, times)
+            return self._realise_unrolled_independent(spec, times)
+        body = self.realise(spec.body)
+        return LoopModule(body, times)
 
     def _realise_unrolled_independent(
         self, spec: Loop, times: int
@@ -880,13 +874,12 @@ class Realiser:
                             else f"Failed at loop iteration {i + 1}/{times}"
                         )
                         raise
-                    else:
-                        raise RealisationError(
-                            f"Loop iteration {i + 1}/{times} failed",
-                            spec=spec.body,
-                            context=self.context,
-                            cause=e,
-                        ) from e
+                    raise RealisationError(
+                        f"Loop iteration {i + 1}/{times} failed",
+                        spec=spec.body,
+                        context=self.context,
+                        cause=e,
+                    ) from e
         except Exception as e:
             cache_error = e
         finally:
@@ -924,10 +917,9 @@ class Realiser:
 
         if key_value in spec.cases:
             return self.realise(spec.cases[key_value])
-        elif spec.default:
+        if spec.default:
             return self.realise(spec.default)
-        else:
-            return nn.Identity()
+        return nn.Identity()
 
 
 # Module implementations
@@ -945,7 +937,7 @@ class ParallelModule(nn.Module):  # type: ignore[misc]
         branches: list[nn.Module],
         merge: str = "concat",
         weights: tuple[float, ...] | None = None,
-    ):
+    ) -> None:
         super().__init__()
         self.branches = nn.ModuleList(branches)
         self.merge = merge
@@ -953,34 +945,32 @@ class ParallelModule(nn.Module):  # type: ignore[misc]
 
     def forward(
         self, x: torch.Tensor
-    ) -> torch.Tensor | tuple[torch.Tensor, ...]:  # noqa: C901
+    ) -> torch.Tensor | tuple[torch.Tensor, ...]:
         """Execute branches and merge outputs."""
         outputs: list[torch.Tensor] = [branch(x) for branch in self.branches]
 
         if self.merge == "concat":
             return torch.cat(outputs, dim=-1)
-        elif self.merge == "add":
+        if self.merge == "add":
             if self.weights:
                 result = self.weights[0] * outputs[0]
                 for w, out in zip(self.weights[1:], outputs[1:], strict=False):
                     result = result + w * out
                 return result
-            else:
-                result = outputs[0]
-                for out in outputs[1:]:
-                    result = result + out
-                return result
-        elif self.merge == "multiply":
+            result = outputs[0]
+            for out in outputs[1:]:
+                result = result + out
+            return result
+        if self.merge == "multiply":
             result = outputs[0]
             for out in outputs[1:]:
                 result = result * out
             return result
-        elif self.merge == "mean":
+        if self.merge == "mean":
             return torch.stack(outputs).mean(dim=0)
-        elif self.merge == "max":
+        if self.merge == "max":
             return torch.stack(outputs).max(dim=0)[0]
-        else:
-            raise ValueError(f"Unknown merge mode: {self.merge}")
+        raise ValueError(f"Unknown merge mode: {self.merge}")
 
 
 class ResidualModule(nn.Module):  # type: ignore[misc]
@@ -991,7 +981,7 @@ class ResidualModule(nn.Module):  # type: ignore[misc]
 
     def __init__(
         self, inner: nn.Module, merge: str = "add", scale: float = 1.0
-    ):
+    ) -> None:
         super().__init__()
         self.inner = inner
         self.merge = merge
@@ -999,23 +989,22 @@ class ResidualModule(nn.Module):  # type: ignore[misc]
 
     def forward(
         self, x: torch.Tensor
-    ) -> torch.Tensor | tuple[torch.Tensor, ...]:  # noqa: C901
+    ) -> torch.Tensor | tuple[torch.Tensor, ...]:
         """Apply inner module with residual connection."""
         residual = x
         out: torch.Tensor = self.inner(x)
 
         if self.merge == "add":
             return residual + self.scale * out
-        elif self.merge == "concat":
+        if self.merge == "concat":
             return torch.cat([residual, out], dim=-1)
-        elif self.merge == "gate":
+        if self.merge == "gate":
             # Learned gating would require parameters
             # For now, use simple average gating
             gate = torch.sigmoid(out.mean(dim=-1, keepdim=True))
             result: torch.Tensor = residual * (1 - gate) + out * gate
             return result
-        else:
-            raise ValueError(f"Unknown merge mode: {self.merge}")
+        raise ValueError(f"Unknown merge mode: {self.merge}")
 
 
 class GraphModule(nn.Module):  # type: ignore[misc]
@@ -1030,7 +1019,7 @@ class GraphModule(nn.Module):  # type: ignore[misc]
         edges: list[tuple[str, str, str | None]],
         inputs: list[str],
         outputs: list[str],
-    ):
+    ) -> None:
         super().__init__()
         self.nodes = nn.ModuleDict(nodes)
         self.edges = edges
@@ -1039,7 +1028,7 @@ class GraphModule(nn.Module):  # type: ignore[misc]
 
     def forward(
         self, x: torch.Tensor
-    ) -> torch.Tensor | tuple[torch.Tensor, ...]:  # noqa: C901
+    ) -> torch.Tensor | tuple[torch.Tensor, ...]:
         """Execute graph computation with proper data flow.
 
         This method executes nodes in topological order, ensuring each node
@@ -1165,7 +1154,7 @@ class GraphModule(nn.Module):  # type: ignore[misc]
 
             if not node_inputs:
                 raise RuntimeError(f"Node '{node_name}' has no inputs")
-            elif len(node_inputs) == 1:
+            if len(node_inputs) == 1:
                 values[node_name] = self.nodes[node_name](node_inputs[0])
             else:
                 combined = torch.cat(node_inputs, dim=-1)
@@ -1196,23 +1185,22 @@ class GraphModule(nn.Module):  # type: ignore[misc]
         """Apply named transformation to tensor on graph edge."""
         if transform == "detach":
             return tensor.detach()
-        elif transform == "sigmoid":
+        if transform == "sigmoid":
             return torch.sigmoid(tensor)
-        elif transform == "relu":
+        if transform == "relu":
             return torch.relu(tensor)
-        elif transform == "normalize":
+        if transform == "normalize":
             return torch.nn.functional.normalize(tensor, dim=-1)
-        elif transform == "stop_gradient":
+        if transform == "stop_gradient":
             return tensor.detach()
-        else:
-            if transform.startswith("[") and transform.endswith("]"):
-                try:
-                    from typing import cast
+        if transform.startswith("[") and transform.endswith("]"):
+            try:
+                from typing import cast
 
-                    return cast(torch.Tensor, eval(f"tensor{transform}"))
-                except Exception:
-                    pass
-            raise ValueError(f"Unknown edge transformation: {transform}")
+                return cast(torch.Tensor, eval(f"tensor{transform}"))
+            except Exception:
+                pass
+        raise ValueError(f"Unknown edge transformation: {transform}")
 
 
 class LoopModule(nn.Module):  # type: ignore[misc]
@@ -1221,7 +1209,7 @@ class LoopModule(nn.Module):  # type: ignore[misc]
     Applies a module multiple times in sequence.
     """
 
-    def __init__(self, body: nn.Module, times: int):
+    def __init__(self, body: nn.Module, times: int) -> None:
         super().__init__()
         self.body = body
         self.times = times
@@ -1241,7 +1229,7 @@ class LambdaModule(nn.Module):  # type: ignore[misc]
 
     Fn = Callable[[torch.Tensor, Context], torch.Tensor]
 
-    def __init__(self, fn: Fn, name: str = "lambda"):
+    def __init__(self, fn: Fn, name: str = "lambda") -> None:
         """Initialize lambda module with function and name.
 
         Parameters
@@ -1524,7 +1512,8 @@ def realise_pos_embed(
     if spec.include_cls:
         num_patches = (num_patches or 0) - 1
     embed_dim = context.get_dim("embed_dim")
-    assert embed_dim is not None and num_patches is not None
+    assert embed_dim is not None
+    assert num_patches is not None
     return PositionalEmbedding2D(
         num_patches,
         embed_dim,

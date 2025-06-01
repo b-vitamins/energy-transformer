@@ -3,8 +3,7 @@
 import math
 
 import torch
-import torch.nn as nn
-from torch import Tensor
+from torch import Tensor, nn
 
 from .base import BaseEnergyAttention
 
@@ -62,7 +61,7 @@ class MultiHeadEnergyAttention(BaseEnergyAttention):
         beta: float | None = None,
         bias: bool = False,
         init_std: float = 0.002,
-    ):
+    ) -> None:
         """Initialize the Energy Attention layer.
 
         Parameters
@@ -210,6 +209,4 @@ class MultiHeadEnergyAttention(BaseEnergyAttention):
 
         # E^ATT = -(1/β)·∑ₕ₌₁ᴴ·∑ᶜ₌₁ᴺ·log(∑ᴮ exp(β·Aₕᴮᶜ))
         β_inv = 1.0 / self.β
-        e_att = -(β_inv * lse).sum()  # scalar
-
-        return e_att
+        return -(β_inv * lse).sum()  # scalar

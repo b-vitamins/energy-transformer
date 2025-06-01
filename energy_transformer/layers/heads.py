@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import torch.nn as nn
-from torch import Tensor
+from torch import Tensor, nn
 
 __all__ = [
     "ClassificationHead",
@@ -189,6 +188,5 @@ class FeatureHead(nn.Module):  # type: ignore[misc]
         if self.use_cls_token:
             # Extract CLS token features (first token in sequence)
             return x[:, 0]  # (B, D)
-        else:
-            # Use global average pooling over all tokens
-            return x.mean(dim=1)  # (B, D)
+        # Use global average pooling over all tokens
+        return x.mean(dim=1)  # (B, D)

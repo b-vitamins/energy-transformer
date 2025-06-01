@@ -40,19 +40,19 @@ from .simplicial import SimplicialHopfieldNetwork
 from .tokens import CLSToken
 
 __all__ = [
-    # Attention
-    "MultiHeadEnergyAttention",
-    # Embeddings
-    "PatchEmbedding",
-    "PositionalEmbedding2D",
+    # Tokens
+    "CLSToken",
     # Heads
     "ClassificationHead",
     "FeatureHead",
     # Memory Networks
     "HopfieldNetwork",
-    "SimplicialHopfieldNetwork",
     # Normalization
     "LayerNorm",
-    # Tokens
-    "CLSToken",
+    # Attention
+    "MultiHeadEnergyAttention",
+    # Embeddings
+    "PatchEmbedding",
+    "PositionalEmbedding2D",
+    "SimplicialHopfieldNetwork",
 ]

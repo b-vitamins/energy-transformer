@@ -5,8 +5,7 @@ import argparse
 import time
 
 import torch
-import torch.nn as nn
-import torch.optim as optim
+from torch import nn, optim
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
 

@@ -4,8 +4,7 @@ from contextlib import AbstractContextManager
 from typing import Literal, NamedTuple, cast
 
 import torch
-import torch.nn as nn
-from torch import Tensor
+from torch import Tensor, nn
 
 from energy_transformer.layers.base import (
     BaseEnergyAttention,
@@ -13,7 +12,7 @@ from energy_transformer.layers.base import (
     BaseLayerNorm,
 )
 
-__all__ = ["EnergyTransformer", "Track", "ETOutput", "DescentMode"]
+__all__ = ["DescentMode", "ETOutput", "EnergyTransformer", "Track"]
 
 # Registry for model classes to enable lookups from realiser
 REALISER_REGISTRY: dict[str, type[nn.Module]] = {}
@@ -31,8 +30,7 @@ def force_enable_grad() -> GCtx:
     Does not work with torch.inference_mode(), which fundamentally prevents
     gradient tracking.
     """
-    gctx = cast(GCtx, torch.enable_grad())  # type: ignore[no-untyped-call]
-    return gctx
+    return cast(GCtx, torch.enable_grad())  # type: ignore[no-untyped-call]
 
 
 class ETOutput(NamedTuple):
@@ -176,8 +174,7 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
             y = (grad - prev_grad).flatten()
             denom = torch.dot(s, y)
             return torch.dot(s, s) / denom.clamp_min(1e-8)
-        else:
-            return self.alpha
+        return self.alpha
 
     def _armijo_line_search(
         self,
@@ -433,8 +430,7 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
                 final_energy=final_energy,
                 trajectory=trajectory_tensor,
             )
-        else:
-            return x
+        return x
 
 
 # Register the EnergyTransformer class in the registry

@@ -668,10 +668,9 @@ class TestSwitch:
             size = ctx.get_dim("size") or 0
             if size < 10:
                 return "small"
-            elif size < 100:
+            if size < 100:
                 return "medium"
-            else:
-                return "large"
+            return "large"
 
         s = switch(
             compute_key,
@@ -713,7 +712,7 @@ class TestSwitch:
 
         children = s.children()
         assert len(children) == 4
-        assert set(children) == set(list(cases.values()) + [default])
+        assert set(children) == {*list(cases.values()), default}
 
 
 class TestIdentityAndLambda:

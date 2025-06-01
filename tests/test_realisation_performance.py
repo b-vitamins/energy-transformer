@@ -22,7 +22,7 @@ class BenchmarkSpec(Spec):
 
 @register(BenchmarkSpec)
 def realise_benchmark(spec, context):
-    import torch.nn as nn
+    from torch import nn
 
     # Create a more complex module to make caching worthwhile
     return nn.Sequential(

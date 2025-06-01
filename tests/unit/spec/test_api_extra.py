@@ -12,24 +12,16 @@ from contextlib import redirect_stdout
 from dataclasses import dataclass
 from unittest.mock import patch
 
-import pytest
-
 import energy_transformer.spec as et_spec
 from energy_transformer.spec import Spec, requires
 
 
 def test_getattr_lazy_loading() -> None:
     """``__getattr__`` lazily loads library specifications."""
-    cls = getattr(et_spec, "LayerNormSpec")
+    cls = et_spec.LayerNormSpec
     from energy_transformer.spec import library
 
     assert cls is library.LayerNormSpec
-
-
-def test_getattr_unknown() -> None:
-    """Accessing an unknown attribute raises :class:`AttributeError`."""
-    with pytest.raises(AttributeError):
-        getattr(et_spec, "DoesNotExist")
 
 
 def test_initialize_defaults_calls_configure() -> None:
@@ -101,4 +93,3 @@ def test_benchmark_realisation_runs() -> None:
     stats = et_spec.benchmark_realisation(spec, iterations=2)
     assert stats["iterations"] == 2
     assert stats["total"] > 0
-

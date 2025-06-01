@@ -61,7 +61,7 @@ from __future__ import annotations
 
 from typing import Any
 
-import torch.nn as nn
+from torch import nn
 
 from ...layers.attention import MultiHeadEnergyAttention
 from ...layers.layer_norm import LayerNorm
@@ -245,57 +245,57 @@ class VisionSimplicialEnergyTransformer(VisionEnergyTransformer):
 
 def viset_tiny(**kwargs: Any) -> VisionSimplicialEnergyTransformer:
     """ViSET-Tiny configuration with topology-aware simplices."""
-    config: dict[str, Any] = dict(
-        embed_dim=192,
-        depth=12,
-        num_heads=3,
-        head_dim=64,
-        hopfield_hidden_dim=768,  # 4x embed_dim
-        et_steps=4,
-        et_alpha=0.125,
-        use_topology=True,
-        simplex_budget=0.15,
-        simplex_max_dim=2,
-        simplex_dim_weights={1: 0.5, 2: 0.5},
-    )
+    config: dict[str, Any] = {
+        "embed_dim": 192,
+        "depth": 12,
+        "num_heads": 3,
+        "head_dim": 64,
+        "hopfield_hidden_dim": 768,  # 4x embed_dim
+        "et_steps": 4,
+        "et_alpha": 0.125,
+        "use_topology": True,
+        "simplex_budget": 0.15,
+        "simplex_max_dim": 2,
+        "simplex_dim_weights": {1: 0.5, 2: 0.5},
+    }
     config.update(kwargs)
     return VisionSimplicialEnergyTransformer(**config)
 
 
 def viset_small(**kwargs: Any) -> VisionSimplicialEnergyTransformer:
     """ViSET-Small configuration with topology-aware simplices."""
-    config: dict[str, Any] = dict(
-        embed_dim=384,
-        depth=12,
-        num_heads=6,
-        head_dim=64,
-        hopfield_hidden_dim=1536,  # 4x embed_dim
-        et_steps=4,
-        et_alpha=0.125,
-        use_topology=True,
-        simplex_budget=0.15,
-        simplex_max_dim=2,
-        simplex_dim_weights={1: 0.5, 2: 0.5},
-    )
+    config: dict[str, Any] = {
+        "embed_dim": 384,
+        "depth": 12,
+        "num_heads": 6,
+        "head_dim": 64,
+        "hopfield_hidden_dim": 1536,  # 4x embed_dim
+        "et_steps": 4,
+        "et_alpha": 0.125,
+        "use_topology": True,
+        "simplex_budget": 0.15,
+        "simplex_max_dim": 2,
+        "simplex_dim_weights": {1: 0.5, 2: 0.5},
+    }
     config.update(kwargs)
     return VisionSimplicialEnergyTransformer(**config)
 
 
 def viset_base(**kwargs: Any) -> VisionSimplicialEnergyTransformer:
     """ViSET-Base configuration with topology-aware simplices."""
-    config: dict[str, Any] = dict(
-        embed_dim=768,
-        depth=12,
-        num_heads=12,
-        head_dim=64,
-        hopfield_hidden_dim=3072,  # 4x embed_dim
-        et_steps=4,
-        et_alpha=0.125,
-        use_topology=True,
-        simplex_budget=0.15,
-        simplex_max_dim=2,
-        simplex_dim_weights={1: 0.5, 2: 0.5},
-    )
+    config: dict[str, Any] = {
+        "embed_dim": 768,
+        "depth": 12,
+        "num_heads": 12,
+        "head_dim": 64,
+        "hopfield_hidden_dim": 3072,  # 4x embed_dim
+        "et_steps": 4,
+        "et_alpha": 0.125,
+        "use_topology": True,
+        "simplex_budget": 0.15,
+        "simplex_max_dim": 2,
+        "simplex_dim_weights": {1: 0.5, 2: 0.5},
+    }
     config.update(kwargs)
     return VisionSimplicialEnergyTransformer(**config)
 
@@ -311,24 +311,24 @@ def viset_2l_e50_t50_cifar(
     Shallow 2-layer model with topology-aware simplices optimized
     for 32x32 images with 4x4 patches.
     """
-    config: dict[str, Any] = dict(
-        img_size=32,
-        patch_size=4,
-        in_chans=3,
-        num_classes=num_classes,
-        embed_dim=192,
-        depth=2,  # Shallow!
-        num_heads=8,
-        head_dim=64,
-        hopfield_hidden_dim=576,  # 3x embed_dim
-        et_steps=6,
-        et_alpha=10.0,
-        drop_rate=0.1,
-        use_topology=True,
-        simplex_budget=0.2,
-        simplex_max_dim=2,
-        simplex_dim_weights={1: 0.5, 2: 0.5},
-    )
+    config: dict[str, Any] = {
+        "img_size": 32,
+        "patch_size": 4,
+        "in_chans": 3,
+        "num_classes": num_classes,
+        "embed_dim": 192,
+        "depth": 2,  # Shallow!
+        "num_heads": 8,
+        "head_dim": 64,
+        "hopfield_hidden_dim": 576,  # 3x embed_dim
+        "et_steps": 6,
+        "et_alpha": 10.0,
+        "drop_rate": 0.1,
+        "use_topology": True,
+        "simplex_budget": 0.2,
+        "simplex_max_dim": 2,
+        "simplex_dim_weights": {1: 0.5, 2: 0.5},
+    }
     config.update(kwargs)
     return VisionSimplicialEnergyTransformer(**config)
 
@@ -341,24 +341,24 @@ def viset_2l_e100_cifar(
     Uses only edges from k-NN graph, no higher-order simplices.
     Good baseline for understanding the value of triangles.
     """
-    config: dict[str, Any] = dict(
-        img_size=32,
-        patch_size=4,
-        in_chans=3,
-        num_classes=num_classes,
-        embed_dim=192,
-        depth=2,
-        num_heads=8,
-        head_dim=64,
-        hopfield_hidden_dim=576,
-        et_steps=6,
-        et_alpha=10.0,
-        drop_rate=0.1,
-        use_topology=True,
-        simplex_budget=0.15,
-        simplex_max_dim=1,  # Only edges!
-        simplex_dim_weights={1: 1.0},
-    )
+    config: dict[str, Any] = {
+        "img_size": 32,
+        "patch_size": 4,
+        "in_chans": 3,
+        "num_classes": num_classes,
+        "embed_dim": 192,
+        "depth": 2,
+        "num_heads": 8,
+        "head_dim": 64,
+        "hopfield_hidden_dim": 576,
+        "et_steps": 6,
+        "et_alpha": 10.0,
+        "drop_rate": 0.1,
+        "use_topology": True,
+        "simplex_budget": 0.15,
+        "simplex_max_dim": 1,  # Only edges!
+        "simplex_dim_weights": {1: 1.0},
+    }
     config.update(kwargs)
     return VisionSimplicialEnergyTransformer(**config)
 
@@ -371,24 +371,24 @@ def viset_2l_t100_cifar(
     Uses only Delaunay triangles, no edges. Tests whether
     higher-order interactions alone are sufficient.
     """
-    config: dict[str, Any] = dict(
-        img_size=32,
-        patch_size=4,
-        in_chans=3,
-        num_classes=num_classes,
-        embed_dim=192,
-        depth=2,
-        num_heads=8,
-        head_dim=64,
-        hopfield_hidden_dim=576,
-        et_steps=6,
-        et_alpha=10.0,
-        drop_rate=0.1,
-        use_topology=True,
-        simplex_budget=0.15,
-        simplex_max_dim=2,
-        simplex_dim_weights={2: 1.0},  # Only triangles!
-    )
+    config: dict[str, Any] = {
+        "img_size": 32,
+        "patch_size": 4,
+        "in_chans": 3,
+        "num_classes": num_classes,
+        "embed_dim": 192,
+        "depth": 2,
+        "num_heads": 8,
+        "head_dim": 64,
+        "hopfield_hidden_dim": 576,
+        "et_steps": 6,
+        "et_alpha": 10.0,
+        "drop_rate": 0.1,
+        "use_topology": True,
+        "simplex_budget": 0.15,
+        "simplex_max_dim": 2,
+        "simplex_dim_weights": {2: 1.0},  # Only triangles!
+    }
     config.update(kwargs)
     return VisionSimplicialEnergyTransformer(**config)
 
@@ -401,24 +401,24 @@ def viset_2l_random_cifar(
     Important baseline: Uses random edges and triangles,
     not k-NN + Delaunay. Shows the value of topology awareness.
     """
-    config: dict[str, Any] = dict(
-        img_size=32,
-        patch_size=4,
-        in_chans=3,
-        num_classes=num_classes,
-        embed_dim=192,
-        depth=2,
-        num_heads=8,
-        head_dim=64,
-        hopfield_hidden_dim=576,
-        et_steps=6,
-        et_alpha=10.0,
-        drop_rate=0.1,
-        use_topology=False,  # KEY: Random simplices!
-        simplex_budget=0.15,
-        simplex_max_dim=2,
-        simplex_dim_weights={1: 0.5, 2: 0.5},
-    )
+    config: dict[str, Any] = {
+        "img_size": 32,
+        "patch_size": 4,
+        "in_chans": 3,
+        "num_classes": num_classes,
+        "embed_dim": 192,
+        "depth": 2,
+        "num_heads": 8,
+        "head_dim": 64,
+        "hopfield_hidden_dim": 576,
+        "et_steps": 6,
+        "et_alpha": 10.0,
+        "drop_rate": 0.1,
+        "use_topology": False,  # KEY: Random simplices!
+        "simplex_budget": 0.15,
+        "simplex_max_dim": 2,
+        "simplex_dim_weights": {1: 0.5, 2: 0.5},
+    }
     config.update(kwargs)
     return VisionSimplicialEnergyTransformer(**config)
 
@@ -427,24 +427,24 @@ def viset_4l_e50_t50_cifar(
     num_classes: int = 100, **kwargs: Any
 ) -> VisionSimplicialEnergyTransformer:
     """ViSET-4L with 50% edges, 50% triangles for CIFAR."""
-    config: dict[str, Any] = dict(
-        img_size=32,
-        patch_size=4,
-        in_chans=3,
-        num_classes=num_classes,
-        embed_dim=192,
-        depth=4,
-        num_heads=8,
-        head_dim=64,
-        hopfield_hidden_dim=576,
-        et_steps=5,
-        et_alpha=5.0,
-        drop_rate=0.1,
-        use_topology=True,
-        simplex_budget=0.15,
-        simplex_max_dim=2,
-        simplex_dim_weights={1: 0.5, 2: 0.5},
-    )
+    config: dict[str, Any] = {
+        "img_size": 32,
+        "patch_size": 4,
+        "in_chans": 3,
+        "num_classes": num_classes,
+        "embed_dim": 192,
+        "depth": 4,
+        "num_heads": 8,
+        "head_dim": 64,
+        "hopfield_hidden_dim": 576,
+        "et_steps": 5,
+        "et_alpha": 5.0,
+        "drop_rate": 0.1,
+        "use_topology": True,
+        "simplex_budget": 0.15,
+        "simplex_max_dim": 2,
+        "simplex_dim_weights": {1: 0.5, 2: 0.5},
+    }
     config.update(kwargs)
     return VisionSimplicialEnergyTransformer(**config)
 
@@ -453,24 +453,24 @@ def viset_6l_e50_t50_cifar(
     num_classes: int = 100, **kwargs: Any
 ) -> VisionSimplicialEnergyTransformer:
     """ViSET-6L with 50% edges, 50% triangles for CIFAR."""
-    config: dict[str, Any] = dict(
-        img_size=32,
-        patch_size=4,
-        in_chans=3,
-        num_classes=num_classes,
-        embed_dim=192,
-        depth=6,
-        num_heads=8,
-        head_dim=64,
-        hopfield_hidden_dim=576,
-        et_steps=4,
-        et_alpha=2.5,
-        drop_rate=0.1,
-        use_topology=True,
-        simplex_budget=0.15,
-        simplex_max_dim=2,
-        simplex_dim_weights={1: 0.5, 2: 0.5},
-    )
+    config: dict[str, Any] = {
+        "img_size": 32,
+        "patch_size": 4,
+        "in_chans": 3,
+        "num_classes": num_classes,
+        "embed_dim": 192,
+        "depth": 6,
+        "num_heads": 8,
+        "head_dim": 64,
+        "hopfield_hidden_dim": 576,
+        "et_steps": 4,
+        "et_alpha": 2.5,
+        "drop_rate": 0.1,
+        "use_topology": True,
+        "simplex_budget": 0.15,
+        "simplex_max_dim": 2,
+        "simplex_dim_weights": {1: 0.5, 2: 0.5},
+    }
     config.update(kwargs)
     return VisionSimplicialEnergyTransformer(**config)
 
@@ -483,24 +483,24 @@ def viset_2l_e40_t40_tet20_cifar(
     Experimental: 40% edges, 40% triangles, 20% random 4-cliques
     to capture 2x2 patch interactions.
     """
-    config: dict[str, Any] = dict(
-        img_size=32,
-        patch_size=4,
-        in_chans=3,
-        num_classes=num_classes,
-        embed_dim=192,
-        depth=2,
-        num_heads=8,
-        head_dim=64,
-        hopfield_hidden_dim=576,
-        et_steps=6,
-        et_alpha=10.0,
-        drop_rate=0.1,
-        use_topology=True,
-        simplex_budget=0.15,
-        simplex_max_dim=3,  # Include tetrahedra!
-        simplex_dim_weights={1: 0.4, 2: 0.4, 3: 0.2},
-    )
+    config: dict[str, Any] = {
+        "img_size": 32,
+        "patch_size": 4,
+        "in_chans": 3,
+        "num_classes": num_classes,
+        "embed_dim": 192,
+        "depth": 2,
+        "num_heads": 8,
+        "head_dim": 64,
+        "hopfield_hidden_dim": 576,
+        "et_steps": 6,
+        "et_alpha": 10.0,
+        "drop_rate": 0.1,
+        "use_topology": True,
+        "simplex_budget": 0.15,
+        "simplex_max_dim": 3,  # Include tetrahedra!
+        "simplex_dim_weights": {1: 0.4, 2: 0.4, 3: 0.2},
+    }
     config.update(kwargs)
     return VisionSimplicialEnergyTransformer(**config)
 

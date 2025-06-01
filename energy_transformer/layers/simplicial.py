@@ -11,9 +11,8 @@ from itertools import combinations
 from typing import Final
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F  # noqa: N812
-from torch import Tensor
+from torch import Tensor, nn
 
 try:
     import numpy as np
@@ -211,7 +210,7 @@ class SimplexBudgetManager:
 class SimplexGenerator(ABC):
     """Abstract base class for simplex generation strategies."""
 
-    def __init__(self, rng: random.Random | None = None):
+    def __init__(self, rng: random.Random | None = None) -> None:
         """Initialize generator with optional random number generator."""
         self.rng = rng or random.Random()
 
@@ -241,7 +240,6 @@ class SimplexGenerator(ABC):
         list[list[int]]
             List of generated simplices.
         """
-        pass
 
 
 class RandomSimplexGenerator(SimplexGenerator):
@@ -324,7 +322,7 @@ class TopologyAwareSimplexGenerator(SimplexGenerator):
         k_neighbors: int | None = None,
         include_delaunay: bool = True,
         rng: random.Random | None = None,
-    ):
+    ) -> None:
         """Initialize with spatial coordinates and parameters.
 
         Parameters

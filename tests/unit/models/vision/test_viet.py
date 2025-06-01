@@ -1,6 +1,6 @@
 import pytest
 import torch
-import torch.nn as nn
+from torch import nn
 
 from energy_transformer.models.base import ETOutput
 from energy_transformer.models.vision import viet
@@ -30,7 +30,7 @@ class DummyET(nn.Module):
 
 
 def _make_model(depth: int = 0) -> viet.VisionEnergyTransformer:
-    model = viet.VisionEnergyTransformer(
+    return viet.VisionEnergyTransformer(
         img_size=4,
         patch_size=2,
         in_chans=3,
@@ -44,7 +44,6 @@ def _make_model(depth: int = 0) -> viet.VisionEnergyTransformer:
         et_alpha=0.1,
         drop_rate=0.0,
     )
-    return model
 
 
 def test_process_blocks_without_energy_info() -> None:

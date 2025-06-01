@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
+import pytest
 import torch
 import torch.nn as nn
-import pytest
 
-from energy_transformer.spec.realise import ModuleCache, GraphModule
-from energy_transformer.spec import Context
-from energy_transformer.spec import library
+from energy_transformer.spec import Context, library
+from energy_transformer.spec.realise import GraphModule, ModuleCache
 
 
 def test_module_cache_etblock_key() -> None:
@@ -25,8 +24,11 @@ def test_module_cache_etblock_key() -> None:
 def test_debug_realisation_break_on_error(monkeypatch) -> None:
     """``debug_realisation`` invokes ``pdb.post_mortem`` when requested."""
     from energy_transformer.spec.debug import debug_realisation
+
     called = {}
-    monkeypatch.setattr("pdb.post_mortem", lambda: called.setdefault("pdb", True))
+    monkeypatch.setattr(
+        "pdb.post_mortem", lambda: called.setdefault("pdb", True)
+    )
     with pytest.raises(RuntimeError):
         with debug_realisation(break_on_error=True):
             raise RuntimeError("boom")
@@ -48,7 +50,9 @@ def test_graph_module_errors() -> None:
     """GraphModule raises helpful errors on invalid graphs."""
     nodes = {"a": nn.Identity(), "b": nn.Identity()}
     # Cycle detection
-    gm_cycle = GraphModule(nodes, [("a", "b"), ("b", "a")], inputs=["x"], outputs=["a"])
+    gm_cycle = GraphModule(
+        nodes, [("a", "b"), ("b", "a")], inputs=["x"], outputs=["a"]
+    )
     with pytest.raises(RuntimeError, match="cycles"):
         gm_cycle(torch.randn(1, 1))
 
@@ -63,7 +67,8 @@ def test_apply_edge_transform_variants() -> None:
     gm = GraphModule({}, [], [], [])
     t = torch.ones(1)
     assert torch.allclose(gm._apply_edge_transform(t, "relu"), torch.relu(t))
-    assert torch.allclose(gm._apply_edge_transform(t, "sigmoid"), torch.sigmoid(t))
+    assert torch.allclose(
+        gm._apply_edge_transform(t, "sigmoid"), torch.sigmoid(t)
+    )
     with pytest.raises(ValueError):
         gm._apply_edge_transform(t, "unknown")
-

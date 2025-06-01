@@ -1,8 +1,8 @@
 """Demonstrate topology-aware simplex generation."""
 
-import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib import patches
 from matplotlib.patches import Polygon  # Import Polygon from correct module
 
 from energy_transformer.layers.simplicial import (
@@ -99,7 +99,7 @@ def visualize_topology(grid_size: int = 8) -> None:
             f"Edges: {len(edges)}\nTriangles: {len(triangles)}",
             transform=ax.transAxes,
             va="top",
-            bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.8),
+            bbox={"boxstyle": "round", "facecolor": "wheat", "alpha": 0.8},
         )
 
     plt.tight_layout()

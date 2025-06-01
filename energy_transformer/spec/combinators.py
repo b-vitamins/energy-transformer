@@ -18,25 +18,25 @@ from typing import Any, Literal, TypeVar, overload
 from .primitives import Context, Spec, ValidationError
 
 __all__ = [
-    "Sequential",
-    "Parallel",
     "Conditional",
-    "Residual",
     "Graph",
-    "Loop",
-    "Switch",
-    "seq",
-    "parallel",
-    "residual",
-    "cond",
-    "loop",
-    "switch",
-    "graph",
     "Identity",
     "Lambda",
-    "transformer_block",
-    "multi_scale",
+    "Loop",
+    "Parallel",
+    "Residual",
+    "Sequential",
+    "Switch",
+    "cond",
+    "graph",
+    "loop",
     "mixture_of_experts",
+    "multi_scale",
+    "parallel",
+    "residual",
+    "seq",
+    "switch",
+    "transformer_block",
 ]
 
 T = TypeVar("T", bound=Spec)
@@ -74,7 +74,7 @@ class Sequential(Spec):
         """
         if isinstance(other, Sequential):
             return Sequential(parts=self.parts + other.parts)
-        return Sequential(parts=self.parts + (other,))
+        return Sequential(parts=(*self.parts, other))
 
     def __lshift__(self, other: Spec) -> Sequential:
         """Prepend spec using << operator.
@@ -91,7 +91,7 @@ class Sequential(Spec):
         """
         if isinstance(other, Sequential):
             return Sequential(parts=other.parts + self.parts)
-        return Sequential(parts=(other,) + self.parts)
+        return Sequential(parts=(other, *self.parts))
 
     def __or__(self, other: Spec) -> Parallel:
         """Create parallel composition using | operator.
@@ -137,7 +137,7 @@ class Sequential(Spec):
         """Return all parts as children."""
         return list(self.parts)
 
-    def validate(self, context: Context) -> list[str]:  # noqa: C901
+    def validate(self, context: Context) -> list[str]:
         """Validate sequence with context propagation.
 
         Parameters
@@ -224,7 +224,7 @@ class Parallel(Spec):
                 weights=self.weights,
             )
         return Parallel(
-            branches=self.branches + (other,),
+            branches=(*self.branches, other),
             merge=self.merge,
             merge_dim=self.merge_dim,
             weights=self.weights,
@@ -272,7 +272,7 @@ class Parallel(Spec):
                     dims.append((i, dim_value))
 
             if dims:
-                unique_dims = set(d[1] for d in dims)
+                unique_dims = {d[1] for d in dims}
                 if len(unique_dims) > 1:
                     dim_info = ", ".join(f"Branch {i}: {d}" for i, d in dims)
                     issues.append(
@@ -381,7 +381,7 @@ class Conditional(Spec):
         """
         if self.condition(context):
             return self.if_true.apply_context(context)
-        elif self.if_false:
+        if self.if_false:
             return self.if_false.apply_context(context)
         return context
 
@@ -591,12 +591,7 @@ class Graph(Spec):
             rec_stack.remove(node)
             return False
 
-        for node in self.nodes:
-            if node not in visited:
-                if dfs(node):
-                    return True
-
-        return False
+        return any(node not in visited and dfs(node) for node in self.nodes)
 
     def _find_cycle_path(self) -> list[str]:
         """Find a cycle path for error reporting."""
@@ -625,9 +620,8 @@ class Graph(Spec):
             return False
 
         for node in self.nodes:
-            if node not in visited:
-                if dfs(node):
-                    return path
+            if node not in visited and dfs(node):
+                return path
 
         return []
 
@@ -1129,11 +1123,9 @@ def mixture_of_experts(
     for i in range(len(experts)):
         g = g.add_edge(f"expert_{i}", "combine")
 
-    g = Graph(
+    return Graph(
         nodes=g.nodes,
         edges=g.edges,
         inputs=["input"],
         outputs=["combine"],
     )
-
-    return g

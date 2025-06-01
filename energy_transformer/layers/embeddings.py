@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import torch
-import torch.nn as nn
-from torch import Tensor
+from torch import Tensor, nn
 
 __all__ = [
     "PatchEmbedding",
@@ -134,9 +133,7 @@ class PatchEmbedding(nn.Module):  # type: ignore[misc]
         # Extract patches and project to embedding space
         x = self.proj(x)  # (b, embed_dim, h//patch_h, w//patch_w)
         x = x.flatten(2)  # (b, embed_dim, num_patches)
-        x = x.transpose(1, 2)  # (b, num_patches, embed_dim)
-
-        return x
+        return x.transpose(1, 2)  # (b, num_patches, embed_dim)
 
 
 class PositionalEmbedding2D(nn.Module):  # type: ignore[misc]

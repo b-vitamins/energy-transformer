@@ -50,8 +50,7 @@ from __future__ import annotations
 from typing import Any
 
 import torch
-import torch.nn as nn
-from torch import Tensor
+from torch import Tensor, nn
 
 
 class PatchEmbedding(nn.Module):  # type: ignore[misc]
@@ -88,8 +87,7 @@ class PatchEmbedding(nn.Module):  # type: ignore[misc]
             Patch embeddings of shape (B, N, D).
         """
         x = self.proj(x)  # (B, D, H/P, W/P)
-        x = x.flatten(2).transpose(1, 2)  # (B, N, D)
-        return x
+        return x.flatten(2).transpose(1, 2)  # (B, N, D)
 
 
 class VisionTransformer(nn.Module):  # type: ignore[misc]
@@ -212,9 +210,7 @@ class VisionTransformer(nn.Module):  # type: ignore[misc]
         # Classification
         x = self.norm(x)
         x = x[:, 0]  # CLS token
-        x = self.head(x)
-
-        return x
+        return self.head(x)
 
 
 class TransformerBlock(nn.Module):  # type: ignore[misc]
@@ -260,8 +256,7 @@ class TransformerBlock(nn.Module):  # type: ignore[misc]
             Output tensor of shape (B, N, D).
         """
         x = x + self.attn(self.norm1(x))
-        x = x + self.mlp(self.norm2(x))
-        return x
+        return x + self.mlp(self.norm2(x))
 
 
 class Attention(nn.Module):  # type: ignore[misc]
@@ -316,9 +311,7 @@ class Attention(nn.Module):  # type: ignore[misc]
         # Aggregate
         x = (attn @ v).transpose(1, 2).reshape(batch_size, seq_len, embed_dim)
         x = self.proj(x)
-        x = self.proj_drop(x)
-
-        return x
+        return self.proj_drop(x)
 
 
 class MLP(nn.Module):  # type: ignore[misc]
@@ -356,8 +349,7 @@ class MLP(nn.Module):  # type: ignore[misc]
         x = self.act(x)
         x = self.drop(x)
         x = self.fc2(x)
-        x = self.drop(x)
-        return x
+        return self.drop(x)
 
 
 # Factory functions
@@ -365,48 +357,48 @@ class MLP(nn.Module):  # type: ignore[misc]
 
 def vit_tiny(**kwargs: Any) -> VisionTransformer:
     """ViT-Tiny configuration."""
-    config: dict[str, Any] = dict(
-        embed_dim=192,
-        depth=12,
-        num_heads=3,
-        mlp_ratio=4.0,
-    )
+    config: dict[str, Any] = {
+        "embed_dim": 192,
+        "depth": 12,
+        "num_heads": 3,
+        "mlp_ratio": 4.0,
+    }
     config.update(kwargs)
     return VisionTransformer(**config)
 
 
 def vit_small(**kwargs: Any) -> VisionTransformer:
     """ViT-Small configuration."""
-    config: dict[str, Any] = dict(
-        embed_dim=384,
-        depth=12,
-        num_heads=6,
-        mlp_ratio=4.0,
-    )
+    config: dict[str, Any] = {
+        "embed_dim": 384,
+        "depth": 12,
+        "num_heads": 6,
+        "mlp_ratio": 4.0,
+    }
     config.update(kwargs)
     return VisionTransformer(**config)
 
 
 def vit_base(**kwargs: Any) -> VisionTransformer:
     """ViT-Base configuration."""
-    config: dict[str, Any] = dict(
-        embed_dim=768,
-        depth=12,
-        num_heads=12,
-        mlp_ratio=4.0,
-    )
+    config: dict[str, Any] = {
+        "embed_dim": 768,
+        "depth": 12,
+        "num_heads": 12,
+        "mlp_ratio": 4.0,
+    }
     config.update(kwargs)
     return VisionTransformer(**config)
 
 
 def vit_large(**kwargs: Any) -> VisionTransformer:
     """ViT-Large configuration."""
-    config: dict[str, Any] = dict(
-        embed_dim=1024,
-        depth=24,
-        num_heads=16,
-        mlp_ratio=4.0,
-    )
+    config: dict[str, Any] = {
+        "embed_dim": 1024,
+        "depth": 24,
+        "num_heads": 16,
+        "mlp_ratio": 4.0,
+    }
     config.update(kwargs)
     return VisionTransformer(**config)
 
@@ -416,33 +408,33 @@ def vit_large(**kwargs: Any) -> VisionTransformer:
 
 def vit_tiny_cifar(num_classes: int = 100, **kwargs: Any) -> VisionTransformer:
     """ViT-Tiny for CIFAR datasets."""
-    config: dict[str, Any] = dict(
-        img_size=32,
-        patch_size=4,
-        in_chans=3,
-        num_classes=num_classes,
-        embed_dim=192,
-        depth=12,
-        num_heads=3,
-        mlp_ratio=4.0,
-        drop_rate=0.1,
-    )
+    config: dict[str, Any] = {
+        "img_size": 32,
+        "patch_size": 4,
+        "in_chans": 3,
+        "num_classes": num_classes,
+        "embed_dim": 192,
+        "depth": 12,
+        "num_heads": 3,
+        "mlp_ratio": 4.0,
+        "drop_rate": 0.1,
+    }
     config.update(kwargs)
     return VisionTransformer(**config)
 
 
 def vit_small_cifar(num_classes: int = 100, **kwargs: Any) -> VisionTransformer:
     """ViT-Small for CIFAR datasets."""
-    config: dict[str, Any] = dict(
-        img_size=32,
-        patch_size=4,
-        in_chans=3,
-        num_classes=num_classes,
-        embed_dim=384,
-        depth=12,
-        num_heads=6,
-        mlp_ratio=4.0,
-        drop_rate=0.1,
-    )
+    config: dict[str, Any] = {
+        "img_size": 32,
+        "patch_size": 4,
+        "in_chans": 3,
+        "num_classes": num_classes,
+        "embed_dim": 384,
+        "depth": 12,
+        "num_heads": 6,
+        "mlp_ratio": 4.0,
+        "drop_rate": 0.1,
+    }
     config.update(kwargs)
     return VisionTransformer(**config)

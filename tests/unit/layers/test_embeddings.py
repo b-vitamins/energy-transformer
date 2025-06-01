@@ -9,7 +9,7 @@ from energy_transformer.layers.embeddings import (
 from energy_transformer.layers.tokens import CLSToken
 
 
-@pytest.mark.parametrize("inp,expected", [(3, (3, 3)), ((2, 5), (2, 5))])
+@pytest.mark.parametrize(("inp", "expected"), [(3, (3, 3)), ((2, 5), (2, 5))])
 def test_to_pair(inp: int | tuple[int, int], expected: tuple[int, int]) -> None:
     assert _to_pair(inp) == expected
 

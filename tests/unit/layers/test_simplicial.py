@@ -35,7 +35,7 @@ def test_simplex_validator_success() -> None:
 
 
 @pytest.mark.parametrize(
-    "simplices,exc",
+    ("simplices", "exc"),
     [
         ([], ValueError),
         ([[0]], ValueError),
@@ -146,7 +146,6 @@ def fake_scipy(monkeypatch):
     monkeypatch.setattr(simplicial, "np", FakeNP())
     monkeypatch.setattr(simplicial, "cKDTree", FakeKDTree)
     monkeypatch.setattr(simplicial, "Delaunay", FakeDelaunay)
-    yield
 
 
 def test_topology_aware_generator_2d() -> None:

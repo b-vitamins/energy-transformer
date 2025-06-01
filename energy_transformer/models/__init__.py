@@ -51,4 +51,4 @@ energy_transformer.spec : Declarative specification system for model constructio
 
 from .base import REALISER_REGISTRY, EnergyTransformer
 
-__all__ = ["EnergyTransformer", "REALISER_REGISTRY"]
+__all__ = ["REALISER_REGISTRY", "EnergyTransformer"]

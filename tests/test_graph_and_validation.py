@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 import pytest
 import torch
-import torch.nn as nn
+from torch import nn
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -168,7 +168,7 @@ class TestGraphExecution:
         from dataclasses import dataclass
 
         import torch
-        import torch.nn as nn
+        from torch import nn
 
         from energy_transformer.spec import Spec, graph, param, realise
         from energy_transformer.spec.combinators import Graph
@@ -221,7 +221,7 @@ class TestGraphExecution:
     def test_graph_execution_order(self, capfd):
         """Verify nodes execute in correct order with proper inputs."""
         import torch
-        import torch.nn as nn
+        from torch import nn
 
         from energy_transformer.spec.realise import GraphModule
 
@@ -510,14 +510,16 @@ class TestErrorMessages:
             g = g.add_edge("end", "middle")
         err = str(exc.value)
         assert "cycle" in err.lower()
-        assert "middle" in err and "end" in err
+        assert "middle" in err
+        assert "end" in err
 
     def test_missing_dimension_error_context(self):
         """Test missing dimension errors show context."""
         spec = ConsumerSpec()
         ctx = Context(dimensions={"other_dim": 123})
         issues = spec.validate(ctx)
-        assert issues and any("test_dim" in i for i in issues)
+        assert issues
+        assert any("test_dim" in i for i in issues)
 
 
 if __name__ == "__main__":

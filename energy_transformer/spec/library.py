@@ -18,31 +18,31 @@ from .primitives import (
 )
 
 __all__ = [
-    # Core layer specs
-    "PatchEmbedSpec",
     "CLSTokenSpec",
-    "PosEmbedSpec",
+    # Head specs
+    "ClassificationHeadSpec",
+    # Utility specs
+    "DropoutSpec",
+    "ETBlockSpec",
+    "FeatureHeadSpec",
+    "HNSpec",
+    "IdentitySpec",
     "LayerNormSpec",
     "MHASpec",
     "MHEASpec",
     "MLPSpec",
-    "HNSpec",
+    # Core layer specs
+    "PatchEmbedSpec",
+    "PosEmbedSpec",
     "SHNSpec",
-    # Head specs
-    "ClassificationHeadSpec",
-    "FeatureHeadSpec",
-    # Utility specs
-    "DropoutSpec",
-    "IdentitySpec",
+    "TransformerBlockSpec",
     # Composite specs
     "VisionEmbeddingSpec",
-    "TransformerBlockSpec",
-    "ETBlockSpec",
     # Utility functions
     "to_pair",
+    "validate_dimension",
     "validate_positive",
     "validate_probability",
-    "validate_dimension",
 ]
 
 
@@ -234,12 +234,11 @@ class HNSpec(Spec):
             if embed_dim := context.get_dim("embed_dim"):
                 computed_hidden = int(embed_dim * self.multiplier)
                 context.set_dim("hopfield_hidden_dim", computed_hidden)
-        else:
-            if isinstance(self.hidden_dim, Dimension):
-                if resolved := self.hidden_dim.resolve(context):
-                    context.set_dim("hopfield_hidden_dim", resolved)
-            elif isinstance(self.hidden_dim, int):
-                context.set_dim("hopfield_hidden_dim", self.hidden_dim)
+        elif isinstance(self.hidden_dim, Dimension):
+            if resolved := self.hidden_dim.resolve(context):
+                context.set_dim("hopfield_hidden_dim", resolved)
+        elif isinstance(self.hidden_dim, int):
+            context.set_dim("hopfield_hidden_dim", self.hidden_dim)
 
         return context
 
@@ -562,5 +561,3 @@ class IdentitySpec(Spec):
     Passes input through unchanged. Useful for optional layers
     or as a no-op in conditional architectures.
     """
-
-    pass

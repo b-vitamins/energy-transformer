@@ -2,8 +2,7 @@
 
 from abc import ABC, abstractmethod
 
-import torch.nn as nn
-from torch import Tensor
+from torch import Tensor, nn
 
 
 class BaseLayerNorm(nn.Module, ABC):  # type: ignore[misc]
@@ -37,7 +36,6 @@ class BaseLayerNorm(nn.Module, ABC):  # type: ignore[misc]
         Override in subclasses to provide specific initialization.
         Default implementation does nothing.
         """
-        pass
 
 
 class BaseEnergyAttention(nn.Module, ABC):  # type: ignore[misc]
@@ -71,7 +69,6 @@ class BaseEnergyAttention(nn.Module, ABC):  # type: ignore[misc]
         Override in subclasses to provide specific initialization.
         Default implementation does nothing.
         """
-        pass
 
 
 class BaseHopfieldNetwork(nn.Module, ABC):  # type: ignore[misc]
@@ -104,7 +101,6 @@ class BaseHopfieldNetwork(nn.Module, ABC):  # type: ignore[misc]
         Override in subclasses to provide specific initialization.
         Default implementation does nothing.
         """
-        pass
 
 
 def _validate_scalar_energy(energy: Tensor, component_name: str) -> None:

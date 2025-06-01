@@ -24,24 +24,24 @@ from typing import (
     get_type_hints,
 )
 
-import torch.nn as nn
+from torch import nn
 
 __all__ = [
-    "Spec",
-    "SpecMeta",
+    "REQUIRED",
     "AsyncSpec",
-    "spec",
-    "param",
     "Context",
     "Dimension",
     "DimensionDef",
     "DimensionLike",
+    "Spec",
+    "SpecMeta",
     "ValidationError",
-    "requires",
-    "provides",
     "modifies",
+    "param",
+    "provides",
+    "requires",
+    "spec",
     "validate_field",
-    "REQUIRED",
 ]
 
 # Type aliases
@@ -109,7 +109,7 @@ class Dimension:
         value: DimensionLike = None,
         formula: str | None = None,
         constraints: list[Callable[[int], bool]] | None = None,
-    ):
+    ) -> None:
         """Initialize Dimension with name, value, formula, and constraints.
 
         Parameters
@@ -153,7 +153,7 @@ class Dimension:
             assert kind is not None
             if kind == "WHITESPACE":
                 continue
-            elif kind == "INVALID":
+            if kind == "INVALID":
                 raise ValueError(f"Invalid character in formula: {value!r}")
             tokens.append((kind, value))
 
@@ -172,10 +172,7 @@ class Dimension:
             op = tokens[pos][0]
             pos += 1
             right, pos = self._parse_term(tokens, pos, variables)
-            if op == "PLUS":
-                left = left + right
-            else:
-                left = left - right
+            left = left + right if op == "PLUS" else left - right
 
         return left, pos
 
@@ -216,7 +213,7 @@ class Dimension:
         if token_type == "NUMBER":
             return float(token_value), pos + 1
 
-        elif token_type == "IDENT":
+        if token_type == "IDENT":
             if token_value not in variables:
                 raise ValueError(f"Unknown variable: {token_value}")
             value = variables[token_value]
@@ -224,20 +221,19 @@ class Dimension:
                 raise ValueError(f"Variable {token_value} has no value")
             return float(value), pos + 1
 
-        elif token_type == "LPAREN":
+        if token_type == "LPAREN":
             pos += 1  # Skip '('
             expr_value, pos = self._parse_expression(tokens, pos, variables)
             if pos >= len(tokens) or tokens[pos][0] != "RPAREN":
                 raise ValueError("Missing closing parenthesis")
             return expr_value, pos + 1  # Skip ')'
 
-        elif token_type == "MINUS":
+        if token_type == "MINUS":
             pos += 1  # Skip unary minus
             factor_val, pos = self._parse_factor(tokens, pos, variables)
             return -factor_val, pos
 
-        else:
-            raise ValueError(f"Unexpected token: {token_value}")
+        raise ValueError(f"Unexpected token: {token_value}")
 
     def _safe_eval_formula(
         self, formula: str, variables: dict[str, int | None]
@@ -335,7 +331,7 @@ class Context:
         dimensions: dict[str, int | None] | None = None,
         metadata: dict[str, Any] | None = None,
         parent: Context | None = None,
-    ):
+    ) -> None:
         """Initialize Context with dimensions, metadata, and parent.
 
         Parameters
@@ -484,7 +480,7 @@ class ValidationError(ValueError):
         field_name: str | None = None,
         suggestion: str | None = None,
         context: Context | None = None,
-    ):
+    ) -> None:
         """Initialize ValidationError with debugging information.
 
         Parameters
@@ -570,10 +566,9 @@ def param(
 
     if default_factory is not None:
         return field(default_factory=default_factory, metadata=metadata)
-    elif default is REQUIRED:
+    if default is REQUIRED:
         return field(metadata=metadata)
-    else:
-        return field(default=default, metadata=metadata)
+    return field(default=default, metadata=metadata)
 
 
 class SpecMeta(ABCMeta):

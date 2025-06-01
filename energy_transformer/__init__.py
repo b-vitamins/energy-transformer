@@ -44,17 +44,17 @@ _LAZY_IMPORTS = {
 if TYPE_CHECKING:  # pragma: no cover
     from .models import EnergyTransformer  # noqa: F401
     from .spec import (
-        Context,  # noqa: F401
-        RealisationError,  # noqa: F401
-        Spec,  # noqa: F401
-        ValidationError,  # noqa: F401
+        Context,
+        RealisationError,
+        Spec,
+        ValidationError,
         cond,  # noqa: F401
         configure_realisation,  # noqa: F401
-        loop,  # noqa: F401
-        parallel,  # noqa: F401
-        realise,  # noqa: F401
+        loop,
+        parallel,
+        realise,
         register,  # noqa: F401
-        seq,  # noqa: F401
+        seq,
         visualize,  # noqa: F401
     )
 
@@ -91,7 +91,8 @@ def __getattr__(name: str) -> Any:
 
 def __dir__() -> list[str]:
     """List available attributes for tab completion."""
-    return list(_LAZY_IMPORTS.keys()) + [
+    return [
+        *list(_LAZY_IMPORTS.keys()),
         "__version__",
         "__author__",
         "__license__",
@@ -101,14 +102,14 @@ def __dir__() -> list[str]:
 
 # Only include commonly used exports in __all__
 __all__ = [
-    "realise",
-    "seq",
+    "Context",
+    "RealisationError",
+    "Spec",
+    "ValidationError",
     "loop",
     "parallel",
-    "Spec",
-    "Context",
-    "ValidationError",
-    "RealisationError",
+    "realise",
+    "seq",
 ]
 
 # NO SIDE EFFECTS ON IMPORT!  Configuration should be explicit.

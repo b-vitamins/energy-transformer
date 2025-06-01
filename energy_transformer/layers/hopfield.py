@@ -3,9 +3,8 @@
 from collections.abc import Callable
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F  # noqa: N812
-from torch import Tensor
+from torch import Tensor, nn
 
 from .base import BaseHopfieldNetwork
 
@@ -50,7 +49,7 @@ class HopfieldNetwork(BaseHopfieldNetwork):
         energy_fn: Callable[[Tensor], Tensor] = (
             lambda h: -0.5 * (F.relu(h) ** 2).sum()
         ),
-    ):
+    ) -> None:
         """Initialize the Hopfield Network.
 
         Parameters

@@ -1,6 +1,6 @@
 import pytest
 import torch
-import torch.nn.functional as functional
+from torch.nn import functional
 
 from energy_transformer.layers.layer_norm import (
     LayerNorm,

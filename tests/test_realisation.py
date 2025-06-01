@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from unittest.mock import patch
 
 import pytest
-import torch.nn as nn
+from torch import nn
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -101,7 +101,7 @@ class TestRecursionDepth:
             def children(self) -> list[Spec]:
                 if self.name == "A":
                     return [CircularSpec(name="B")]
-                elif self.name == "B":
+                if self.name == "B":
                     return [CircularSpec(name="A")]
                 return []
 
@@ -240,7 +240,7 @@ class TestCacheStateRestoration:
         """Test exact behavior from verify_cache_restoration.py."""
         from dataclasses import dataclass
 
-        import torch.nn as nn
+        from torch import nn
 
         from energy_transformer.spec import (
             Spec,

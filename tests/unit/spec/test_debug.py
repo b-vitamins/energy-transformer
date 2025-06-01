@@ -3,19 +3,18 @@
 from __future__ import annotations
 
 import logging
-from io import StringIO
 from contextlib import redirect_stdout
+from io import StringIO
 
-import pytest
 import torch.nn as nn
 
+from energy_transformer.spec import Context
 from energy_transformer.spec.debug import (
     clear_cache,
     debug_realisation,
     inspect_cache_stats,
 )
 from energy_transformer.spec.realise import ModuleCache, _config
-from energy_transformer.spec import Context
 from tests.unit.spec.test_realise import SimpleSpec
 
 
@@ -49,4 +48,3 @@ def test_inspect_and_clear_cache_output(capsys) -> None:
         clear_cache()
         assert "Cache cleared" in buf.getvalue()
     assert len(cache._cache) == 0
-

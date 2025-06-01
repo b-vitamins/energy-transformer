@@ -3,9 +3,8 @@
 import math
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F  # noqa: N812
-from torch import Tensor
+from torch import Tensor, nn
 
 from .base import BaseLayerNorm
 
@@ -48,7 +47,7 @@ class LayerNorm(BaseLayerNorm):
         self,
         in_dim: int,
         eps: float = 1e-5,
-    ):
+    ) -> None:
         """Initialize LayerNorm module.
 
         Parameters

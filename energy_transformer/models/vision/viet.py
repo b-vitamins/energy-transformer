@@ -54,8 +54,7 @@ from __future__ import annotations
 
 from typing import Any
 
-import torch.nn as nn
-from torch import Tensor
+from torch import Tensor, nn
 
 from ...layers.attention import MultiHeadEnergyAttention
 from ...layers.embeddings import PatchEmbedding, PositionalEmbedding2D
@@ -304,11 +303,10 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
             if return_energy_info:
                 return {"features": features, "energy_info": energy_info}
             return features
-        else:
-            logits: Tensor = self.head(x)  # (B, num_classes)
-            if return_energy_info:
-                return {"logits": logits, "energy_info": energy_info}
-            return logits
+        logits: Tensor = self.head(x)  # (B, num_classes)
+        if return_energy_info:
+            return {"logits": logits, "energy_info": energy_info}
+        return logits
 
 
 # Factory functions
@@ -316,60 +314,60 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
 
 def viet_tiny(**kwargs: Any) -> VisionEnergyTransformer:
     """ViET-Tiny configuration."""
-    config: dict[str, Any] = dict(
-        embed_dim=192,
-        depth=12,
-        num_heads=3,
-        head_dim=64,
-        hopfield_hidden_dim=768,  # 4x embed_dim
-        et_steps=4,
-        et_alpha=0.125,
-    )
+    config: dict[str, Any] = {
+        "embed_dim": 192,
+        "depth": 12,
+        "num_heads": 3,
+        "head_dim": 64,
+        "hopfield_hidden_dim": 768,  # 4x embed_dim
+        "et_steps": 4,
+        "et_alpha": 0.125,
+    }
     config.update(kwargs)
     return VisionEnergyTransformer(**config)
 
 
 def viet_small(**kwargs: Any) -> VisionEnergyTransformer:
     """ViET-Small configuration."""
-    config: dict[str, Any] = dict(
-        embed_dim=384,
-        depth=12,
-        num_heads=6,
-        head_dim=64,
-        hopfield_hidden_dim=1536,  # 4x embed_dim
-        et_steps=4,
-        et_alpha=0.125,
-    )
+    config: dict[str, Any] = {
+        "embed_dim": 384,
+        "depth": 12,
+        "num_heads": 6,
+        "head_dim": 64,
+        "hopfield_hidden_dim": 1536,  # 4x embed_dim
+        "et_steps": 4,
+        "et_alpha": 0.125,
+    }
     config.update(kwargs)
     return VisionEnergyTransformer(**config)
 
 
 def viet_base(**kwargs: Any) -> VisionEnergyTransformer:
     """ViET-Base configuration."""
-    config: dict[str, Any] = dict(
-        embed_dim=768,
-        depth=12,
-        num_heads=12,
-        head_dim=64,
-        hopfield_hidden_dim=3072,  # 4x embed_dim
-        et_steps=4,
-        et_alpha=0.125,
-    )
+    config: dict[str, Any] = {
+        "embed_dim": 768,
+        "depth": 12,
+        "num_heads": 12,
+        "head_dim": 64,
+        "hopfield_hidden_dim": 3072,  # 4x embed_dim
+        "et_steps": 4,
+        "et_alpha": 0.125,
+    }
     config.update(kwargs)
     return VisionEnergyTransformer(**config)
 
 
 def viet_large(**kwargs: Any) -> VisionEnergyTransformer:
     """ViET-Large configuration."""
-    config: dict[str, Any] = dict(
-        embed_dim=1024,
-        depth=24,
-        num_heads=16,
-        head_dim=64,
-        hopfield_hidden_dim=4096,  # 4x embed_dim
-        et_steps=4,
-        et_alpha=0.125,
-    )
+    config: dict[str, Any] = {
+        "embed_dim": 1024,
+        "depth": 24,
+        "num_heads": 16,
+        "head_dim": 64,
+        "hopfield_hidden_dim": 4096,  # 4x embed_dim
+        "et_steps": 4,
+        "et_alpha": 0.125,
+    }
     config.update(kwargs)
     return VisionEnergyTransformer(**config)
 
@@ -381,20 +379,20 @@ def viet_tiny_cifar(
     num_classes: int = 100, **kwargs: Any
 ) -> VisionEnergyTransformer:
     """ViET-Tiny for CIFAR datasets."""
-    config: dict[str, Any] = dict(
-        img_size=32,
-        patch_size=4,
-        in_chans=3,
-        num_classes=num_classes,
-        embed_dim=192,
-        depth=12,
-        num_heads=3,
-        head_dim=64,
-        hopfield_hidden_dim=768,
-        et_steps=4,
-        et_alpha=0.125,
-        drop_rate=0.1,
-    )
+    config: dict[str, Any] = {
+        "img_size": 32,
+        "patch_size": 4,
+        "in_chans": 3,
+        "num_classes": num_classes,
+        "embed_dim": 192,
+        "depth": 12,
+        "num_heads": 3,
+        "head_dim": 64,
+        "hopfield_hidden_dim": 768,
+        "et_steps": 4,
+        "et_alpha": 0.125,
+        "drop_rate": 0.1,
+    }
     config.update(kwargs)
     return VisionEnergyTransformer(**config)
 
@@ -403,20 +401,20 @@ def viet_small_cifar(
     num_classes: int = 100, **kwargs: Any
 ) -> VisionEnergyTransformer:
     """ViET-Small for CIFAR datasets."""
-    config: dict[str, Any] = dict(
-        img_size=32,
-        patch_size=4,
-        in_chans=3,
-        num_classes=num_classes,
-        embed_dim=384,
-        depth=12,
-        num_heads=6,
-        head_dim=64,
-        hopfield_hidden_dim=1536,
-        et_steps=4,
-        et_alpha=0.125,
-        drop_rate=0.1,
-    )
+    config: dict[str, Any] = {
+        "img_size": 32,
+        "patch_size": 4,
+        "in_chans": 3,
+        "num_classes": num_classes,
+        "embed_dim": 384,
+        "depth": 12,
+        "num_heads": 6,
+        "head_dim": 64,
+        "hopfield_hidden_dim": 1536,
+        "et_steps": 4,
+        "et_alpha": 0.125,
+        "drop_rate": 0.1,
+    }
     config.update(kwargs)
     return VisionEnergyTransformer(**config)
 
@@ -428,20 +426,20 @@ def viet_2l_cifar(
     num_classes: int = 100, **kwargs: Any
 ) -> VisionEnergyTransformer:
     """Vision Energy Transformer with only 2 layers for CIFAR datasets."""
-    config: dict[str, Any] = dict(
-        img_size=32,
-        patch_size=4,
-        in_chans=3,
-        num_classes=num_classes,
-        embed_dim=192,
-        depth=2,  # Shallow!
-        num_heads=8,
-        head_dim=64,
-        hopfield_hidden_dim=576,  # 3x embed_dim
-        et_steps=6,
-        et_alpha=10.0,
-        drop_rate=0.1,
-    )
+    config: dict[str, Any] = {
+        "img_size": 32,
+        "patch_size": 4,
+        "in_chans": 3,
+        "num_classes": num_classes,
+        "embed_dim": 192,
+        "depth": 2,  # Shallow!
+        "num_heads": 8,
+        "head_dim": 64,
+        "hopfield_hidden_dim": 576,  # 3x embed_dim
+        "et_steps": 6,
+        "et_alpha": 10.0,
+        "drop_rate": 0.1,
+    }
     config.update(kwargs)
     return VisionEnergyTransformer(**config)
 
@@ -450,20 +448,20 @@ def viet_4l_cifar(
     num_classes: int = 100, **kwargs: Any
 ) -> VisionEnergyTransformer:
     """Vision Energy Transformer with 4 layers for CIFAR datasets."""
-    config: dict[str, Any] = dict(
-        img_size=32,
-        patch_size=4,
-        in_chans=3,
-        num_classes=num_classes,
-        embed_dim=192,
-        depth=4,
-        num_heads=8,
-        head_dim=64,
-        hopfield_hidden_dim=576,
-        et_steps=5,
-        et_alpha=5.0,
-        drop_rate=0.1,
-    )
+    config: dict[str, Any] = {
+        "img_size": 32,
+        "patch_size": 4,
+        "in_chans": 3,
+        "num_classes": num_classes,
+        "embed_dim": 192,
+        "depth": 4,
+        "num_heads": 8,
+        "head_dim": 64,
+        "hopfield_hidden_dim": 576,
+        "et_steps": 5,
+        "et_alpha": 5.0,
+        "drop_rate": 0.1,
+    }
     config.update(kwargs)
     return VisionEnergyTransformer(**config)
 
@@ -472,19 +470,19 @@ def viet_6l_cifar(
     num_classes: int = 100, **kwargs: Any
 ) -> VisionEnergyTransformer:
     """Vision Energy Transformer with 6 layers for CIFAR datasets."""
-    config: dict[str, Any] = dict(
-        img_size=32,
-        patch_size=4,
-        in_chans=3,
-        num_classes=num_classes,
-        embed_dim=192,
-        depth=6,
-        num_heads=8,
-        head_dim=64,
-        hopfield_hidden_dim=576,
-        et_steps=4,
-        et_alpha=2.5,
-        drop_rate=0.1,
-    )
+    config: dict[str, Any] = {
+        "img_size": 32,
+        "patch_size": 4,
+        "in_chans": 3,
+        "num_classes": num_classes,
+        "embed_dim": 192,
+        "depth": 6,
+        "num_heads": 8,
+        "head_dim": 64,
+        "hopfield_hidden_dim": 576,
+        "et_steps": 4,
+        "et_alpha": 2.5,
+        "drop_rate": 0.1,
+    }
     config.update(kwargs)
     return VisionEnergyTransformer(**config)

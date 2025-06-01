@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
-import pytest
 from dataclasses import dataclass
 
-from energy_transformer.spec.primitives import Dimension, ValidationError, REQUIRED
-from energy_transformer.spec.primitives import Context, Spec, param
+import pytest
+
+from energy_transformer.spec.primitives import (
+    REQUIRED,
+    Context,
+    Dimension,
+    Spec,
+    ValidationError,
+    param,
+)
 
 
 class TestDimensionResolve:
@@ -39,4 +46,3 @@ def test_required_parameter_validation() -> None:
 
     with pytest.raises(ValidationError):
         ReqSpec(value=REQUIRED)
-

@@ -1,6 +1,6 @@
 import torch
-import torch.nn as nn
 import torch.nn.functional as F  # noqa: N812
+from torch import nn
 
 from energy_transformer.layers.heads import ClassificationHead, FeatureHead
 

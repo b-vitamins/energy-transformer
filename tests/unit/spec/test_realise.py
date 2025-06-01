@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import torch
-import torch.nn as nn
+from torch import nn
 
 from energy_transformer.spec.combinators import (
     Graph,
@@ -532,7 +532,6 @@ class TestRealiser:
         """Test circular dependency detection."""
         # This is tricky to test without complex setup
         # Would need specs that reference each other
-        pass
 
     def test_max_recursion_limit(self):
         """Test maximum recursion limit."""

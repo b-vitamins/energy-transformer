@@ -1,5 +1,5 @@
 import pytest
-import torch.nn as nn
+from torch import nn
 
 from energy_transformer.models.vision import viset
 
