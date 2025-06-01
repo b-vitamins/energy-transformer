@@ -119,6 +119,18 @@ jobs:
           virtualenvs-create: true
           virtualenvs-in-project: true
       
+      # Windows-specific: Ensure Poetry is in PATH
+      - name: Add Poetry to PATH (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+          echo "$env:APPDATA\Python\Scripts" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "$env:APPDATA\pypoetry\venv\Scripts" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      
+      - name: Verify Poetry installation
+        run: poetry --version
+      
       - name: Load cached venv
         id: cached-poetry-dependencies
         uses: actions/cache@v4
