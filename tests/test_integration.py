@@ -7,6 +7,8 @@ from torch import nn
 from energy_transformer import realise, seq
 from energy_transformer.spec import Context
 
+pytestmark = pytest.mark.integration
+
 
 class TestCompleteWorkflows:
     """Test complete model building workflows."""

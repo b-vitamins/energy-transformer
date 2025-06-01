@@ -131,11 +131,20 @@ jobs:
       
       - name: Run tests
         run: |
-          poetry run pytest -n auto \
+          # Run fast tests first
+          poetry run pytest -m "not slow" -n auto \
             --cov=energy_transformer \
             --cov-report=xml \
             --cov-report=term-missing:skip-covered \
-            --junitxml=junit/test-results-${{ matrix.os }}-${{ matrix.python-version }}.xml
+            --junitxml=junit/test-results-fast-${{ matrix.os }}-${{ matrix.python-version }}.xml
+
+          # Run slow tests separately (without parallelization)
+          poetry run pytest -m "slow" \
+            --cov=energy_transformer \
+            --cov-append \
+            --cov-report=xml \
+            --cov-report=term-missing:skip-covered \
+            --junitxml=junit/test-results-slow-${{ matrix.os }}-${{ matrix.python-version }}.xml
       
       - name: Upload test results
         if: always()

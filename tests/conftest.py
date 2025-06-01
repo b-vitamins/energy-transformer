@@ -72,6 +72,10 @@ def pytest_configure(config):
         "integration: marks tests as integration tests",
     )
     config.addinivalue_line("markers", "gpu: marks tests that require GPU")
+    config.addinivalue_line(
+        "markers",
+        "benchmark: marks performance benchmark tests",
+    )
     config.addinivalue_line("markers", "security: marks security-related tests")
 
 
