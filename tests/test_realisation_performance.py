@@ -3,6 +3,8 @@
 import time
 from dataclasses import dataclass
 
+import pytest
+
 from energy_transformer.spec import (
     Context,
     Spec,
@@ -11,6 +13,8 @@ from energy_transformer.spec import (
     realise,
 )
 from energy_transformer.spec.realise import ModuleCache, register
+
+pytestmark = pytest.mark.benchmark
 
 
 @dataclass(frozen=True)
