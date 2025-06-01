@@ -742,12 +742,6 @@ class Realiser:
                 ):
                     kwargs["num_vertices"] = vertices
 
-            elif spec_name == "LayerNormSpec" and (
-                embed_dim := self.context.get_dim("embed_dim")
-            ):
-                eps = kwargs.pop("eps", 1e-5)
-                return nn.LayerNorm(normalized_shape=embed_dim, eps=eps)
-
             kwargs = {
                 k: v
                 for k, v in kwargs.items()
@@ -865,12 +859,30 @@ class Realiser:
         return ResidualModule(inner, spec.merge, spec.scale)
 
     def _realise_graph(self, spec: Graph) -> nn.Module:
-        """Realise graph structure."""
-        nodes = {}
+        """Realise graph structure into executable module."""
+        nodes: dict[str, nn.Module] = {}
         for name, node_spec in spec.nodes.items():
-            nodes[name] = self.realise(node_spec)
+            node_context = self.context.child()
+            child_realiser = Realiser(node_context, self._recursion_depth)
+            try:
+                nodes[name] = child_realiser.realise(node_spec)
+            except RealisationError as e:
+                raise RealisationError(
+                    f"Failed to realise graph node '{name}'",
+                    spec=spec,
+                    context=self.context,
+                    cause=e,
+                    suggestion=(
+                        f"Check node '{name}' specification and context requirements"
+                    ),
+                ) from e
 
-        return GraphModule(nodes, spec.edges, spec.inputs, spec.outputs)
+        return GraphModule(
+            nodes=nodes,
+            edges=spec.edges,
+            inputs=spec.inputs,
+            outputs=spec.outputs,
+        )
 
     def _realise_loop(self, spec: Loop) -> nn.Module:
         """Realise loop structure with proper cache handling."""
@@ -1738,3 +1750,74 @@ def realise_mha(
         bias=spec.qkv_bias,
         batch_first=True,
     )
+
+
+@register(library.MLPSpec)
+def realise_mlp(spec: library.MLPSpec, context: Context) -> nn.Module:
+    """Realise MLP specification."""
+    from energy_transformer.layers.mlp import MLP
+
+    embed_dim = context.get_dim("embed_dim")
+    if embed_dim is None:
+        raise RealisationError(
+            "MLPSpec requires 'embed_dim' in context",
+            spec=spec,
+            context=context,
+        )
+
+    hidden_features = spec.hidden_features or embed_dim * 4
+    out_features = spec.out_features or embed_dim
+
+    return MLP(
+        in_features=embed_dim,
+        hidden_features=hidden_features,
+        out_features=out_features,
+        activation=spec.activation,
+        drop=spec.drop,
+    )
+
+
+@register(library.TransformerBlockSpec)
+def realise_transformer_block(
+    spec: library.TransformerBlockSpec,
+    context: Context,
+) -> nn.Module:
+    """Realise standard transformer block."""
+    from torch import nn
+
+    realiser = Realiser(context)
+    embed_dim_val = context.get_dim("embed_dim")
+    if embed_dim_val is None:
+        raise RealisationError(
+            "TransformerBlockSpec requires 'embed_dim' in context",
+            spec=spec,
+            context=context,
+        )
+    embed_dim: int = embed_dim_val
+
+    attention = realiser.realise(spec.attention)
+    mlp = realiser.realise(spec.mlp)
+
+    class _Block(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.attn = attention
+            self.mlp = mlp
+            self.norm1 = nn.LayerNorm(embed_dim)
+            self.norm2 = nn.LayerNorm(embed_dim)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
+            if spec.norm_first:
+                y = self.norm1(x)
+                x = x + self.attn(y, y, y)[0]
+                y = self.norm2(x)
+                x = x + self.mlp(y)
+                return x  # noqa: RET504
+
+            x = self.attn(x, x, x)[0] + x
+            x = self.norm1(x)
+            x = self.mlp(x) + x
+            x = self.norm2(x)
+            return x  # noqa: RET504
+
+    return _Block()

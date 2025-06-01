@@ -19,13 +19,12 @@ from energy_transformer.models.vision import (
     viset_base,
     viset_small,
     viset_tiny,
-    vit_base,
     vit_large,
     vit_small,
     vit_small_cifar,
     vit_tiny_cifar,
 )
-from energy_transformer.spec import Context, loop, realise, seq
+from energy_transformer.spec import loop, realise, seq
 from energy_transformer.spec.library import (
     ClassificationHeadSpec,
     CLSTokenSpec,
@@ -66,9 +65,10 @@ class TestVisionTransformerModels:
             LayerNormSpec(),
             ClassificationHeadSpec(num_classes=1000, use_cls_token=True),
         )
-        # Just ensure spec validates
-        issues = spec.validate(Context())
-        assert not issues
+        model = realise(spec)
+        x = torch.randn(1, 3, 224, 224)
+        out = model(x)
+        assert out.shape == (1, 1000)
 
     def test_vit_small_equivalence(self):
         """Test ViT-Small construction."""
@@ -78,9 +78,25 @@ class TestVisionTransformerModels:
 
     def test_vit_base_equivalence(self):
         """Test ViT-Base construction."""
-        direct = vit_base(img_size=224, patch_size=16, num_classes=1000)
-        assert direct.embed_dim == 768
-        assert len(direct.blocks) == 12
+        spec = seq(
+            PatchEmbedSpec(img_size=224, patch_size=16, embed_dim=768),
+            CLSTokenSpec(),
+            PosEmbedSpec(include_cls=True),
+            loop(
+                TransformerBlockSpec(
+                    attention=MHASpec(num_heads=12, qkv_bias=True),
+                    mlp=MLPSpec(hidden_features=3072, activation="gelu"),
+                    norm_first=True,
+                ),
+                times=12,
+            ),
+            LayerNormSpec(),
+            ClassificationHeadSpec(num_classes=1000),
+        )
+        model = realise(spec)
+        x = torch.randn(2, 3, 224, 224)
+        out = model(x)
+        assert out.shape == (2, 1000)
 
     def test_vit_large_equivalence(self):
         """Test ViT-Large construction."""

@@ -36,22 +36,18 @@ from .embeddings import PatchEmbedding, PositionalEmbedding2D
 from .heads import ClassificationHead, FeatureHead
 from .hopfield import HopfieldNetwork
 from .layer_norm import LayerNorm
+from .mlp import MLP
 from .simplicial import SimplicialHopfieldNetwork
 from .tokens import CLSToken
 
 __all__ = [
-    # Tokens
+    "MLP",
     "CLSToken",
-    # Heads
     "ClassificationHead",
     "FeatureHead",
-    # Memory Networks
     "HopfieldNetwork",
-    # Normalization
     "LayerNorm",
-    # Attention
     "MultiHeadEnergyAttention",
-    # Embeddings
     "PatchEmbedding",
     "PositionalEmbedding2D",
     "SimplicialHopfieldNetwork",
