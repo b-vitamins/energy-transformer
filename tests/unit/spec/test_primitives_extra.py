@@ -42,7 +42,7 @@ def test_required_parameter_validation() -> None:
 
     @dataclass(frozen=True)
     class ReqSpec(Spec):
-        value: int = param()
+        value: int = param()  # noqa: RUF009
 
     with pytest.raises(ValidationError):
         ReqSpec(value=REQUIRED)

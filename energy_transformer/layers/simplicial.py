@@ -283,7 +283,7 @@ class RandomSimplexGenerator(SimplexGenerator):
             edge_budget = int(budget)
 
         if edge_budget < 1:
-            raise ValueError("Budget too small – would generate empty complex.")
+            raise ValueError("Budget too small - would generate empty complex.")
 
         # Allocate budget to generate simplices
         simplices, remaining = SimplexBudgetManager.allocate_budget(
@@ -690,27 +690,27 @@ class SimplicialHopfieldNetwork(BaseHopfieldNetwork):
 
     @staticmethod
     def _simplex_product(u: Tensor, idx: Tensor) -> Tensor:
-        """Compute ϕ_i(σ)=∏_{v∈σ} g_i(v) for all simplices σ in ``idx``.
+        """Compute phi_i(sigma)=prod_{v∈sigma} g_i(v) for all simplices sigma in ``idx``.
 
         This method computes the product without materialising an intermediate
-        ``(..., k, sₘ, n_tokens)`` tensor.
+        ``(..., k, s_m, n_tokens)`` tensor.
 
         Parameters
         ----------
         u : Tensor
             Shape (..., k, n_tokens).
         idx : Tensor
-            Long tensor of shape (sₘ, m) with vertex indices for m-simplices.
+            Long tensor of shape (s_m, m) with vertex indices for m-simplices.
 
         Returns
         -------
         Tensor
-            Shape (..., k, sₘ) containing the products per simplex.
+            Shape (..., k, s_m) containing the products per simplex.
         """
-        prod = torch.index_select(u, -1, idx[:, 0])  # (..., k, sₘ)
+        prod = torch.index_select(u, -1, idx[:, 0])  # (..., k, s_m)
         # m ≤ 3 in practice; a tiny Python loop is faster and lighter
         for j in range(1, idx.shape[1]):  # over remaining vertices
-            slice_j = torch.index_select(u, -1, idx[:, j])  # (..., k, sₘ)
+            slice_j = torch.index_select(u, -1, idx[:, j])  # (..., k, s_m)
             prod = prod.mul_(slice_j)
         return prod
 
@@ -752,7 +752,7 @@ class SimplicialHopfieldNetwork(BaseHopfieldNetwork):
                 else idx_tensor
             )
             # Vectorised gather-and-product (memory-frugal)
-            prod = self._simplex_product(u, idx_device)  # (..., k, sₘ)
+            prod = self._simplex_product(u, idx_device)  # (..., k, s_m)
             list_of_logits.append(prod)
 
         # Concatenate across all simplex sizes: (..., k, total_simplices)

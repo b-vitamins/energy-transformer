@@ -88,7 +88,7 @@ class LayerNormSpec(Spec):
         Epsilon for numerical stability
     """
 
-    eps: float = param(default=1e-5, validator=validate_positive)
+    eps: float = param(default=1e-5, validator=validate_positive)  # noqa: RUF009
 
 
 @dataclass(frozen=True)
@@ -110,11 +110,11 @@ class PatchEmbedSpec(Spec):
         Whether to include bias in projection
     """
 
-    img_size: int | tuple[int, int] = param(validator=validate_positive)
-    patch_size: int | tuple[int, int] = param(validator=validate_positive)
-    embed_dim: int = param(validator=validate_dimension)
-    in_chans: int = param(default=3, validator=validate_positive)
-    bias: bool = param(default=True)
+    img_size: int | tuple[int, int] = param(validator=validate_positive)  # noqa: RUF009
+    patch_size: int | tuple[int, int] = param(validator=validate_positive)  # noqa: RUF009
+    embed_dim: int = param(validator=validate_dimension)  # noqa: RUF009
+    in_chans: int = param(default=3, validator=validate_positive)  # noqa: RUF009
+    bias: bool = param(default=True)  # noqa: RUF009
 
     def apply_context(self, context: Context) -> Context:
         """Apply patch embedding specification to context."""
@@ -180,8 +180,8 @@ class PosEmbedSpec(Spec):
         Standard deviation for initialization
     """
 
-    include_cls: bool = param(default=False)
-    init_std: float = param(default=0.02, validator=validate_positive)
+    include_cls: bool = param(default=False)  # noqa: RUF009
+    init_std: float = param(default=0.02, validator=validate_positive)  # noqa: RUF009
 
 
 @dataclass(frozen=True)
@@ -203,11 +203,11 @@ class MHEASpec(Spec):
         Standard deviation for weight initialization
     """
 
-    num_heads: int = param(default=12, validator=validate_positive)
-    head_dim: int = param(default=64, validator=validate_dimension)
-    beta: float | None = param(default=None)
-    bias: bool = param(default=False)
-    init_std: float = param(default=0.002, validator=validate_positive)
+    num_heads: int = param(default=12, validator=validate_positive)  # noqa: RUF009
+    head_dim: int = param(default=64, validator=validate_dimension)  # noqa: RUF009
+    beta: float | None = param(default=None)  # noqa: RUF009
+    bias: bool = param(default=False)  # noqa: RUF009
+    init_std: float = param(default=0.002, validator=validate_positive)  # noqa: RUF009
 
 
 @dataclass(frozen=True)
@@ -225,11 +225,11 @@ class HNSpec(Spec):
         Energy function type (could be extended to support custom functions)
     """
 
-    hidden_dim: Dimension | None = param(default=None, dimension=True)
-    multiplier: float = param(
+    hidden_dim: Dimension | None = param(default=None, dimension=True)  # noqa: RUF009
+    multiplier: float = param(  # noqa: RUF009
         default=4.0, validator=lambda x: 0 < x <= MAX_MULTIPLIER
     )
-    energy_fn: str = param(
+    energy_fn: str = param(  # noqa: RUF009
         default="relu_squared",
         choices=["relu_squared", "softmax", "tanh"],
     )
@@ -290,24 +290,24 @@ class SHNSpec(Spec):
     """
 
     # Simplicial complex parameters
-    simplices: list[list[int]] | None = param(default=None)
-    num_vertices: int | None = param(
+    simplices: list[list[int]] | None = param(default=None)  # noqa: RUF009
+    num_vertices: int | None = param(  # noqa: RUF009
         default=None,
         validator=lambda x: x is None or x > 0,
     )
-    max_dim: int = param(
+    max_dim: int = param(  # noqa: RUF009
         default=1, validator=lambda x: 1 <= x <= MAX_COMPLEX_DIM
     )
-    budget: float = param(default=0.1, validator=lambda x: 0 < x <= 1)
-    dim_weights: dict[int, float] | None = param(default=None)
-    coordinates: list[tuple[float, float]] | None = param(default=None)
+    budget: float = param(default=0.1, validator=lambda x: 0 < x <= 1)  # noqa: RUF009
+    dim_weights: dict[int, float] | None = param(default=None)  # noqa: RUF009
+    coordinates: list[tuple[float, float]] | None = param(default=None)  # noqa: RUF009
 
     # Network parameters
-    hidden_dim: Dimension | None = param(default=None, dimension=True)
-    multiplier: float = param(
+    hidden_dim: Dimension | None = param(default=None, dimension=True)  # noqa: RUF009
+    multiplier: float = param(  # noqa: RUF009
         default=4.0, validator=lambda x: 0 < x <= MAX_MULTIPLIER
     )
-    temperature: float = param(default=0.5, validator=validate_positive)
+    temperature: float = param(default=0.5, validator=validate_positive)  # noqa: RUF009
 
     def apply_context(self, context: Context) -> Context:
         """Apply simplicial Hopfield specification to context."""
@@ -352,11 +352,11 @@ class ETBlockSpec(Spec):
         Hopfield network specification (standard or simplicial)
     """
 
-    steps: int = param(default=12, validator=lambda x: 0 < x <= MAX_STEPS)
-    alpha: float = param(default=0.125, validator=validate_positive)
-    layer_norm: LayerNormSpec = param(default_factory=LayerNormSpec)
-    attention: MHEASpec = param(default_factory=MHEASpec)
-    hopfield: HNSpec | SHNSpec = param(default_factory=HNSpec)
+    steps: int = param(default=12, validator=lambda x: 0 < x <= MAX_STEPS)  # noqa: RUF009
+    alpha: float = param(default=0.125, validator=validate_positive)  # noqa: RUF009
+    layer_norm: LayerNormSpec = param(default_factory=LayerNormSpec)  # noqa: RUF009
+    attention: MHEASpec = param(default_factory=MHEASpec)  # noqa: RUF009
+    hopfield: HNSpec | SHNSpec = param(default_factory=HNSpec)  # noqa: RUF009
 
 
 # Head specifications
@@ -380,10 +380,10 @@ class ClassificationHeadSpec(Spec):
         Whether to use CLS token or average pooling
     """
 
-    num_classes: int = param(validator=validate_positive)
-    representation_size: int | None = param(default=None)
-    drop_rate: float = param(default=0.0, validator=validate_probability)
-    use_cls_token: bool = param(default=True)
+    num_classes: int = param(validator=validate_positive)  # noqa: RUF009
+    representation_size: int | None = param(default=None)  # noqa: RUF009
+    drop_rate: float = param(default=0.0, validator=validate_probability)  # noqa: RUF009
+    use_cls_token: bool = param(default=True)  # noqa: RUF009
 
     def apply_context(self, context: Context) -> Context:
         """Apply classification head to context."""
@@ -403,7 +403,7 @@ class FeatureHeadSpec(Spec):
         Whether to extract CLS token or use average pooling
     """
 
-    use_cls_token: bool = param(default=True)
+    use_cls_token: bool = param(default=True)  # noqa: RUF009
 
 
 # Composite specifications
@@ -433,12 +433,12 @@ class VisionEmbeddingSpec(Spec):
         Dropout rate after positional embedding
     """
 
-    img_size: int | tuple[int, int] = param(validator=validate_positive)
-    patch_size: int | tuple[int, int] = param(validator=validate_positive)
-    embed_dim: int = param(validator=validate_dimension)
-    in_chans: int = param(default=3, validator=validate_positive)
-    use_cls_token: bool = param(default=True)
-    drop_rate: float = param(default=0.0, validator=validate_probability)
+    img_size: int | tuple[int, int] = param(validator=validate_positive)  # noqa: RUF009
+    patch_size: int | tuple[int, int] = param(validator=validate_positive)  # noqa: RUF009
+    embed_dim: int = param(validator=validate_dimension)  # noqa: RUF009
+    in_chans: int = param(default=3, validator=validate_positive)  # noqa: RUF009
+    use_cls_token: bool = param(default=True)  # noqa: RUF009
+    drop_rate: float = param(default=0.0, validator=validate_probability)  # noqa: RUF009
 
     def apply_context(self, context: Context) -> Context:
         """Apply vision embedding to context."""
@@ -478,10 +478,10 @@ class MHASpec(Spec):
         Projection dropout rate
     """
 
-    num_heads: int = param(default=8, validator=validate_positive)
-    qkv_bias: bool = param(default=True)
-    attn_drop: float = param(default=0.0, validator=validate_probability)
-    proj_drop: float = param(default=0.0, validator=validate_probability)
+    num_heads: int = param(default=8, validator=validate_positive)  # noqa: RUF009
+    qkv_bias: bool = param(default=True)  # noqa: RUF009
+    attn_drop: float = param(default=0.0, validator=validate_probability)  # noqa: RUF009
+    proj_drop: float = param(default=0.0, validator=validate_probability)  # noqa: RUF009
 
 
 @dataclass(frozen=True)
@@ -502,10 +502,10 @@ class MLPSpec(Spec):
     """
 
     Activation = Literal["gelu", "relu", "swish", "silu"]
-    hidden_features: int | None = param(default=None)
-    out_features: int | None = param(default=None)
-    activation: Activation = param(default="gelu")
-    drop: float = param(default=0.0, validator=validate_probability)
+    hidden_features: int | None = param(default=None)  # noqa: RUF009
+    out_features: int | None = param(default=None)  # noqa: RUF009
+    activation: Activation = param(default="gelu")  # noqa: RUF009
+    drop: float = param(default=0.0, validator=validate_probability)  # noqa: RUF009
 
     def validate(self, context: Context) -> list[str]:
         """Validate MLP output dimension."""
@@ -541,10 +541,10 @@ class TransformerBlockSpec(Spec):
         Whether to use pre-normalization (True) or post-normalization
     """
 
-    attention: MHASpec = param(default_factory=MHASpec)
-    mlp: MLPSpec = param(default_factory=MLPSpec)
-    drop_path: float = param(default=0.0, validator=validate_probability)
-    norm_first: bool = param(default=True)
+    attention: MHASpec = param(default_factory=MHASpec)  # noqa: RUF009
+    mlp: MLPSpec = param(default_factory=MLPSpec)  # noqa: RUF009
+    drop_path: float = param(default=0.0, validator=validate_probability)  # noqa: RUF009
+    norm_first: bool = param(default=True)  # noqa: RUF009
 
 
 # Utility specifications
@@ -562,8 +562,8 @@ class DropoutSpec(Spec):
         Whether to perform dropout in-place
     """
 
-    p: float = param(default=0.5, validator=validate_probability)
-    inplace: bool = param(default=False)
+    p: float = param(default=0.5, validator=validate_probability)  # noqa: RUF009
+    inplace: bool = param(default=False)  # noqa: RUF009
 
 
 @dataclass(frozen=True)

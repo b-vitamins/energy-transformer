@@ -17,7 +17,7 @@ from energy_transformer.spec.realise import ModuleCache, register
 class BenchmarkSpec(Spec):
     """Simple spec for benchmarking."""
 
-    size: int = param(default=100)
+    size: int = param(default=100)  # noqa: RUF009
 
 
 @register(BenchmarkSpec)
