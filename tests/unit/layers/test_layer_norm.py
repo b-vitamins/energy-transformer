@@ -1,4 +1,5 @@
 import pytest
+pytestmark = pytest.mark.unit
 import torch
 from torch.nn import functional as F  # noqa: N812
 

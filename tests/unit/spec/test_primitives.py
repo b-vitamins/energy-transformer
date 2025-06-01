@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 
 import pytest
+pytestmark = pytest.mark.unit
 
 from energy_transformer.spec.primitives import (
     REQUIRED,

@@ -2,6 +2,7 @@ import math
 import random
 
 import pytest
+pytestmark = pytest.mark.unit
 import torch
 
 from energy_transformer.layers import simplicial

@@ -1,4 +1,5 @@
 import pytest
+pytestmark = pytest.mark.unit
 import torch
 
 from energy_transformer.layers.embeddings import (

@@ -7,6 +7,7 @@ from contextlib import redirect_stdout
 from io import StringIO
 
 import pytest
+pytestmark = pytest.mark.unit
 from torch import nn
 
 from energy_transformer.spec import Context

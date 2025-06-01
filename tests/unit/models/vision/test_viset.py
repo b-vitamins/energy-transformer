@@ -1,4 +1,5 @@
 import pytest
+pytestmark = pytest.mark.unit
 from torch import nn
 
 from energy_transformer.models.vision import viset

@@ -187,12 +187,27 @@ addopts = """
     --cov-report=term-missing:skip-covered
 """
 markers = [
+    # Test speed markers
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-    "integration: marks tests as integration tests",
-    "gpu: marks tests that require GPU",
-    "benchmark: marks performance benchmark tests",
+    "fast: marks tests that run in under 100ms",
+    
+    # Test type markers
+    "unit: isolated unit tests",
+    "integration: tests requiring multiple components",
+    "functional: end-to-end functional tests",
+    "performance: performance benchmark tests",
+    "security: security-related tests",
+    "regression: regression tests for specific bugs",
+    
+    # Environment markers
+    "gpu: requires GPU/CUDA",
+    "network: requires network access",
+    "heavy: requires significant resources",
+    
+    # Priority markers
+    "smoke: critical tests for smoke testing",
+    "nightly: tests for nightly builds only"
 ]
-
 [tool.coverage.run]
 source = ["energy_transformer"]
 omit = ["*/tests/*", "*/examples/*"]
