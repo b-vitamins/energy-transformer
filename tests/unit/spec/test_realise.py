@@ -376,7 +376,7 @@ class TestRealiserPlugins:
                 return isinstance(spec, SimpleSpec)
 
             def realise(self, _spec, _context):
-                raise RuntimeError("Plugin is broken")  # noqa: TRY003
+                raise RuntimeError("Plugin is broken")
 
         configure_realisation(plugins=[BrokenPlugin()], warnings=True)
 
@@ -455,7 +455,7 @@ class TestRealiser:
         def realise_linear(spec, context):
             input_dim = context.get_dim("input_dim")
             if input_dim is None:
-                raise RealisationError("Missing input_dim")  # noqa: TRY003
+                raise RealisationError("Missing input_dim")
             return nn.Linear(input_dim, spec.output_dim, bias=spec.bias)
 
         try:

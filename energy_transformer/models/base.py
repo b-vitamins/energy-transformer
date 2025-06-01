@@ -258,7 +258,7 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
 
         # Check for inference_mode early - we cannot override this
         if torch.is_inference_mode_enabled() and not detach_mode:
-            raise RuntimeError(  # noqa: TRY003
+            raise RuntimeError(
                 "EnergyTransformer requires gradient computation, "
                 "which is not possible within torch.inference_mode(). "
                 "Use detach=True or call the model outside inference_mode().",

@@ -166,7 +166,7 @@ class TestCacheStateRestoration:
             nonlocal attempt_count
             attempt_count += 1
             if attempt_count == spec.fail_on_iteration:
-                raise ValueError("Intentional failure")  # noqa: TRY003
+                raise ValueError("Intentional failure")
             return nn.Identity()
 
         loop_spec = loop(
@@ -203,7 +203,7 @@ class TestCacheStateRestoration:
 
         @register(InnerFailSpec)
         def realise_inner_fail(_spec, _context):
-            raise RuntimeError("Inner failure")  # noqa: TRY003
+            raise RuntimeError("Inner failure")
 
         nested = OuterSpec(
             inner=loop(
@@ -269,7 +269,7 @@ class TestCacheStateRestoration:
             nonlocal call_count
             call_count += 1
             if call_count == 2:
-                raise ValueError("Intentional failure")  # noqa: TRY003
+                raise ValueError("Intentional failure")
             return nn.Identity()
 
         configure_realisation(cache=ModuleCache(enabled=True))
@@ -547,7 +547,7 @@ class TestRealisationErrorContext:
 
         @register(Level2Spec)
         def realise_level2(_spec, _context):
-            raise RuntimeError("Deep error")  # noqa: TRY003
+            raise RuntimeError("Deep error")
 
         @register(Level1Spec)
         def realise_level1(spec, _context):

@@ -138,10 +138,10 @@ def __getattr__(name: str) -> object:
         try:
             return getattr(library, name)
         except AttributeError:  # pragma: no cover - unexpected
-            raise AttributeError(  # noqa: TRY003
+            raise AttributeError(
                 f"energy_transformer.spec.library has no spec {name!r}",
             ) from None
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")  # noqa: TRY003
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 __all__ = [

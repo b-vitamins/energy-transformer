@@ -472,14 +472,14 @@ class Graph(Spec):
         try:
             has_cycle = self._has_cycle()
         except Exception as e:
-            raise ValidationError(  # noqa: TRY003
+            raise ValidationError(
                 f"Graph validation failed: {e}",
                 spec=self,
                 suggestion="Check graph edge definitions",
             ) from e
         if has_cycle:
             cycle_path = self._find_cycle_path()
-            raise ValidationError(  # noqa: TRY003
+            raise ValidationError(
                 "Graph contains cycles",
                 spec=self,
                 suggestion=f"Remove cyclic dependency in path: {' -> '.join(cycle_path)}",
@@ -881,7 +881,7 @@ def parallel(
         If no branches provided
     """
     if not branches:
-        raise ValueError("Parallel requires at least one branch")  # noqa: TRY003
+        raise ValueError("Parallel requires at least one branch")
 
     # Flatten nested Parallel specs with same merge
     flat_branches: list[Spec] = []

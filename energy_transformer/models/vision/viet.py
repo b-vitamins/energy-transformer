@@ -278,7 +278,7 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
 
         # Validate input size
         if x.shape[-2:] != (self.img_size, self.img_size):
-            raise ValueError(  # noqa: TRY003
+            raise ValueError(
                 f"Input size {x.shape[-2:]} doesn't match model size "
                 f"({self.img_size}, {self.img_size})",
             )
