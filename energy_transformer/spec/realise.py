@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import importlib
 import warnings
+from collections import defaultdict, deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol, TypeVar, get_type_hints
@@ -1059,7 +1060,21 @@ class GraphModule(nn.Module):  # type: ignore[misc]
         RuntimeError
             If graph execution fails or outputs are not available
         """
-        from collections import defaultdict, deque
+        adjacency, in_degree, incoming_edges = self._prepare_graph()
+        values = self._collect_input_values(x)
+        order = self._topological_sort(adjacency, in_degree)
+        self._execute_nodes(order, incoming_edges, values)
+        return self._gather_outputs(values)
+
+    def _prepare_graph(
+        self,
+    ) -> tuple[
+        defaultdict[str, list[tuple[str, str | None]]],
+        defaultdict[str, int],
+        defaultdict[str, list[tuple[str, str | None]]],
+    ]:
+        """Construct adjacency and dependency data for the graph."""
+        from collections import defaultdict
 
         adjacency: defaultdict[str, list[tuple[str, str | None]]] = defaultdict(
             list
@@ -1084,6 +1099,12 @@ class GraphModule(nn.Module):  # type: ignore[misc]
                 if source in self.nodes:
                     in_degree[target] += 1
 
+        return adjacency, in_degree, incoming_edges
+
+    def _collect_input_values(
+        self, x: torch.Tensor | dict[str, torch.Tensor]
+    ) -> dict[str, torch.Tensor]:
+        """Gather values for graph input nodes."""
         values: dict[str, torch.Tensor] = {}
 
         if isinstance(x, dict):
@@ -1094,25 +1115,42 @@ class GraphModule(nn.Module):  # type: ignore[misc]
             for input_name in self.inputs:
                 values[input_name] = x
 
+        return values
+
+    def _topological_sort(
+        self,
+        adjacency: defaultdict[str, list[tuple[str, str | None]]],
+        in_degree: defaultdict[str, int],
+    ) -> list[str]:
+        """Return nodes in topological execution order."""
         queue = deque([n for n in self.nodes if in_degree[n] == 0])
-        execution_order: list[str] = []
+        order: list[str] = []
 
         while queue:
-            current_node = queue.popleft()
-            execution_order.append(current_node)
-            for target, _ in adjacency.get(current_node, []):
+            current = queue.popleft()
+            order.append(current)
+            for target, _ in adjacency.get(current, []):
                 if target in self.nodes:
                     in_degree[target] -= 1
                     if in_degree[target] == 0:
                         queue.append(target)
 
-        if len(execution_order) != len(self.nodes):
-            unprocessed = set(self.nodes) - set(execution_order)
+        if len(order) != len(self.nodes):
+            unprocessed = set(self.nodes) - set(order)
             raise RuntimeError(
                 f"Graph contains cycles or unreachable nodes: {unprocessed}"
             )
 
-        for node_name in execution_order:
+        return order
+
+    def _execute_nodes(
+        self,
+        order: list[str],
+        incoming_edges: defaultdict[str, list[tuple[str, str | None]]],
+        values: dict[str, torch.Tensor],
+    ) -> None:
+        """Run graph nodes following the resolved order."""
+        for node_name in order:
             node_inputs: list[torch.Tensor] = []
             for source, transform in incoming_edges[node_name]:
                 if source not in values:
@@ -1133,6 +1171,10 @@ class GraphModule(nn.Module):  # type: ignore[misc]
                 combined = torch.cat(node_inputs, dim=-1)
                 values[node_name] = self.nodes[node_name](combined)
 
+    def _gather_outputs(
+        self, values: dict[str, torch.Tensor]
+    ) -> torch.Tensor | tuple[torch.Tensor, ...]:
+        """Collect tensors for the output nodes."""
         output_tensors = []
         for output_name in self.outputs:
             if output_name not in values:
@@ -1144,10 +1186,9 @@ class GraphModule(nn.Module):  # type: ignore[misc]
 
         if len(output_tensors) == 0:
             raise RuntimeError("No outputs specified for graph")
-        elif len(output_tensors) == 1:
+        if len(output_tensors) == 1:
             return output_tensors[0]
-        else:
-            return tuple(output_tensors)
+        return tuple(output_tensors)
 
     def _apply_edge_transform(
         self, tensor: torch.Tensor, transform: str
