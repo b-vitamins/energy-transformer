@@ -1,13 +1,12 @@
-#!/usr/bin/env python3
 """Profile memory usage of models in detail."""
 
 from __future__ import annotations
 
 import argparse
 import json
+from pathlib import Path
 from typing import Any
 
-import Path
 import torch
 
 from energy_transformer.models.vision import (
@@ -111,27 +110,57 @@ def main() -> None:
     all_models = {
         "vit_tiny": (
             vit_tiny,
-            {"img_size": 224, "patch_size": 16, "num_classes": 1000},
+            {
+                "img_size": 224,
+                "patch_size": 16,
+                "in_chans": 3,
+                "num_classes": 1000,
+            },
         ),
         "viet_tiny": (
             viet_tiny,
-            {"img_size": 224, "patch_size": 16, "num_classes": 1000},
+            {
+                "img_size": 224,
+                "patch_size": 16,
+                "in_chans": 3,
+                "num_classes": 1000,
+            },
         ),
         "viset_tiny": (
             viset_tiny,
-            {"img_size": 224, "patch_size": 16, "num_classes": 1000},
+            {
+                "img_size": 224,
+                "patch_size": 16,
+                "in_chans": 3,
+                "num_classes": 1000,
+            },
         ),
         "vit_base": (
             vit_base,
-            {"img_size": 224, "patch_size": 16, "num_classes": 1000},
+            {
+                "img_size": 224,
+                "patch_size": 16,
+                "in_chans": 3,
+                "num_classes": 1000,
+            },
         ),
         "viet_base": (
             viet_base,
-            {"img_size": 224, "patch_size": 16, "num_classes": 1000},
+            {
+                "img_size": 224,
+                "patch_size": 16,
+                "in_chans": 3,
+                "num_classes": 1000,
+            },
         ),
         "viset_base": (
             viset_base,
-            {"img_size": 224, "patch_size": 16, "num_classes": 1000},
+            {
+                "img_size": 224,
+                "patch_size": 16,
+                "in_chans": 3,
+                "num_classes": 1000,
+            },
         ),
     }
 
@@ -160,7 +189,7 @@ def main() -> None:
                 f"  Peak GPU: {result['inference_memory']['peak_gpu_mb']:.1f} MB"
             )
 
-    with Path.open(args.output, "w") as f:
+    with Path(args.output).open("w") as f:
         json.dump(results, f, indent=2)
 
     print(f"\nDetailed results saved to {args.output}")

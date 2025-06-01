@@ -144,6 +144,11 @@ def analyze_memory_scaling(
     }
 
     profiler.clean_memory()
+    # Ensure model_kwargs has all required parameters
+    # The factory functions need in_chans parameter
+    if "in_chans" not in model_kwargs and len(input_size) > 0:
+        model_kwargs["in_chans"] = input_size[0]
+
     model = model_factory(**model_kwargs).to(device).eval()
     model_snapshot = profiler.get_memory_snapshot()
     if device.type == "cuda":
@@ -158,7 +163,14 @@ def analyze_memory_scaling(
             if device.type == "cuda":
                 torch.cuda.reset_peak_memory_stats()
             before = profiler.get_memory_snapshot()
-            _ = model(x)
+
+            # Handle ET models that need et_kwargs
+            model_name = model_factory.__name__
+            if "viet" in model_name or "viset" in model_name:
+                _ = model(x, et_kwargs={"detach": True})
+            else:
+                _ = model(x)
+
             after = profiler.get_memory_snapshot()
             if device.type == "cuda":
                 activation_memory = (
