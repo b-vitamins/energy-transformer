@@ -1,3 +1,4 @@
+# ruff: noqa: TRY003
 """Specification realisation system for creating PyTorch modules.
 
 This module converts abstract specifications into concrete PyTorch modules
@@ -8,6 +9,7 @@ The system maintains a clear separation between specification (what to build)
 and realisation (how to build it), enabling multiple implementations of the
 same specification.
 """
+# ruff: noqa: TRY003
 
 from __future__ import annotations
 
@@ -281,15 +283,14 @@ class ModuleCache:
             ctx_meta = make_hashable(context.metadata)
 
             cache_version = getattr(self, "version", 1)
-
-            return (cache_version, spec_key, ctx_dims, ctx_meta)
-
         except Exception as e:  # noqa: BLE001 pragma: no cover - defensive
             import logging
 
             logger = logging.getLogger(__name__)
             logger.warning("Cache key generation failed: %s", e)
             return (id(spec), id(context), "uncacheable")
+        else:
+            return (cache_version, spec_key, ctx_dims, ctx_meta)
 
     def get(self, spec: Spec, context: Context) -> nn.Module | None:
         """Get cached module if available.
@@ -535,7 +536,6 @@ class Realiser:
         try:
             module = self._realise_impl(spec)
             _config.cache.put(spec, self.context, module)
-            return module
         except Exception as e:
             if not isinstance(e, RealisationError):
                 raise RealisationError(
@@ -551,6 +551,8 @@ class Realiser:
                 else f"Failed at depth {self._recursion_depth}"
             )
             raise
+        else:
+            return module
         finally:
             self._realiser_stack.pop()
             self._recursion_depth -= 1
@@ -695,10 +697,9 @@ class Realiser:
         except Exception as e:
             if _config.warnings:
                 logger.exception(
-                    "Unexpected error importing %s: %s: %s",
+                    "Unexpected error importing %s: %s",
                     module_path,
                     type(e).__name__,
-                    e,
                 )
             return None
 
@@ -733,10 +734,9 @@ class Realiser:
         except Exception as e:
             if _config.warnings:
                 logger.exception(
-                    "Failed to extract kwargs from %s: %s: %s",
+                    "Failed to extract kwargs from %s: %s",
                     spec_name,
                     type(e).__name__,
-                    e,
                 )
             return None
 
@@ -757,8 +757,6 @@ class Realiser:
                     spec_name,
                     class_name,
                 )
-
-            return instance
         except TypeError as e:
             if _config.warnings:
                 error_msg = str(e)
@@ -772,12 +770,11 @@ class Realiser:
         except Exception as e:
             if _config.warnings:
                 logger.exception(
-                    "Failed to instantiate %s: %s: %s",
-                    class_name,
-                    type(e).__name__,
-                    e,
+                    "Failed to instantiate %s: %s", class_name, type(e).__name__
                 )
             return None
+        else:
+            return instance
 
     def _realise_sequential(self, spec: Sequential) -> nn.Module:
         """Realise sequential composition."""

@@ -470,19 +470,20 @@ class Graph(Spec):
         """Validate graph structure immediately after creation."""
         super().__post_init__()
         try:
-            if self._has_cycle():
-                cycle_path = self._find_cycle_path()
-                raise ValidationError(
-                    "Graph contains cycles",
-                    spec=self,
-                    suggestion=f"Remove cyclic dependency in path: {' -> '.join(cycle_path)}",
-                )
+            has_cycle = self._has_cycle()
         except Exception as e:
-            raise ValidationError(
+            raise ValidationError(  # noqa: TRY003
                 f"Graph validation failed: {e}",
                 spec=self,
                 suggestion="Check graph edge definitions",
             ) from e
+        if has_cycle:
+            cycle_path = self._find_cycle_path()
+            raise ValidationError(  # noqa: TRY003
+                "Graph contains cycles",
+                spec=self,
+                suggestion=f"Remove cyclic dependency in path: {' -> '.join(cycle_path)}",
+            )
 
     def add_node(self, name: str, spec: Spec) -> Graph:
         """Add a node to the graph.
@@ -880,7 +881,7 @@ def parallel(
         If no branches provided
     """
     if not branches:
-        raise ValueError("Parallel requires at least one branch")
+        raise ValueError("Parallel requires at least one branch")  # noqa: TRY003
 
     # Flatten nested Parallel specs with same merge
     flat_branches: list[Spec] = []
