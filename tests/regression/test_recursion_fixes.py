@@ -1,10 +1,8 @@
 """Test realisation system robustness."""
 
-import logging
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 from torch import nn
@@ -17,18 +15,17 @@ from energy_transformer.spec import (
     Sequential,
     Spec,
     configure_realisation,
-    loop,
     param,
     realise,
     seq,
 )
 from energy_transformer.spec.primitives import SpecMeta
 from energy_transformer.spec.realise import (
-    ModuleCache,
     Realiser,
     _config,
     register,
 )
+
 pytestmark = pytest.mark.regression
 
 
@@ -143,5 +140,3 @@ class TestRecursionDepth:
         final_hits = _config.cache._hit_count
         assert final_hits > initial_hits, "Cache should have been used"
         assert _config.cache.hit_rate > 0, "Hit rate should be positive"
-
-

@@ -1,10 +1,11 @@
 import pytest
-pytestmark = pytest.mark.unit
 import torch
 from torch import nn
 
 from energy_transformer.models.base import ETOutput
 from energy_transformer.models.vision import viet
+
+pytestmark = pytest.mark.unit
 
 
 class DummyET(nn.Module):

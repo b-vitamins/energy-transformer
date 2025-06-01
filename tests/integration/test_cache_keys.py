@@ -1,34 +1,24 @@
 """Test realisation system robustness."""
 
-import logging
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
-from torch import nn
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from energy_transformer.spec import (
     Context,
-    RealisationError,
-    Sequential,
     Spec,
-    configure_realisation,
-    loop,
     param,
     realise,
-    seq,
 )
-from energy_transformer.spec.primitives import SpecMeta
 from energy_transformer.spec.realise import (
     ModuleCache,
-    Realiser,
     _config,
-    register,
 )
+
 pytestmark = pytest.mark.integration
 
 
@@ -133,9 +123,8 @@ class TestCacheKeyGeneration:
 
     def test_verify_cache_keys_script_behavior(self):
         """Test exact behavior from verify_cache_keys.py."""
-        from energy_transformer.spec import Context, realise
+        from energy_transformer.spec import Context
         from energy_transformer.spec.library import IdentitySpec
-        from energy_transformer.spec.realise import _config
 
         ctx1 = Context(
             dimensions={"a": 1, "b": 2},
@@ -162,5 +151,3 @@ class TestCacheKeyGeneration:
         assert _config.cache._hit_count >= 1
         assert _config.cache._miss_count == miss_after_first
         assert model1 is model2
-
-

@@ -1,8 +1,9 @@
 import pytest
-pytestmark = pytest.mark.unit
 from torch import nn
 
 from energy_transformer.models.vision import viset
+
+pytestmark = pytest.mark.unit
 
 
 class DummyEnergyTransformer(nn.Module):

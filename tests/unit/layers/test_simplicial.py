@@ -2,10 +2,11 @@ import math
 import random
 
 import pytest
-pytestmark = pytest.mark.unit
 import torch
 
 from energy_transformer.layers import simplicial
+
+pytestmark = pytest.mark.unit
 
 
 def test_simplex_validator_success() -> None:

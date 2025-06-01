@@ -7,7 +7,6 @@ from contextlib import redirect_stdout
 from io import StringIO
 
 import pytest
-pytestmark = pytest.mark.unit
 from torch import nn
 
 from energy_transformer.spec import Context
@@ -18,6 +17,8 @@ from energy_transformer.spec.debug import (
 )
 from energy_transformer.spec.realise import ModuleCache, _config
 from tests.unit.spec.test_realise import SimpleSpec
+
+pytestmark = pytest.mark.unit
 
 
 def test_debug_realisation_traces_cache(caplog) -> None:

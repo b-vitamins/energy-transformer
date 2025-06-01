@@ -1,8 +1,14 @@
 import pytest
-from energy_transformer.spec.library import validate_dimension, validate_positive, validate_probability
+
+from energy_transformer.spec.library import (
+    validate_dimension,
+    validate_positive,
+    validate_probability,
+)
 from energy_transformer.spec.primitives import ValidationError
 
 pytestmark = pytest.mark.security
+
 
 class TestTypeUnionFixes:
     """Test that isinstance() works correctly with type unions."""
@@ -126,5 +132,3 @@ class TestChoiceValidation:
 
         with pytest.raises(ValidationError):
             TestSpec(size="2")
-
-

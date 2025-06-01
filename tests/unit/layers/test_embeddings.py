@@ -1,5 +1,4 @@
 import pytest
-pytestmark = pytest.mark.unit
 import torch
 
 from energy_transformer.layers.embeddings import (
@@ -8,6 +7,8 @@ from energy_transformer.layers.embeddings import (
     _to_pair,
 )
 from energy_transformer.layers.tokens import CLSToken
+
+pytestmark = pytest.mark.unit
 
 
 @pytest.mark.parametrize(("inp", "expected"), [(3, (3, 3)), ((2, 5), (2, 5))])

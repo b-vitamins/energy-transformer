@@ -1,5 +1,4 @@
 import pytest
-pytestmark = pytest.mark.unit
 import torch
 
 from energy_transformer.layers.base import (
@@ -8,6 +7,8 @@ from energy_transformer.layers.base import (
     BaseLayerNorm,
 )
 from energy_transformer.models.base import EnergyTransformer, ETOutput
+
+pytestmark = pytest.mark.unit
 
 
 class DummyLayerNorm(BaseLayerNorm):

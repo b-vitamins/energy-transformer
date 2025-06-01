@@ -1,8 +1,11 @@
-import pytest
 from unittest.mock import patch
+
+import pytest
+
 from energy_transformer.spec.primitives import Context, Dimension
 
 pytestmark = pytest.mark.security
+
 
 class TestSecurityFixes:
     """Test that eval() exploits are prevented."""

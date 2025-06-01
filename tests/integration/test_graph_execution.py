@@ -22,16 +22,14 @@ from energy_transformer.spec import (
     Spec,
     ValidationError,
     graph,
-    parallel,
     param,
     realise,
-    seq,
 )
 from energy_transformer.spec.combinators import Graph
-from energy_transformer.spec.primitives import Dimension, provides, requires
+from energy_transformer.spec.primitives import provides, requires
 from energy_transformer.spec.realise import GraphModule
-pytestmark = pytest.mark.integration
 
+pytestmark = pytest.mark.integration
 
 
 @dataclass(frozen=True)
@@ -184,8 +182,7 @@ class TestGraphExecution:
         import torch
         from torch import nn
 
-        from energy_transformer.spec import Spec, graph, param, realise
-        from energy_transformer.spec.combinators import Graph
+        from energy_transformer.spec import Spec, graph, param
         from energy_transformer.spec.realise import register_typed
 
         class AddModule(nn.Module):
@@ -280,4 +277,3 @@ class TestGraphExecution:
         g = g.add_edge("B", "C")
         with pytest.raises(ValidationError, match="cycle"):
             g = g.add_edge("C", "B")  # Cycle detected early
-

@@ -12,23 +12,14 @@ from torch import nn
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from energy_transformer.spec import (
-    Context,
-    RealisationError,
-    Sequential,
     Spec,
     configure_realisation,
-    loop,
     param,
-    realise,
-    seq,
 )
-from energy_transformer.spec.primitives import SpecMeta
 from energy_transformer.spec.realise import (
-    ModuleCache,
     Realiser,
-    _config,
-    register,
 )
+
 pytestmark = pytest.mark.functional
 
 
@@ -154,5 +145,3 @@ class TestAutoImportLogging:
             assert result is not None
             assert isinstance(result, nn.Identity)
             assert "Successfully auto-imported" in caplog.text
-
-

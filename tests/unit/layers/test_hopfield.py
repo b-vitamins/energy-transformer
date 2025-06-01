@@ -1,8 +1,9 @@
 import pytest
-pytestmark = pytest.mark.unit
 import torch
 
 from energy_transformer.layers.hopfield import HopfieldNetwork
+
+pytestmark = pytest.mark.unit
 
 
 def test_hopfield_energy_matches_manual() -> None:

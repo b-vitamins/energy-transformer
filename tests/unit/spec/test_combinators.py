@@ -7,7 +7,6 @@ specific library specs, using minimal mock specs instead.
 from dataclasses import dataclass
 
 import pytest
-pytestmark = pytest.mark.unit
 
 from energy_transformer.spec.combinators import (
     Conditional,
@@ -38,6 +37,8 @@ from energy_transformer.spec.primitives import (
     provides,
     requires,
 )
+
+pytestmark = pytest.mark.unit
 
 
 # Mock specs for testing combinators

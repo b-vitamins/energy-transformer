@@ -2,6 +2,7 @@ import pytest
 
 pytestmark = pytest.mark.integration
 
+
 class TestIntegration:
     """Integration tests combining multiple fixes."""
 
@@ -20,4 +21,3 @@ class TestIntegration:
 
         dim3 = Dimension("exploit", formula="exec('x=1') or embed_dim")
         assert dim3.resolve(ctx) is None
-

@@ -3,7 +3,6 @@
 from dataclasses import dataclass
 
 import pytest
-pytestmark = pytest.mark.unit
 
 from energy_transformer.spec.primitives import (
     REQUIRED,
@@ -19,6 +18,8 @@ from energy_transformer.spec.primitives import (
     spec,
     validate_field,
 )
+
+pytestmark = pytest.mark.unit
 
 
 # Test specs for validation

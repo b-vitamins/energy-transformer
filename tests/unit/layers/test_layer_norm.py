@@ -1,5 +1,4 @@
 import pytest
-pytestmark = pytest.mark.unit
 import torch
 from torch.nn import functional as F  # noqa: N812
 
@@ -7,6 +6,8 @@ from energy_transformer.layers.layer_norm import (
     LayerNorm,
     _functional_layernorm_energy,
 )
+
+pytestmark = pytest.mark.unit
 
 
 def test_layernorm_matches_torch() -> None:

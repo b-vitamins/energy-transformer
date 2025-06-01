@@ -1,6 +1,5 @@
 """Test realisation system robustness."""
 
-import logging
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,15 +11,12 @@ from torch import nn
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from energy_transformer.spec import (
-    Context,
     RealisationError,
-    Sequential,
     Spec,
     configure_realisation,
     loop,
     param,
     realise,
-    seq,
 )
 from energy_transformer.spec.primitives import SpecMeta
 from energy_transformer.spec.realise import (
@@ -29,6 +25,7 @@ from energy_transformer.spec.realise import (
     _config,
     register,
 )
+
 pytestmark = pytest.mark.regression
 
 
@@ -198,5 +195,3 @@ class TestCacheStateRestoration:
         from energy_transformer.spec.primitives import SpecMeta
 
         SpecMeta._realisers.pop(FailingSpec, None)
-
-

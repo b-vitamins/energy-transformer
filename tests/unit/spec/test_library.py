@@ -7,7 +7,6 @@ including validation, context handling, and composition.
 from dataclasses import fields
 
 import pytest
-pytestmark = pytest.mark.unit
 
 from energy_transformer.spec.library import (
     ClassificationHeadSpec,
@@ -32,6 +31,8 @@ from energy_transformer.spec.library import (
     validate_probability,
 )
 from energy_transformer.spec.primitives import Context, ValidationError
+
+pytestmark = pytest.mark.unit
 
 
 class TestUtilityFunctions:

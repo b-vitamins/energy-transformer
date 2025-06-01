@@ -1,7 +1,9 @@
 import pytest
+
 from energy_transformer.spec import Context
 
 pytestmark = pytest.mark.integration
+
 
 class TestErrorHandling:
     """Test error handling in complete workflows."""
@@ -32,4 +34,3 @@ class TestErrorHandling:
         issues = spec.validate(ctx)
         assert len(issues) > 0
         assert any("Incompatible dimensions" in issue for issue in issues)
-

@@ -1,10 +1,11 @@
 import math
 
 import pytest
-pytestmark = pytest.mark.unit
 import torch
 
 from energy_transformer.layers.attention import MultiHeadEnergyAttention
+
+pytestmark = pytest.mark.unit
 
 
 def _manual_energy(

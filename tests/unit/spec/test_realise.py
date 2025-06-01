@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from unittest.mock import MagicMock, patch
 
 import pytest
-pytestmark = pytest.mark.unit
 import torch
 from torch import nn
 
@@ -53,6 +52,8 @@ from energy_transformer.spec.realise import (
     to_yaml,
     visualize,
 )
+
+pytestmark = pytest.mark.unit
 
 
 # Mock specs for testing
