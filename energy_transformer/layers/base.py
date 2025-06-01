@@ -121,5 +121,5 @@ def _validate_scalar_energy(energy: Tensor, component_name: str) -> None:
     if energy.dim() != 0:
         raise ValueError(
             f"{component_name} must return scalar energy tensor, "
-            f"got shape {energy.shape}"
+            f"got shape {energy.shape}",
         )

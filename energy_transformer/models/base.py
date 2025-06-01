@@ -142,7 +142,9 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
                     trajectory.append(energy.detach().clone())
 
                 (grad,) = torch.autograd.grad(
-                    energy, x_grad, create_graph=create_graph
+                    energy,
+                    x_grad,
+                    create_graph=create_graph,
                 )
         else:
             # In detach mode, compute energy without gradients
@@ -156,7 +158,9 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
                 x_grad = x.clone().requires_grad_(True)
                 energy_for_grad = self.energy(x_grad)
                 (grad,) = torch.autograd.grad(
-                    energy_for_grad, x_grad, create_graph=False
+                    energy_for_grad,
+                    x_grad,
+                    create_graph=False,
                 )
 
         return energy, grad
@@ -257,7 +261,7 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
             raise RuntimeError(
                 "EnergyTransformer requires gradient computation, "
                 "which is not possible within torch.inference_mode(). "
-                "Use detach=True or call the model outside inference_mode()."
+                "Use detach=True or call the model outside inference_mode().",
             )
 
         # Initialize BB buffers
@@ -275,7 +279,11 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
 
             # Compute energy and gradient
             energy, grad = self._compute_gradient(
-                x, detach_mode, create_graph, track_trajectory, trajectory
+                x,
+                detach_mode,
+                create_graph,
+                track_trajectory,
+                trajectory,
             )
 
             # Skip update if we couldn't compute gradients
@@ -285,7 +293,10 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
             # Compute step based on optimization mode
             if mode == "bb":
                 lr: Tensor | float = self._compute_bb_step_size(
-                    x, grad, prev_x, prev_grad
+                    x,
+                    grad,
+                    prev_x,
+                    prev_grad,
                 )
                 step = self._armijo_line_search(
                     x,

@@ -40,7 +40,8 @@ class ExampleSpec(Spec):
     mode: str = param(default="auto", choices=["auto", "manual", "hybrid"])
     hidden_dim: Dimension = param(
         default_factory=lambda: Dimension(
-            "hidden_dim", formula="embed_dim * 4"
+            "hidden_dim",
+            formula="embed_dim * 4",
         ),
         dimension=True,
     )

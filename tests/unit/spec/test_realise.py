@@ -632,7 +632,9 @@ class TestBuiltinRealisers:
 
         try:
             seq_spec = seq(
-                SimpleSpec(size=20), SimpleSpec(size=30), SimpleSpec(size=40)
+                SimpleSpec(size=20),
+                SimpleSpec(size=30),
+                SimpleSpec(size=40),
             )
 
             realiser = Realiser()
@@ -653,7 +655,9 @@ class TestBuiltinRealisers:
 
         try:
             par_spec = parallel(
-                SimpleSpec(size=20), SimpleSpec(size=30), merge="add"
+                SimpleSpec(size=20),
+                SimpleSpec(size=30),
+                merge="add",
             )
 
             realiser = Realiser()
@@ -751,7 +755,10 @@ class TestBuiltinRealisers:
 
             # Unrolled without shared weights
             loop_spec3 = loop(
-                SimpleSpec(size=32), times=3, unroll=True, share_weights=False
+                SimpleSpec(size=32),
+                times=3,
+                unroll=True,
+                share_weights=False,
             )
             module3 = realiser.realise(loop_spec3)
 
@@ -813,7 +820,10 @@ class TestBuiltinRealisers:
             )
 
             graph_spec = Graph(
-                nodes=g.nodes, edges=g.edges, inputs=["a"], outputs=["c"]
+                nodes=g.nodes,
+                edges=g.edges,
+                inputs=["a"],
+                outputs=["c"],
             )
 
             realiser = Realiser()
@@ -994,7 +1004,8 @@ class TestPublicAPI:
 
         @register_typed
         def realise_simple_spec(
-            spec: SimpleSpec, context: Context
+            spec: SimpleSpec,
+            context: Context,
         ) -> nn.Module:
             return nn.Linear(spec.size, spec.size)
 

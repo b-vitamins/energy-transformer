@@ -3,8 +3,10 @@
 import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Any
 
+from torch.nn import Module
+
+from .primitives import Context, Spec
 from .realise import _config
 
 
@@ -23,8 +25,8 @@ def debug_realisation(
     handler = logging.StreamHandler()
     handler.setFormatter(
         logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        )
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        ),
     )
     logger.addHandler(handler)
 
@@ -35,15 +37,15 @@ def debug_realisation(
         original_get = _config.cache.get
         original_put = _config.cache.put
 
-        def traced_get(spec: Any, context: Any) -> Any:
+        def traced_get(spec: Spec, context: Context) -> Module | None:
             result = original_get(spec, context)
             status = "HIT" if result else "MISS"
             logger.debug(
-                f"Cache {status}: {spec.__class__.__name__} (hit rate: {_config.cache.hit_rate:.1%})"
+                f"Cache {status}: {spec.__class__.__name__} (hit rate: {_config.cache.hit_rate:.1%})",
             )
             return result
 
-        def traced_put(spec: Any, context: Any, module: Any) -> None:
+        def traced_put(spec: Spec, context: Context, module: Module) -> None:
             logger.debug(f"Cache PUT: {spec.__class__.__name__}")
             original_put(spec, context, module)
 

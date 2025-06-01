@@ -185,7 +185,7 @@ class ModuleCache:
         handles cycles gracefully to ensure deterministic keys.
         """
 
-        def make_hashable(obj: Any, seen: set[int] | None = None) -> Any:  # noqa: C901
+        def make_hashable(obj: object, seen: set[int] | None = None) -> object:  # noqa: C901
             """Recursively convert ``obj`` into a hashable form."""
             if seen is None:
                 seen = set()
@@ -229,7 +229,8 @@ class ModuleCache:
                 if isinstance(obj, set):
                     seen.add(obj_id)
                     sorted_items = sorted(
-                        obj, key=lambda x: (type(x).__name__, str(x))
+                        obj,
+                        key=lambda x: (type(x).__name__, str(x)),
                     )
                     result = (
                         "set",
@@ -249,12 +250,12 @@ class ModuleCache:
 
                 return (type(obj).__name__, str(obj))
 
-            except Exception as e:  # pragma: no cover - defensive
+            except Exception as e:  # noqa: BLE001 pragma: no cover - defensive
                 import logging
 
                 logger = logging.getLogger(__name__)
                 logger.debug(
-                    f"Cache key generation failed for {type(obj)}: {e}"
+                    f"Cache key generation failed for {type(obj)}: {e}",
                 )
                 return (type(obj).__name__, "<error>")
 
@@ -267,7 +268,7 @@ class ModuleCache:
                     "class": spec.__class__.__name__,
                     "module": spec.__class__.__module__,
                     "data": spec_dict,
-                }
+                },
             )
 
             ctx_dims = make_hashable(dict(sorted(context.dimensions.items())))
@@ -277,7 +278,7 @@ class ModuleCache:
 
             return (cache_version, spec_key, ctx_dims, ctx_meta)
 
-        except Exception as e:  # pragma: no cover - defensive
+        except Exception as e:  # noqa: BLE001 pragma: no cover - defensive
             import logging
 
             logger = logging.getLogger(__name__)
@@ -448,7 +449,9 @@ class Realiser:
     """
 
     def __init__(
-        self, context: Context | None = None, _recursion_depth: int = 0
+        self,
+        context: Context | None = None,
+        _recursion_depth: int = 0,
     ) -> None:
         """Initialize realiser with optional context.
 
@@ -527,7 +530,7 @@ class Realiser:
             module = self._realise_impl(spec)
             _config.cache.put(spec, self.context, module)
             return module
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             if not isinstance(e, RealisationError):
                 raise RealisationError(
                     f"Realisation failed: {type(e).__name__}: {e}",
@@ -620,7 +623,7 @@ class Realiser:
         if realiser_fn := SpecMeta.get_realiser(spec.__class__):
             try:
                 return realiser_fn(spec, self.context)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 raise RealisationError(
                     f"Realiser failed for {spec.__class__.__name__}",
                     spec=spec,
@@ -642,7 +645,7 @@ class Realiser:
             if plugin.can_realise(spec):
                 try:
                     return plugin.realise(spec, self.context)
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     if _config.warnings:
                         warnings.warn(
                             f"Plugin {plugin} failed for {spec}: {e}",
@@ -665,7 +668,7 @@ class Realiser:
         if not mapping:
             if _config.warnings:
                 logger.debug(
-                    f"No auto-import mapping for {spec_name}. Available mappings: {list(module_mappings.keys())}"
+                    f"No auto-import mapping for {spec_name}. Available mappings: {list(module_mappings.keys())}",
                 )
             return None
 
@@ -676,10 +679,10 @@ class Realiser:
         except ImportError as e:
             if _config.warnings:
                 logger.warning(
-                    f"Failed to import {module_path} for {spec_name}: {e}. Is the module installed? Try: pip install energy-transformer"
+                    f"Failed to import {module_path} for {spec_name}: {e}. Is the module installed? Try: pip install energy-transformer",
                 )
             return None
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             if _config.warnings:
                 logger.error(
                     f"Unexpected error importing {module_path}: {type(e).__name__}: {e}",
@@ -692,7 +695,7 @@ class Realiser:
         except AttributeError:
             if _config.warnings:
                 logger.warning(
-                    f"Module {module_path} has no attribute {class_name}. Available attributes: {[a for a in dir(module) if not a.startswith('_')]}"
+                    f"Module {module_path} has no attribute {class_name}. Available attributes: {[a for a in dir(module) if not a.startswith('_')]}",
                 )
             return None
 
@@ -708,9 +711,9 @@ class Realiser:
 
             if _config.warnings and logger.isEnabledFor(logging.DEBUG):
                 logger.debug(
-                    f"Auto-importing {class_name} with kwargs: {kwargs}"
+                    f"Auto-importing {class_name} with kwargs: {kwargs}",
                 )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             if _config.warnings:
                 logger.error(
                     f"Failed to extract kwargs from {spec_name}: {type(e).__name__}: {e}",
@@ -723,13 +726,13 @@ class Realiser:
             if not isinstance(instance, nn.Module):
                 if _config.warnings:
                     logger.warning(
-                        f"Auto-imported {class_name} is not an nn.Module, got {type(instance)}"
+                        f"Auto-imported {class_name} is not an nn.Module, got {type(instance)}",
                     )
                 return None
 
             if _config.warnings:
                 logger.info(
-                    f"Successfully auto-imported {spec_name} as {class_name}"
+                    f"Successfully auto-imported {spec_name} as {class_name}",
                 )
 
             return instance
@@ -737,10 +740,10 @@ class Realiser:
             if _config.warnings:
                 error_msg = str(e)
                 logger.warning(
-                    f"Failed to instantiate {class_name}: {error_msg}. Provided kwargs: {list(kwargs.keys())}. This usually means the spec and module have incompatible parameters."
+                    f"Failed to instantiate {class_name}: {error_msg}. Provided kwargs: {list(kwargs.keys())}. This usually means the spec and module have incompatible parameters.",
                 )
             return None
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             if _config.warnings:
                 logger.error(
                     f"Failed to instantiate {class_name}: {type(e).__name__}: {e}",
@@ -777,7 +780,8 @@ class Realiser:
         for i, branch in enumerate(spec.branches):
             # Each branch gets independent context but inherits depth
             child_realiser = Realiser(
-                self.context.child(), self._recursion_depth
+                self.context.child(),
+                self._recursion_depth,
             )
             try:
                 module = child_realiser.realise(branch)
@@ -849,7 +853,9 @@ class Realiser:
         return LoopModule(body, times)
 
     def _realise_unrolled_independent(
-        self, spec: Loop, times: int
+        self,
+        spec: Loop,
+        times: int,
     ) -> nn.Module:
         """Realise unrolled loop with independent weights."""
         bodies: list[nn.Module] = []
@@ -861,12 +867,13 @@ class Realiser:
             for i in range(times):
                 try:
                     child_realiser = Realiser(
-                        self.context.child(), self._recursion_depth
+                        self.context.child(),
+                        self._recursion_depth,
                     )
                     child_realiser.context.metadata["loop_iteration"] = i
                     body = child_realiser.realise(spec.body)
                     bodies.append(body)
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     if isinstance(e, RealisationError):
                         e.suggestion = (
                             f"Failed at loop iteration {i + 1}/{times}\n{e.suggestion}"
@@ -880,12 +887,12 @@ class Realiser:
                         context=self.context,
                         cause=e,
                     ) from e
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             cache_error = e
         finally:
             try:
                 _config.cache.enabled = original_cache_enabled
-            except Exception as restore_error:  # pragma: no cover - defensive
+            except Exception as restore_error:  # noqa: BLE001 pragma: no cover - defensive
                 import logging
 
                 logger = logging.getLogger(__name__)
@@ -895,7 +902,7 @@ class Realiser:
                 )
                 if cache_error:
                     raise RuntimeError(
-                        "Multiple errors: cache restore failed after realisation error"
+                        "Multiple errors: cache restore failed after realisation error",
                     ) from cache_error
                 raise
 
@@ -944,7 +951,8 @@ class ParallelModule(nn.Module):  # type: ignore[misc]
         self.weights = weights
 
     def forward(
-        self, x: torch.Tensor
+        self,
+        x: torch.Tensor,
     ) -> torch.Tensor | tuple[torch.Tensor, ...]:
         """Execute branches and merge outputs."""
         outputs: list[torch.Tensor] = [branch(x) for branch in self.branches]
@@ -980,7 +988,10 @@ class ResidualModule(nn.Module):  # type: ignore[misc]
     """
 
     def __init__(
-        self, inner: nn.Module, merge: str = "add", scale: float = 1.0
+        self,
+        inner: nn.Module,
+        merge: str = "add",
+        scale: float = 1.0,
     ) -> None:
         super().__init__()
         self.inner = inner
@@ -988,7 +999,8 @@ class ResidualModule(nn.Module):  # type: ignore[misc]
         self.scale = scale
 
     def forward(
-        self, x: torch.Tensor
+        self,
+        x: torch.Tensor,
     ) -> torch.Tensor | tuple[torch.Tensor, ...]:
         """Apply inner module with residual connection."""
         residual = x
@@ -1027,7 +1039,8 @@ class GraphModule(nn.Module):  # type: ignore[misc]
         self.outputs = outputs
 
     def forward(
-        self, x: torch.Tensor
+        self,
+        x: torch.Tensor,
     ) -> torch.Tensor | tuple[torch.Tensor, ...]:
         """Execute graph computation with proper data flow.
 
@@ -1066,7 +1079,7 @@ class GraphModule(nn.Module):  # type: ignore[misc]
         from collections import defaultdict
 
         adjacency: defaultdict[str, list[tuple[str, str | None]]] = defaultdict(
-            list
+            list,
         )
         in_degree: defaultdict[str, int] = defaultdict(int)
         incoming_edges: defaultdict[str, list[tuple[str, str | None]]] = (
@@ -1091,7 +1104,8 @@ class GraphModule(nn.Module):  # type: ignore[misc]
         return adjacency, in_degree, incoming_edges
 
     def _collect_input_values(
-        self, x: torch.Tensor | dict[str, torch.Tensor]
+        self,
+        x: torch.Tensor | dict[str, torch.Tensor],
     ) -> dict[str, torch.Tensor]:
         """Gather values for graph input nodes."""
         values: dict[str, torch.Tensor] = {}
@@ -1127,7 +1141,7 @@ class GraphModule(nn.Module):  # type: ignore[misc]
         if len(order) != len(self.nodes):
             unprocessed = set(self.nodes) - set(order)
             raise RuntimeError(
-                f"Graph contains cycles or unreachable nodes: {unprocessed}"
+                f"Graph contains cycles or unreachable nodes: {unprocessed}",
             )
 
         return order
@@ -1145,7 +1159,7 @@ class GraphModule(nn.Module):  # type: ignore[misc]
                 if source not in values:
                     raise RuntimeError(
                         f"Input '{source}' not available for node '{node_name}'. "
-                        f"Available values: {list(values.keys())}"
+                        f"Available values: {list(values.keys())}",
                     )
                 value = values[source]
                 if transform is not None:
@@ -1161,7 +1175,8 @@ class GraphModule(nn.Module):  # type: ignore[misc]
                 values[node_name] = self.nodes[node_name](combined)
 
     def _gather_outputs(
-        self, values: dict[str, torch.Tensor]
+        self,
+        values: dict[str, torch.Tensor],
     ) -> torch.Tensor | tuple[torch.Tensor, ...]:
         """Collect tensors for the output nodes."""
         output_tensors = []
@@ -1169,7 +1184,7 @@ class GraphModule(nn.Module):  # type: ignore[misc]
             if output_name not in values:
                 raise RuntimeError(
                     f"Output '{output_name}' not computed. "
-                    f"Available values: {list(values.keys())}"
+                    f"Available values: {list(values.keys())}",
                 )
             output_tensors.append(values[output_name])
 
@@ -1180,7 +1195,9 @@ class GraphModule(nn.Module):  # type: ignore[misc]
         return tuple(output_tensors)
 
     def _apply_edge_transform(
-        self, tensor: torch.Tensor, transform: str
+        self,
+        tensor: torch.Tensor,
+        transform: str,
     ) -> torch.Tensor:
         """Apply named transformation to tensor on graph edge."""
         if transform == "detach":
@@ -1197,9 +1214,14 @@ class GraphModule(nn.Module):  # type: ignore[misc]
             try:
                 from typing import cast
 
-                return cast(torch.Tensor, eval(f"tensor{transform}"))
-            except Exception:
-                pass
+                return cast(torch.Tensor, eval(f"tensor{transform}"))  # noqa: S307
+            except Exception as exc:  # noqa: BLE001
+                import logging
+
+                logging.getLogger(__name__).debug(
+                    "Failed to evaluate edge transformation",
+                    exc_info=exc,
+                )
         raise ValueError(f"Unknown edge transformation: {transform}")
 
 
@@ -1360,14 +1382,14 @@ def register_typed(
     return fn
 
 
-def visualize(spec: Spec, format: str = "svg") -> str:
+def visualize(spec: Spec, out_format: str = "svg") -> str:
     """Generate visual representation of specification.
 
     Parameters
     ----------
     spec : Spec
         Specification to visualize
-    format : str
+    out_format : str
         Output format (svg, png, dot)
 
     Returns
@@ -1439,7 +1461,7 @@ def to_yaml(spec: Spec) -> str:
     except ImportError as e:
         raise ImportError(
             "PyYAML is required for YAML serialization. "
-            "Install with: pip install PyYAML"
+            "Install with: pip install PyYAML",
         ) from e
     return str(yaml.dump(spec.to_dict(), default_flow_style=False))
 
@@ -1462,7 +1484,7 @@ def from_yaml(yaml_str: str) -> Spec:
     except ImportError as e:
         raise ImportError(
             "PyYAML is required for YAML deserialization. "
-            "Install with: pip install PyYAML"
+            "Install with: pip install PyYAML",
         ) from e
     data = yaml.safe_load(yaml_str)
     return Spec.from_dict(data)
@@ -1491,7 +1513,8 @@ def realise_et_block(spec: library.ETBlockSpec, context: Context) -> nn.Module:
 
 @register(library.CLSTokenSpec)
 def realise_cls_token(
-    spec: library.CLSTokenSpec, context: Context
+    spec: library.CLSTokenSpec,
+    context: Context,
 ) -> nn.Module:
     """Realise a CLS token using context embed dimension."""
     from energy_transformer.layers.tokens import CLSToken
@@ -1503,7 +1526,8 @@ def realise_cls_token(
 
 @register(library.PosEmbedSpec)
 def realise_pos_embed(
-    spec: library.PosEmbedSpec, context: Context
+    spec: library.PosEmbedSpec,
+    context: Context,
 ) -> nn.Module:
     """Realise positional embedding with context dimensions."""
     from energy_transformer.layers.embeddings import PositionalEmbedding2D
@@ -1524,7 +1548,8 @@ def realise_pos_embed(
 
 @register(library.LayerNormSpec)
 def realise_layer_norm(
-    spec: library.LayerNormSpec, context: Context
+    spec: library.LayerNormSpec,
+    context: Context,
 ) -> nn.Module:
     """Realise layer normalization with embed dimension."""
     embed_dim = context.get_dim("embed_dim")
@@ -1546,7 +1571,8 @@ def realise_hn(spec: library.HNSpec, context: Context) -> nn.Module:
 
 @register(library.ClassificationHeadSpec)
 def realise_cls_head(
-    spec: library.ClassificationHeadSpec, context: Context
+    spec: library.ClassificationHeadSpec,
+    context: Context,
 ) -> nn.Module:
     """Realise classification head module."""
     from energy_transformer.layers.heads import ClassificationHead

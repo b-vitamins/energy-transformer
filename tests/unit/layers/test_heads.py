@@ -15,7 +15,10 @@ def test_classification_head_output_shape() -> None:
 
 def test_classification_head_pooling() -> None:
     head = ClassificationHead(
-        embed_dim=4, num_classes=2, use_cls_token=False, drop_rate=0.0
+        embed_dim=4,
+        num_classes=2,
+        use_cls_token=False,
+        drop_rate=0.0,
     )
     x = torch.randn(2, 3, 4)
     out = head(x)
@@ -100,7 +103,9 @@ def test_classification_head_head_input_dim_dependent_on_representation_size() -
 ):
     head_no_rep = ClassificationHead(embed_dim=4, num_classes=2)
     head_rep = ClassificationHead(
-        embed_dim=4, num_classes=2, representation_size=6
+        embed_dim=4,
+        num_classes=2,
+        representation_size=6,
     )
     assert head_no_rep.head.in_features == 4
     assert head_rep.head.in_features == 6
@@ -132,7 +137,10 @@ def test_classification_head_representation_forward() -> None:
 
 def test_classification_head_global_average_outputs_expected() -> None:
     head = ClassificationHead(
-        embed_dim=2, num_classes=1, use_cls_token=False, drop_rate=0.0
+        embed_dim=2,
+        num_classes=1,
+        use_cls_token=False,
+        drop_rate=0.0,
     )
     with torch.no_grad():
         head.head.weight.fill_(1.0)

@@ -77,7 +77,8 @@ class ClassificationHead(nn.Module):  # type: ignore[misc]
         # Pre-logits processing (following original ViT design)
         if representation_size is not None:
             self.pre_logits = nn.Sequential(
-                nn.Linear(embed_dim, representation_size), nn.Tanh()
+                nn.Linear(embed_dim, representation_size),
+                nn.Tanh(),
             )
             head_input_dim = representation_size
         else:

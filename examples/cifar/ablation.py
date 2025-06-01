@@ -58,25 +58,32 @@ def setup_data(
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             transforms.Normalize(
-                (0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)
+                (0.5071, 0.4867, 0.4408),
+                (0.2675, 0.2565, 0.2761),
             ),
-        ]
+        ],
     )
 
     transform_test = transforms.Compose(
         [
             transforms.ToTensor(),
             transforms.Normalize(
-                (0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)
+                (0.5071, 0.4867, 0.4408),
+                (0.2675, 0.2565, 0.2761),
             ),
-        ]
+        ],
     )
 
     train_dataset = datasets.CIFAR100(
-        DATA_HOME, train=True, download=True, transform=transform_train
+        DATA_HOME,
+        train=True,
+        download=True,
+        transform=transform_train,
     )
     test_dataset = datasets.CIFAR100(
-        DATA_HOME, train=False, transform=transform_test
+        DATA_HOME,
+        train=False,
+        transform=transform_test,
     )
 
     # 90/10 train/val split
@@ -89,7 +96,10 @@ def setup_data(
     )
 
     val_dataset = datasets.CIFAR100(
-        DATA_HOME, train=True, download=False, transform=transform_test
+        DATA_HOME,
+        train=True,
+        download=False,
+        transform=transform_test,
     )
 
     val_subset_with_test_transform = Subset(val_dataset, val_subset.indices)
@@ -108,7 +118,10 @@ def setup_data(
         pin_memory=True,
     )
     test_loader = DataLoader(
-        test_dataset, config.batch_size * 2, num_workers=4, pin_memory=True
+        test_dataset,
+        config.batch_size * 2,
+        num_workers=4,
+        pin_memory=True,
     )
 
     return train_loader, val_loader, test_loader
@@ -254,7 +267,11 @@ def train_model(
             is_et,
         )
         val_loss, val_acc = evaluate(
-            model, val_loader, criterion, device, is_et
+            model,
+            val_loader,
+            criterion,
+            device,
+            is_et,
         )
         _, test_acc = evaluate(model, test_loader, criterion, device, is_et)
 
@@ -268,7 +285,7 @@ def train_model(
     print("-" * 90)
     print(
         f"Training completed! Best validation: {best_val:.2f}%, "
-        f"Best test: {best_test:.2f}%"
+        f"Best test: {best_test:.2f}%",
     )
 
     return TrainingResult(
@@ -318,7 +335,7 @@ def main() -> None:
     for r in sorted(results, key=lambda x: x["best_val"], reverse=True):
         print(
             f"{r['name']:<20} {r['params']:>10,} "
-            f"{r['best_val']:>9.2f}% {r['best_test']:>9.2f}%"
+            f"{r['best_val']:>9.2f}% {r['best_test']:>9.2f}%",
         )
 
     # Key comparisons
@@ -330,11 +347,11 @@ def main() -> None:
         print("\nViSET-E50-T50 vs ViSET-Random:")
         print(
             f"  Validation accuracy difference: "
-            f"{viset['best_val'] - viset_rand['best_val']:+.2f}%"
+            f"{viset['best_val'] - viset_rand['best_val']:+.2f}%",
         )
         print(
             f"  Test accuracy difference: "
-            f"{viset['best_test'] - viset_rand['best_test']:+.2f}%"
+            f"{viset['best_test'] - viset_rand['best_test']:+.2f}%",
         )
 
     if viset and vit:

@@ -24,7 +24,9 @@ def visualize_topology(grid_size: int = 8) -> None:
 
     # Topology-aware simplices
     generator = TopologyAwareSimplexGenerator(
-        coordinates=coords, k_neighbors=6, include_delaunay=True
+        coordinates=coords,
+        k_neighbors=6,
+        include_delaunay=True,
     )
     topo_simplices = generator.generate(
         num_vertices=num_patches,
@@ -72,7 +74,11 @@ def visualize_topology(grid_size: int = 8) -> None:
         for edge in edges:
             p1, p2 = coords[edge[0]], coords[edge[1]]
             ax.plot(
-                [p1[1], p2[1]], [p1[0], p2[0]], "b-", alpha=0.4, linewidth=1
+                [p1[1], p2[1]],
+                [p1[0], p2[0]],
+                "b-",
+                alpha=0.4,
+                linewidth=1,
             )
 
         # Draw triangles

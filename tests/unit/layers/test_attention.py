@@ -30,7 +30,11 @@ def _manual_energy(
 
 def test_attention_energy_matches_manual() -> None:
     attn = MultiHeadEnergyAttention(
-        in_dim=2, num_heads=1, head_dim=2, beta=1.0, bias=False
+        in_dim=2,
+        num_heads=1,
+        head_dim=2,
+        beta=1.0,
+        bias=False,
     )
     with torch.no_grad():
         attn.w_k.copy_(torch.eye(2).unsqueeze(0))
@@ -43,7 +47,11 @@ def test_attention_energy_matches_manual() -> None:
 
 def test_attention_excludes_diagonal() -> None:
     attn = MultiHeadEnergyAttention(
-        in_dim=1, num_heads=1, head_dim=1, beta=1.0, bias=False
+        in_dim=1,
+        num_heads=1,
+        head_dim=1,
+        beta=1.0,
+        bias=False,
     )
     with torch.no_grad():
         attn.w_k.fill_(1.0)
@@ -59,7 +67,11 @@ def test_attention_excludes_diagonal() -> None:
 
 def test_attention_applies_mask() -> None:
     attn = MultiHeadEnergyAttention(
-        in_dim=1, num_heads=1, head_dim=1, beta=1.0, bias=False
+        in_dim=1,
+        num_heads=1,
+        head_dim=1,
+        beta=1.0,
+        bias=False,
     )
     with torch.no_grad():
         attn.w_k.fill_(1.0)
@@ -80,7 +92,10 @@ def test_attention_single_token_zero() -> None:
 
 def test_attention_parameter_shapes_and_bias() -> None:
     attn_no_bias = MultiHeadEnergyAttention(
-        in_dim=3, num_heads=2, head_dim=4, bias=False
+        in_dim=3,
+        num_heads=2,
+        head_dim=4,
+        bias=False,
     )
     assert attn_no_bias.w_k.shape == (2, 4, 3)
     assert attn_no_bias.w_q.shape == (2, 4, 3)
@@ -88,7 +103,10 @@ def test_attention_parameter_shapes_and_bias() -> None:
     assert attn_no_bias.b_q is None
 
     attn_bias = MultiHeadEnergyAttention(
-        in_dim=3, num_heads=2, head_dim=4, bias=True
+        in_dim=3,
+        num_heads=2,
+        head_dim=4,
+        bias=True,
     )
     assert attn_bias.b_k.shape == (4,)
     assert attn_bias.b_q.shape == (4,)
@@ -97,7 +115,11 @@ def test_attention_parameter_shapes_and_bias() -> None:
 def test_attention_default_beta_matches_manual() -> None:
     head_dim = 4
     attn = MultiHeadEnergyAttention(
-        in_dim=2, num_heads=1, head_dim=head_dim, beta=None, bias=False
+        in_dim=2,
+        num_heads=1,
+        head_dim=head_dim,
+        beta=None,
+        bias=False,
     )
     assert attn.β == pytest.approx(1.0 / math.sqrt(head_dim))
     with torch.no_grad():
@@ -115,7 +137,11 @@ def test_attention_default_beta_matches_manual() -> None:
 def test_attention_mixed_precision(dtype: torch.dtype) -> None:
     torch.manual_seed(42)
     attn = MultiHeadEnergyAttention(
-        in_dim=1, num_heads=1, head_dim=1, beta=1.0, bias=False
+        in_dim=1,
+        num_heads=1,
+        head_dim=1,
+        beta=1.0,
+        bias=False,
     )
     with torch.no_grad():
         attn.w_k.fill_(1.0)
@@ -132,14 +158,18 @@ def test_attention_mixed_precision(dtype: torch.dtype) -> None:
 
 def test_attention_mask_broadcast() -> None:
     attn = MultiHeadEnergyAttention(
-        in_dim=1, num_heads=2, head_dim=1, beta=1.0, bias=False
+        in_dim=1,
+        num_heads=2,
+        head_dim=1,
+        beta=1.0,
+        bias=False,
     )
     with torch.no_grad():
         attn.w_k.fill_(1.0)
         attn.w_q.fill_(1.0)
     g = torch.ones(1, 3, 1)
     mask = torch.tensor(
-        [[0.0, float("-inf"), 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
+        [[0.0, float("-inf"), 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]],
     )
     mask = mask.unsqueeze(0).unsqueeze(0)  # shape [1, 1, N, N]
     energy = attn(g, attn_mask=mask)

@@ -55,7 +55,6 @@ build-backend = "poetry.core.masonry.api"
 [tool.ruff]
 line-length = 80
 target-version = "py311"
-# Explicitly exclude .git and other non-Python directories
 exclude = [
     ".venv",
     "build",
@@ -69,19 +68,63 @@ exclude = [
     "*.egg-info",
 ]
 
+
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "N", "D", "C90", "W"]
-ignore = ["E203", "E501", "D100", "D104", "N999"]
+select = [
+    "E",
+    "F",
+    "I",
+    "UP",
+    "B",
+    "N",
+    "D",
+    "C90",
+    "W",
+    "ANN",
+    "S",
+    "BLE",
+    "A",
+    "COM",
+]
+ignore = [
+    "E203",
+    "E501",
+    "D100",
+    "D104",
+    "N999",
+    "ANN101",
+    "ANN102",
+    "S101",
+    "PLR0913",
+]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*.py" = ["D", "ANN"]
-"examples/*.py" = ["D"]
+"tests/*.py" = ["D", "ANN", "S101", "PLR2004", "PLR0915"]
+"examples/*.py" = ["D", "ANN", "T201"]
+"benchmarks/*.py" = ["D", "ANN"]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 10
+
+[tool.ruff.lint.flake8-annotations]
+allow-star-arg-any = true
+mypy-init-return = true
+
+[tool.ruff.lint.flake8-import-conventions.aliases]
+"numpy" = "np"
+"pandas" = "pd"
+"seaborn" = "sns"
+"matplotlib.pyplot" = "plt"
+"torch.nn.functional" = "F"
+
+[tool.ruff.lint.pylint]
+max-args = 8
+max-branches = 12
+max-returns = 6
+max-statements = 50
 
 [tool.ruff.format]
 quote-style = "double"

@@ -266,7 +266,7 @@ class Parallel(Spec):
                 if dim_value is None:
                     issues.append(
                         f"Branch {i} does not provide required dimension "
-                        f"'{merge_dim_name}' for {self.merge} merge"
+                        f"'{merge_dim_name}' for {self.merge} merge",
                     )
                 else:
                     dims.append((i, dim_value))
@@ -277,7 +277,7 @@ class Parallel(Spec):
                     dim_info = ", ".join(f"Branch {i}: {d}" for i, d in dims)
                     issues.append(
                         f"Incompatible dimensions for {self.merge} merge: {dim_info}. "
-                        f"All branches must output the same dimension."
+                        f"All branches must output the same dimension.",
                     )
 
         elif self.merge == "concat":
@@ -292,7 +292,7 @@ class Parallel(Spec):
                 if concat_dims and max(concat_dims) > min(concat_dims) * 10:
                     issues.append(
                         f"Warning: Large dimension disparity in concat merge: "
-                        f"min={min(concat_dims)}, max={max(concat_dims)}"
+                        f"min={min(concat_dims)}, max={max(concat_dims)}",
                     )
 
         # Validate weights if provided
@@ -300,7 +300,7 @@ class Parallel(Spec):
             if len(self.weights) != len(self.branches):
                 issues.append(
                     f"Weight count ({len(self.weights)}) doesn't match "
-                    f"branch count ({len(self.branches)})"
+                    f"branch count ({len(self.branches)})",
                 )
 
             if not all(isinstance(w, int | float) for w in self.weights):
@@ -309,7 +309,7 @@ class Parallel(Spec):
             if self.merge == "add" and abs(sum(self.weights) - 1.0) > 1e-6:
                 issues.append(
                     f"Warning: Weights sum to {sum(self.weights)}, not 1.0. "
-                    f"This may cause unexpected scaling."
+                    f"This may cause unexpected scaling.",
                 )
 
         return issues
@@ -475,7 +475,7 @@ class Graph(Spec):
                     spec=self,
                     suggestion=f"Remove cyclic dependency in path: {' -> '.join(cycle_path)}",
                 )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             raise ValidationError(
                 f"Graph validation failed: {e}",
                 spec=self,
@@ -507,7 +507,10 @@ class Graph(Spec):
         )
 
     def add_edge(
-        self, from_node: str, to_node: str, transform: str | None = None
+        self,
+        from_node: str,
+        to_node: str,
+        transform: str | None = None,
     ) -> Graph:
         """Add an edge to the graph.
 
@@ -950,7 +953,9 @@ def cond(
             return ctx.get_dim(dim_name) is not None
 
         return Conditional(
-            condition=condition_fn, if_true=if_true, if_false=if_false
+            condition=condition_fn,
+            if_true=if_true,
+            if_false=if_false,
         )
 
     return Conditional(condition=condition, if_true=if_true, if_false=if_false)
@@ -982,7 +987,10 @@ def loop(
         Loop specification
     """
     return Loop(
-        body=body, times=times, unroll=unroll, share_weights=share_weights
+        body=body,
+        times=times,
+        unroll=unroll,
+        share_weights=share_weights,
     )
 
 

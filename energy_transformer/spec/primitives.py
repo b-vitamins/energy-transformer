@@ -210,10 +210,10 @@ class Dimension:
 
         token_type, token_value = tokens[pos]
 
-        if token_type == "NUMBER":
+        if token_type == "NUMBER":  # noqa: S105
             return float(token_value), pos + 1
 
-        if token_type == "IDENT":
+        if token_type == "IDENT":  # noqa: S105
             if token_value not in variables:
                 raise ValueError(f"Unknown variable: {token_value}")
             value = variables[token_value]
@@ -221,14 +221,14 @@ class Dimension:
                 raise ValueError(f"Variable {token_value} has no value")
             return float(value), pos + 1
 
-        if token_type == "LPAREN":
+        if token_type == "LPAREN":  # noqa: S105
             pos += 1  # Skip '('
             expr_value, pos = self._parse_expression(tokens, pos, variables)
             if pos >= len(tokens) or tokens[pos][0] != "RPAREN":
                 raise ValueError("Missing closing parenthesis")
             return expr_value, pos + 1  # Skip ')'
 
-        if token_type == "MINUS":
+        if token_type == "MINUS":  # noqa: S105
             pos += 1  # Skip unary minus
             factor_val, pos = self._parse_factor(tokens, pos, variables)
             return -factor_val, pos
@@ -236,7 +236,9 @@ class Dimension:
         raise ValueError(f"Unexpected token: {token_value}")
 
     def _safe_eval_formula(
-        self, formula: str, variables: dict[str, int | None]
+        self,
+        formula: str,
+        variables: dict[str, int | None],
     ) -> float | None:
         """Safely evaluate mathematical formula without eval()."""
         try:
@@ -248,11 +250,11 @@ class Dimension:
 
             if pos < len(tokens):
                 raise ValueError(
-                    f"Unexpected token after expression: {tokens[pos][1]}"
+                    f"Unexpected token after expression: {tokens[pos][1]}",
                 )
 
             return result
-        except Exception as e:  # pragma: no cover - debugging
+        except Exception as e:  # noqa: BLE001 pragma: no cover - debugging
             import logging
 
             logger = logging.getLogger(__name__)
@@ -284,7 +286,7 @@ class Dimension:
             try:
                 result = self._safe_eval_formula(self.formula, local_vars)
                 return int(result) if result is not None else None
-            except Exception:
+            except Exception:  # noqa: BLE001
                 return None
 
         return context.get_dim(self.name)
@@ -305,7 +307,7 @@ class Dimension:
         for constraint in self.constraints:
             if not constraint(value):
                 raise ValidationError(
-                    f"Dimension {self.name}={value} failed constraint"
+                    f"Dimension {self.name}={value} failed constraint",
                 )
 
 
@@ -415,7 +417,7 @@ class Context:
         child.update(**updates)
         return child
 
-    def cache_get(self, key: str) -> Any | None:
+    def cache_get(self, key: str) -> object | None:
         """Get cached value by key.
 
         Parameters
@@ -430,7 +432,7 @@ class Context:
         """
         return self._cache.get(key)
 
-    def cache_set(self, key: str, value: Any) -> None:
+    def cache_set(self, key: str, value: object) -> None:
         """Set cached value.
 
         Parameters
@@ -515,14 +517,14 @@ class ValidationError(ValueError):
 
 
 def param(
-    default: Any = REQUIRED,
+    default: Any = REQUIRED,  # noqa: ANN401
     *,
-    default_factory: Callable[[], Any] | None = None,
-    validator: Callable[[Any], bool] | None = None,
+    default_factory: Callable[[], Any] | None = None,  # noqa: ANN401
+    validator: Callable[[Any], bool] | None = None,  # noqa: ANN401
     description: str | None = None,
     dimension: bool = False,
-    choices: list[Any] | None = None,
-) -> Any:
+    choices: list[Any] | None = None,  # noqa: ANN401
+) -> Any:  # noqa: ANN401
     """Define a specification parameter with validation and metadata.
 
     Parameters
@@ -595,7 +597,8 @@ class SpecMeta(ABCMeta):
 
     @classmethod
     def register_realiser(
-        cls, spec_cls: type[Spec]
+        cls,
+        spec_cls: type[Spec],
     ) -> Callable[[ModuleFactory], ModuleFactory]:
         """Register a realiser function for a spec type.
 
@@ -721,7 +724,7 @@ class Spec(ABC, metaclass=SpecMeta):
 
                         logger = logging.getLogger(__name__)
                         logger.warning(
-                            f"Field {field_info.name} has choices with mixed types: {choice_types}"
+                            f"Field {field_info.name} has choices with mixed types: {choice_types}",
                         )
 
                     value_type = type(value)
@@ -758,9 +761,9 @@ class Spec(ABC, metaclass=SpecMeta):
         child_context = context.child()
         try:
             updated_context = self.apply_context(child_context)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             issues.append(
-                f"Failed to apply context updates: {type(e).__name__}: {e}"
+                f"Failed to apply context updates: {type(e).__name__}: {e}",
             )
             return issues
 
@@ -774,12 +777,12 @@ class Spec(ABC, metaclass=SpecMeta):
                 for issue in child_issues:
                     issues.append(
                         f"{self.__class__.__name__}.children[{i}] "
-                        f"({child.__class__.__name__}): {issue}"
+                        f"({child.__class__.__name__}): {issue}",
                     )
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 issues.append(
                     f"{self.__class__.__name__}.children[{i}]: "
-                    f"Validation crashed with {type(e).__name__}: {e}"
+                    f"Validation crashed with {type(e).__name__}: {e}",
                 )
 
         return issues
@@ -801,7 +804,7 @@ class Spec(ABC, metaclass=SpecMeta):
             if context.spec_version not in self._compatible_versions:
                 return [
                     f"Version mismatch: context has {context.spec_version}, "
-                    f"spec supports {self._compatible_versions}"
+                    f"spec supports {self._compatible_versions}",
                 ]
         return []
 
@@ -991,7 +994,7 @@ class Spec(ABC, metaclass=SpecMeta):
         # Check version compatibility
         if version not in spec_cls._compatible_versions:
             raise ValueError(
-                f"Version {version} not compatible with {spec_cls.__name__}"
+                f"Version {version} not compatible with {spec_cls.__name__}",
             )
 
         # Recursively convert nested specs
@@ -1020,19 +1023,19 @@ class Spec(ABC, metaclass=SpecMeta):
 
         return f"{self.__class__.__name__}({', '.join(params)})"
 
-    def __rshift__(self, other: Spec) -> Any:
+    def __rshift__(self, other: Spec) -> Spec:
         """Chain specs using >> operator to create Sequential."""
         from .combinators import Sequential
 
         return Sequential(parts=(self, other))
 
-    def __lshift__(self, other: Spec) -> Any:
+    def __lshift__(self, other: Spec) -> Spec:
         """Prepend spec using << operator to create Sequential."""
         from .combinators import Sequential
 
         return Sequential(parts=(other, self))
 
-    def __or__(self, other: Spec) -> Any:
+    def __or__(self, other: Spec) -> Spec:
         """Create parallel composition using | operator."""
         from .combinators import Parallel
 

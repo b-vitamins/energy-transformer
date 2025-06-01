@@ -185,7 +185,7 @@ class TestTypeUnionFixes:
                 )
             except TypeError:
                 pytest.fail(
-                    f"validate_positive({value!r}) raised TypeError - type union fix failed!"
+                    f"validate_positive({value!r}) raised TypeError - type union fix failed!",
                 )
 
     def test_validate_probability(self):
@@ -215,7 +215,8 @@ class TestChoiceValidation:
         @dataclass(frozen=True)
         class TestSpec(Spec):
             mode: str = param(
-                default="auto", choices=["auto", "manual", "hybrid"]
+                default="auto",
+                choices=["auto", "manual", "hybrid"],
             )
             size: int = param(default=1, choices=[1, 2, 4, 8])
 
@@ -260,7 +261,7 @@ class TestIntegration:
         from energy_transformer.spec.primitives import Context, Dimension
 
         ctx = Context(
-            dimensions={"embed_dim": 768, "num_heads": 12, "mlp_ratio": 4}
+            dimensions={"embed_dim": 768, "num_heads": 12, "mlp_ratio": 4},
         )
 
         dim1 = Dimension("head_dim", formula="embed_dim / num_heads")

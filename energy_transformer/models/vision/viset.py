@@ -236,7 +236,7 @@ class VisionSimplicialEnergyTransformer(VisionEnergyTransformer):
                     alpha=et_alpha,
                 )
                 for _ in range(depth)
-            ]
+            ],
         )
 
 
@@ -304,7 +304,8 @@ def viset_base(**kwargs: Any) -> VisionSimplicialEnergyTransformer:
 
 
 def viset_2l_e50_t50_cifar(
-    num_classes: int = 100, **kwargs: Any
+    num_classes: int = 100,
+    **kwargs: Any,
 ) -> VisionSimplicialEnergyTransformer:
     """ViSET-2L with 50% edges, 50% triangles for CIFAR.
 
@@ -334,7 +335,8 @@ def viset_2l_e50_t50_cifar(
 
 
 def viset_2l_e100_cifar(
-    num_classes: int = 100, **kwargs: Any
+    num_classes: int = 100,
+    **kwargs: Any,
 ) -> VisionSimplicialEnergyTransformer:
     """ViSET-2L with 100% edges (k-NN only) for CIFAR.
 
@@ -364,7 +366,8 @@ def viset_2l_e100_cifar(
 
 
 def viset_2l_t100_cifar(
-    num_classes: int = 100, **kwargs: Any
+    num_classes: int = 100,
+    **kwargs: Any,
 ) -> VisionSimplicialEnergyTransformer:
     """ViSET-2L with 100% triangles for CIFAR.
 
@@ -394,7 +397,8 @@ def viset_2l_t100_cifar(
 
 
 def viset_2l_random_cifar(
-    num_classes: int = 100, **kwargs: Any
+    num_classes: int = 100,
+    **kwargs: Any,
 ) -> VisionSimplicialEnergyTransformer:
     """ViSET-2L with RANDOM simplices (no topology awareness).
 
@@ -424,7 +428,8 @@ def viset_2l_random_cifar(
 
 
 def viset_4l_e50_t50_cifar(
-    num_classes: int = 100, **kwargs: Any
+    num_classes: int = 100,
+    **kwargs: Any,
 ) -> VisionSimplicialEnergyTransformer:
     """ViSET-4L with 50% edges, 50% triangles for CIFAR."""
     config: dict[str, Any] = {
@@ -450,7 +455,8 @@ def viset_4l_e50_t50_cifar(
 
 
 def viset_6l_e50_t50_cifar(
-    num_classes: int = 100, **kwargs: Any
+    num_classes: int = 100,
+    **kwargs: Any,
 ) -> VisionSimplicialEnergyTransformer:
     """ViSET-6L with 50% edges, 50% triangles for CIFAR."""
     config: dict[str, Any] = {
@@ -476,7 +482,8 @@ def viset_6l_e50_t50_cifar(
 
 
 def viset_2l_e40_t40_tet20_cifar(
-    num_classes: int = 100, **kwargs: Any
+    num_classes: int = 100,
+    **kwargs: Any,
 ) -> VisionSimplicialEnergyTransformer:
     """ViSET-2L with edges, triangles, AND tetrahedra.
 
@@ -509,7 +516,9 @@ def viset_2l_e40_t40_tet20_cifar(
 
 
 def get_viset_name(
-    depth: int, dim_weights: dict[int, float], use_topology: bool = True
+    depth: int,
+    dim_weights: dict[int, float],
+    use_topology: bool = True,
 ) -> str:
     """Generate standardized ViSET model name from configuration.
 

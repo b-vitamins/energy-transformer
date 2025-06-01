@@ -71,10 +71,12 @@ def test_process_blocks_with_energy_info() -> None:
     import numpy as np
 
     np.testing.assert_array_almost_equal(
-        info["block_trajectories"][0], np.array([0.1])
+        info["block_trajectories"][0],
+        np.array([0.1]),
     )
     np.testing.assert_array_almost_equal(
-        info["block_trajectories"][1], np.array([0.2])
+        info["block_trajectories"][1],
+        np.array([0.2]),
     )
 
 

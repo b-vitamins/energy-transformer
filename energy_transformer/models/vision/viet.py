@@ -171,7 +171,7 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
                     alpha=et_alpha,
                 )
                 for _ in range(depth)
-            ]
+            ],
         )
 
         # Final layer normalization
@@ -224,7 +224,10 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
 
         for et_block in self.et_blocks:
             result = et_block(
-                x, return_energy=True, return_trajectory=True, **et_kwargs
+                x,
+                return_energy=True,
+                return_trajectory=True,
+                **et_kwargs,
             )
             if hasattr(result, "tokens"):
                 x = result.tokens
@@ -274,7 +277,7 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
         if x.shape[-2:] != (self.img_size, self.img_size):
             raise ValueError(
                 f"Input size {x.shape[-2:]} doesn't match model size "
-                f"({self.img_size}, {self.img_size})"
+                f"({self.img_size}, {self.img_size})",
             )
 
         # 1. Patch embedding
@@ -289,7 +292,9 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
 
         # 4. Energy Transformer blocks
         x, energy_info = self._process_et_blocks(
-            x, return_energy_info, et_kwargs
+            x,
+            return_energy_info,
+            et_kwargs,
         )
 
         # 5. Final layer normalization
@@ -376,7 +381,8 @@ def viet_large(**kwargs: Any) -> VisionEnergyTransformer:
 
 
 def viet_tiny_cifar(
-    num_classes: int = 100, **kwargs: Any
+    num_classes: int = 100,
+    **kwargs: Any,
 ) -> VisionEnergyTransformer:
     """ViET-Tiny for CIFAR datasets."""
     config: dict[str, Any] = {
@@ -398,7 +404,8 @@ def viet_tiny_cifar(
 
 
 def viet_small_cifar(
-    num_classes: int = 100, **kwargs: Any
+    num_classes: int = 100,
+    **kwargs: Any,
 ) -> VisionEnergyTransformer:
     """ViET-Small for CIFAR datasets."""
     config: dict[str, Any] = {
@@ -423,7 +430,8 @@ def viet_small_cifar(
 
 
 def viet_2l_cifar(
-    num_classes: int = 100, **kwargs: Any
+    num_classes: int = 100,
+    **kwargs: Any,
 ) -> VisionEnergyTransformer:
     """Vision Energy Transformer with only 2 layers for CIFAR datasets."""
     config: dict[str, Any] = {
@@ -445,7 +453,8 @@ def viet_2l_cifar(
 
 
 def viet_4l_cifar(
-    num_classes: int = 100, **kwargs: Any
+    num_classes: int = 100,
+    **kwargs: Any,
 ) -> VisionEnergyTransformer:
     """Vision Energy Transformer with 4 layers for CIFAR datasets."""
     config: dict[str, Any] = {
@@ -467,7 +476,8 @@ def viet_4l_cifar(
 
 
 def viet_6l_cifar(
-    num_classes: int = 100, **kwargs: Any
+    num_classes: int = 100,
+    **kwargs: Any,
 ) -> VisionEnergyTransformer:
     """Vision Energy Transformer with 6 layers for CIFAR datasets."""
     config: dict[str, Any] = {

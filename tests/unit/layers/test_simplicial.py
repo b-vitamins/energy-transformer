@@ -17,7 +17,7 @@ def test_simplex_validator_success() -> None:
         [0, 2],
     ]  # Added [0, 2] edge
     buckets, max_v = simplicial.SimplexValidator.validate_and_canonicalize(
-        simplices
+        simplices,
     )
     # Now the test expectations match what we actually provide
     assert buckets[2] == [[0, 1], [0, 2]]
@@ -27,7 +27,7 @@ def test_simplex_validator_success() -> None:
     # Alternative: Fix the test to match the actual input
     simplices2 = [[1, 0], (2, 0, 1), [1, 0, 2], [3, 2, 1]]
     buckets2, max_v2 = simplicial.SimplexValidator.validate_and_canonicalize(
-        simplices2
+        simplices2,
     )
     assert buckets2[2] == [[0, 1]]  # Only one edge in input
     assert buckets2[3] == [[0, 1, 2], [1, 2, 3]]  # Two unique triangles
@@ -55,11 +55,13 @@ def test_simplex_budget_manager_edge_units() -> None:
 
 def test_simplex_budget_manager_normalize_dimension_weights() -> None:
     assert simplicial.SimplexBudgetManager.normalize_dimension_weights(
-        None, 2
+        None,
+        2,
     ) == {1: 1.0}
 
     weights = simplicial.SimplexBudgetManager.normalize_dimension_weights(
-        {1: 1, 2: 1}, 2
+        {1: 1, 2: 1},
+        2,
     )
     assert weights == {1: 0.5, 2: 0.5}
 
@@ -71,7 +73,9 @@ def test_allocate_budget_consumes_and_returns_remaining() -> None:
     candidates = {2: [(0, 1), (0, 2), (1, 2)], 3: [(0, 1, 2)]}
     weights = {1: 0.5, 2: 0.5}
     simplices, remaining = simplicial.SimplexBudgetManager.allocate_budget(
-        6, weights, candidates
+        6,
+        weights,
+        candidates,
     )
     # Order of generated simplices depends on RNG; just check counts
     assert len(simplices) == 4
@@ -79,7 +83,7 @@ def test_allocate_budget_consumes_and_returns_remaining() -> None:
 
 
 def test_random_simplex_generator_generate() -> None:
-    gen = simplicial.RandomSimplexGenerator(random.Random(0))
+    gen = simplicial.RandomSimplexGenerator(random.Random(0))  # noqa: S311
     simplices = gen.generate(4, 2, budget=1.0)
     # Should generate some simplices respecting budget
     assert len(simplices) > 0
@@ -151,7 +155,9 @@ def fake_scipy(monkeypatch):
 def test_topology_aware_generator_2d() -> None:
     coords = [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]
     gen = simplicial.TopologyAwareSimplexGenerator(
-        coords, k_neighbors=1, rng=random.Random(0)
+        coords,
+        k_neighbors=1,
+        rng=random.Random(0),  # noqa: S311
     )
     simplices = gen.generate(3, 2, budget=1.0)
     assert [0, 1] in simplices
@@ -165,7 +171,7 @@ def test_topology_aware_generator_3d_with_sampling() -> None:
         (0.0, 1.0, 0.0),
         (0.0, 0.0, 1.0),
     ]
-    gen = simplicial.TopologyAwareSimplexGenerator(coords, rng=random.Random(0))
+    gen = simplicial.TopologyAwareSimplexGenerator(coords, rng=random.Random(0))  # noqa: S311
     simplices = gen.generate(4, 3, budget=0.5)
     assert len(simplices) >= 1
 

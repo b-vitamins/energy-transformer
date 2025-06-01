@@ -517,7 +517,10 @@ class TestGraph:
         )
 
         g = Graph(
-            nodes=g.nodes, edges=g.edges, inputs=["input"], outputs=["output"]
+            nodes=g.nodes,
+            edges=g.edges,
+            inputs=["input"],
+            outputs=["output"],
         )
 
         assert len(g.nodes) == 3
@@ -760,7 +763,9 @@ class TestHighLevelFactories:
 
         # Post-norm version
         block2 = transformer_block(
-            norm_first=False, attention=MockSpec(1), mlp=MockSpec(2)
+            norm_first=False,
+            attention=MockSpec(1),
+            mlp=MockSpec(2),
         )
 
         assert isinstance(block2, Sequential)
@@ -837,7 +842,7 @@ class TestComplexCompositions:
         """Test loop containing residual blocks."""
         model = loop(
             residual(
-                seq(MockTransformSpec("attention"), MockTransformSpec("mlp"))
+                seq(MockTransformSpec("attention"), MockTransformSpec("mlp")),
             ),
             times=6,
         )
@@ -852,7 +857,8 @@ class TestComplexCompositions:
             graph()
             .add_node("input", MockProviderSpec())
             .add_node(
-                "conditional", cond("fast_path", MockSpec(1), MockSpec(2))
+                "conditional",
+                cond("fast_path", MockSpec(1), MockSpec(2)),
             )
             .add_node("output", MockSpec())
             .add_edge("input", "conditional")
@@ -860,7 +866,10 @@ class TestComplexCompositions:
         )
 
         g = Graph(
-            nodes=g.nodes, edges=g.edges, inputs=["input"], outputs=["output"]
+            nodes=g.nodes,
+            edges=g.edges,
+            inputs=["input"],
+            outputs=["output"],
         )
 
         assert "conditional" in g.nodes
@@ -896,7 +905,7 @@ class TestTreeOperations:
 
         # Extract all values
         values = model.map(
-            lambda s: s.value if isinstance(s, MockSpec) else None
+            lambda s: s.value if isinstance(s, MockSpec) else None,
         )
         mock_values = [v for v in values if v is not None]
 

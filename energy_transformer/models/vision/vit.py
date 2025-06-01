@@ -70,7 +70,10 @@ class PatchEmbedding(nn.Module):  # type: ignore[misc]
         self.num_patches = (img_size // patch_size) ** 2
 
         self.proj = nn.Conv2d(
-            in_chans, embed_dim, kernel_size=patch_size, stride=patch_size
+            in_chans,
+            embed_dim,
+            kernel_size=patch_size,
+            stride=patch_size,
         )
 
     def forward(self, x: Tensor) -> Tensor:
@@ -148,7 +151,7 @@ class VisionTransformer(nn.Module):  # type: ignore[misc]
         # CLS token and positional embeddings
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         self.pos_embed = nn.Parameter(
-            torch.zeros(1, 1 + num_patches, embed_dim)
+            torch.zeros(1, 1 + num_patches, embed_dim),
         )
         self.pos_drop = nn.Dropout(p=drop_rate)
 
@@ -164,7 +167,7 @@ class VisionTransformer(nn.Module):  # type: ignore[misc]
                     attn_drop=attn_drop_rate,
                 )
                 for _ in range(depth)
-            ]
+            ],
         )
 
         # Final norm and classification head
@@ -210,7 +213,9 @@ class VisionTransformer(nn.Module):  # type: ignore[misc]
         # Classification
         x = self.norm(x)
         x = x[:, 0]  # CLS token
-        return self.head(x)
+        from typing import cast
+
+        return cast(Tensor, self.head(x))
 
 
 class TransformerBlock(nn.Module):  # type: ignore[misc]
@@ -255,8 +260,10 @@ class TransformerBlock(nn.Module):  # type: ignore[misc]
         Tensor
             Output tensor of shape (B, N, D).
         """
-        x = x + self.attn(self.norm1(x))
-        return x + self.mlp(self.norm2(x))
+        from typing import cast
+
+        x = x + cast(Tensor, self.attn(self.norm1(x)))
+        return x + cast(Tensor, self.mlp(self.norm2(x)))
 
 
 class Attention(nn.Module):  # type: ignore[misc]
@@ -298,7 +305,11 @@ class Attention(nn.Module):  # type: ignore[misc]
 
         # QKV projection and reshape
         qkv = self.qkv(x).reshape(
-            batch_size, seq_len, 3, self.num_heads, self.head_dim
+            batch_size,
+            seq_len,
+            3,
+            self.num_heads,
+            self.head_dim,
         )
         qkv = qkv.permute(2, 0, 3, 1, 4)  # (3, B, H, N, D_h)
         q, k, v = qkv[0], qkv[1], qkv[2]
@@ -309,9 +320,11 @@ class Attention(nn.Module):  # type: ignore[misc]
         attn = self.attn_drop(attn)
 
         # Aggregate
+        from typing import cast
+
         x = (attn @ v).transpose(1, 2).reshape(batch_size, seq_len, embed_dim)
-        x = self.proj(x)
-        return self.proj_drop(x)
+        x = cast(Tensor, self.proj(x))
+        return cast(Tensor, self.proj_drop(x))
 
 
 class MLP(nn.Module):  # type: ignore[misc]
@@ -345,11 +358,13 @@ class MLP(nn.Module):  # type: ignore[misc]
         Tensor
             Output tensor.
         """
-        x = self.fc1(x)
-        x = self.act(x)
-        x = self.drop(x)
-        x = self.fc2(x)
-        return self.drop(x)
+        from typing import cast
+
+        x = cast(Tensor, self.fc1(x))
+        x = cast(Tensor, self.act(x))
+        x = cast(Tensor, self.drop(x))
+        x = cast(Tensor, self.fc2(x))
+        return cast(Tensor, self.drop(x))
 
 
 # Factory functions

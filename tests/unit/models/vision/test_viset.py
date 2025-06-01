@@ -59,7 +59,9 @@ def patch_components(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(viset, "LayerNorm", DummyLayerNorm)
     monkeypatch.setattr(viset, "MultiHeadEnergyAttention", DummyAttention)
     monkeypatch.setattr(
-        viset, "SimplicialHopfieldNetwork", DummySimplicialHopfieldNetwork
+        viset,
+        "SimplicialHopfieldNetwork",
+        DummySimplicialHopfieldNetwork,
     )
 
 

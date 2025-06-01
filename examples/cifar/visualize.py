@@ -110,7 +110,9 @@ def plot_results(results: list[dict[str, Any]], save_dir: Path) -> None:
 
             plt.tight_layout()
             plt.savefig(
-                save_dir / "topology_impact.png", dpi=150, bbox_inches="tight"
+                save_dir / "topology_impact.png",
+                dpi=150,
+                bbox_inches="tight",
             )
             plt.close()
 

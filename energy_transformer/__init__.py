@@ -15,7 +15,7 @@ For visualization and optional features:
 >>> from energy_transformer.models import viet_base  # Loads full models
 """
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 __version__ = "0.3.1"
 __author__ = "Ayan Das <bvits@riseup.net>"
@@ -59,7 +59,7 @@ if TYPE_CHECKING:  # pragma: no cover
     )
 
 
-def __getattr__(name: str) -> Any:
+def __getattr__(name: str) -> object:
     """Lazy load modules and attributes.
 
     This implements PEP 562 for lazy loading. Attributes are only
@@ -76,13 +76,13 @@ def __getattr__(name: str) -> Any:
                 f"Cannot import {name} from {module_name}. "
                 f"This might be due to missing optional dependencies. "
                 f"Try: pip install energy-transformer[all]\n"
-                f"Original error: {e}"
+                f"Original error: {e}",
             ) from e
         try:
             attr = getattr(module, name)
         except AttributeError as e:  # pragma: no cover - unexpected
             raise AttributeError(
-                f"Module {module_name} has no attribute {name}"
+                f"Module {module_name} has no attribute {name}",
             ) from e
         globals()[name] = attr
         return attr

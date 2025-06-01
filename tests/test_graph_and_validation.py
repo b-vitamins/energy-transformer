@@ -88,7 +88,10 @@ class TestGraphExecution:
             ("mul", "sub", None),
         ]
         gm = GraphModule(
-            nodes=nodes, edges=edges, inputs=["input"], outputs=["sub"]
+            nodes=nodes,
+            edges=edges,
+            inputs=["input"],
+            outputs=["sub"],
         )
 
         x = torch.tensor([5.0])
@@ -126,7 +129,10 @@ class TestGraphExecution:
             ("branch2", "merge", None),
         ]
         gm = GraphModule(
-            nodes=nodes, edges=edges, inputs=["input"], outputs=["merge"]
+            nodes=nodes,
+            edges=edges,
+            inputs=["input"],
+            outputs=["merge"],
         )
 
         x = torch.tensor([[1.0, 2.0]])
@@ -144,7 +150,10 @@ class TestGraphExecution:
         nodes = {"node1": Identity(), "node2": Identity()}
         edges = [("input", "node1", None), ("node1", "node2", "relu")]
         gm = GraphModule(
-            nodes=nodes, edges=edges, inputs=["input"], outputs=["node2"]
+            nodes=nodes,
+            edges=edges,
+            inputs=["input"],
+            outputs=["node2"],
         )
 
         x = torch.tensor([[-1.0, 2.0, -3.0]])
@@ -157,7 +166,10 @@ class TestGraphExecution:
         nodes = {"node": nn.Identity()}
         edges = [("missing_input", "node", None)]
         gm = GraphModule(
-            nodes=nodes, edges=edges, inputs=["input"], outputs=["node"]
+            nodes=nodes,
+            edges=edges,
+            inputs=["input"],
+            outputs=["node"],
         )
 
         with pytest.raises(RuntimeError, match="not available"):
@@ -411,7 +423,10 @@ class TestParallelMergeValidation:
         assert any("Weight count" in i for i in issues)
 
         spec2 = parallel(
-            ProviderSpec(), ProviderSpec(), merge="add", weights=[0.3, 0.3]
+            ProviderSpec(),
+            ProviderSpec(),
+            merge="add",
+            weights=[0.3, 0.3],
         )
         issues = spec2.validate(Context())
         assert any("Warning" in i and "sum" in i for i in issues)
@@ -431,13 +446,15 @@ class TestIntegration:
 
         @register_typed
         def _realise_layer_norm(
-            spec: LayerNormSpec, context: Context
+            spec: LayerNormSpec,
+            context: Context,
         ) -> nn.Module:
             return nn.LayerNorm(context.get_dim("embed_dim"), eps=spec.eps)
 
         @register_typed
         def _realise_identity(
-            spec: IdentitySpec, context: Context
+            spec: IdentitySpec,
+            context: Context,
         ) -> nn.Module:
             return nn.Identity()
 
@@ -456,7 +473,10 @@ class TestIntegration:
         g = g.add_edge("mlp", "add")
 
         graph_spec = Graph(
-            nodes=g.nodes, edges=g.edges, inputs=["input"], outputs=["add"]
+            nodes=g.nodes,
+            edges=g.edges,
+            inputs=["input"],
+            outputs=["add"],
         )
 
         ctx = Context(dimensions={"embed_dim": 768})
