@@ -22,7 +22,7 @@ from energy_transformer.spec import (
 from energy_transformer.spec.primitives import SpecMeta
 from energy_transformer.spec.realise import (
     Realiser,
-    _config,
+    _get_config,
     register,
 )
 
@@ -70,7 +70,7 @@ class TestRecursionDepth:
         model2 = realise(deep_spec, context=ctx)
         assert model2 is not None
 
-        assert _config.cache.hit_rate > 0
+        assert _get_config().cache.hit_rate > 0
 
     def test_recursion_error_includes_context(self):
         configure_realisation(max_recursion=3, optimizations=False)
@@ -125,7 +125,7 @@ class TestRecursionDepth:
         """Test exact behavior from verify_recursion_fix.py."""
         from energy_transformer.spec import configure_realisation, realise, seq
         from energy_transformer.spec.library import IdentitySpec
-        from energy_transformer.spec.realise import _config
+        from energy_transformer.spec.realise import _get_config
 
         configure_realisation(max_recursion=5)
         deep_model_spec = seq(*[IdentitySpec() for _ in range(20)])
@@ -133,10 +133,10 @@ class TestRecursionDepth:
         model1 = realise(deep_model_spec)
         assert model1 is not None, "First realisation should succeed"
 
-        initial_hits = _config.cache._hit_count
+        initial_hits = _get_config().cache._hit_count
         model2 = realise(deep_model_spec)
         assert model2 is not None, "Second realisation should succeed"
 
-        final_hits = _config.cache._hit_count
+        final_hits = _get_config().cache._hit_count
         assert final_hits > initial_hits, "Cache should have been used"
-        assert _config.cache.hit_rate > 0, "Hit rate should be positive"
+        assert _get_config().cache.hit_rate > 0, "Hit rate should be positive"

@@ -994,9 +994,9 @@ class TestPublicAPI:
             size: int = param(default=64)  # noqa: RUF009
 
         # Clear any potential cached modules
-        from energy_transformer.spec.realise import _config
+        from energy_transformer.spec.realise import _get_config
 
-        _config.cache.clear()
+        _get_config().cache.clear()
 
         @register(UniqueTestSpec)
         def my_realiser(spec, _context):

@@ -13,12 +13,23 @@ same specification.
 
 from __future__ import annotations
 
+import hashlib
 import importlib
+import json
+import threading
 import warnings
 from collections import defaultdict, deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Protocol, TypeVar, get_type_hints
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Optional,
+    Protocol,
+    TypeVar,
+    cast,
+    get_type_hints,
+)
 
 import torch
 from torch import nn
@@ -184,113 +195,61 @@ class ModuleCache:
         self._hit_count = 0
         self._miss_count = 0
 
-    def _make_key(self, spec: Spec, context: Context) -> tuple[Any, ...]:  # noqa: C901
-        """Create cache key from spec and context.
-
-        This implementation performs deep sorting of nested structures and
-        handles cycles gracefully to ensure deterministic keys.
-        """
-
-        def make_hashable(obj: object, seen: set[int] | None = None) -> object:  # noqa: C901, PLR0911
-            """Recursively convert ``obj`` into a hashable form."""
-            if seen is None:
-                seen = set()
-
-            if obj is None:
-                return None
-
-            obj_id = id(obj)
-            if isinstance(obj, dict | list | set) and obj_id in seen:
-                return f"<cycle:{obj_id}>"
-
-            try:
-                if isinstance(obj, str | int | float | bool):
-                    return (type(obj).__name__, obj)
-
-                if isinstance(obj, tuple):
-                    seen.add(obj_id)
-                    result = tuple(make_hashable(item, seen) for item in obj)
-                    seen.discard(obj_id)
-                    return result
-
-                if isinstance(obj, dict):
-                    seen.add(obj_id)
-                    items = []
-                    for k, v in sorted(obj.items(), key=lambda x: str(x[0])):
-                        k_hash = make_hashable(k, seen)
-                        v_hash = make_hashable(v, seen)
-                        items.append((k_hash, v_hash))
-                    seen.discard(obj_id)
-                    return ("dict", tuple(items))
-
-                if isinstance(obj, list):
-                    seen.add(obj_id)
-                    result = (
-                        "list",
-                        tuple(make_hashable(i, seen) for i in obj),
-                    )
-                    seen.discard(obj_id)
-                    return result
-
-                if isinstance(obj, set):
-                    seen.add(obj_id)
-                    sorted_items = sorted(
-                        obj,
-                        key=lambda x: (type(x).__name__, str(x)),
-                    )
-                    result = (
-                        "set",
-                        tuple(make_hashable(i, seen) for i in sorted_items),
-                    )
-                    seen.discard(obj_id)
-                    return result
-
-                if isinstance(obj, Spec):
-                    if obj.__class__.__name__ == "ETBlockSpec":
-                        return ("spec", id(obj))
-                    return (
-                        "spec",
-                        obj.__class__.__name__,
-                        make_hashable(obj.to_dict(), seen),
-                    )
-
-                return (type(obj).__name__, str(obj))
-
-            except Exception as e:  # noqa: BLE001 pragma: no cover - defensive
-                import logging
-
-                logger = logging.getLogger(__name__)
-                logger.debug(
-                    "Cache key generation failed for %s: %s",
-                    type(obj),
-                    e,
-                )
-                return (type(obj).__name__, "<error>")
-
+    def _make_key(self, spec: Spec, context: Context) -> tuple[Any, ...]:
+        """Create a cache key using a hash-based approach."""
+        if spec.__class__.__name__ == "ETBlockSpec":
+            return ("nocache", id(spec))
         try:
-            if spec.__class__.__name__ == "ETBlockSpec":
-                return ("nocache", id(spec))
-            spec_dict = spec.to_dict()
-            spec_key = make_hashable(
-                {
-                    "class": spec.__class__.__name__,
-                    "module": spec.__class__.__module__,
-                    "data": spec_dict,
-                },
-            )
+            meta_str = json.dumps(context.metadata, sort_keys=True, default=str)
+        except ValueError:
+            meta_str = str(context.metadata)
 
-            ctx_dims = make_hashable(dict(sorted(context.dimensions.items())))
-            ctx_meta = make_hashable(context.metadata)
+        key_dict = {
+            "spec_type": type(spec).__name__,
+            "spec_params": self._serialize_spec(spec),
+            "context_dims": dict(context.dimensions),
+            "context_meta": meta_str,
+            "version": getattr(self, "version", 1),
+        }
 
-            cache_version = getattr(self, "version", 1)
-        except Exception as e:  # noqa: BLE001 pragma: no cover - defensive
-            import logging
+        key_str = json.dumps(key_dict, sort_keys=True, default=str)
+        key_hash = hashlib.sha256(key_str.encode()).hexdigest()
+        return (type(spec).__name__, key_hash)
 
-            logger = logging.getLogger(__name__)
-            logger.warning("Cache key generation failed: %s", e)
-            return (id(spec), id(context), "uncacheable")
-        else:
-            return (cache_version, spec_key, ctx_dims, ctx_meta)
+    def _serialize_spec(self, spec: Spec, max_depth: int = 10) -> dict[str, Any]:
+        """Serialize a spec to a dictionary for hashing."""
+        if max_depth <= 0:
+            return {"__truncated__": True}
+
+        result: dict[str, Any] = {"__type__": type(spec).__name__}
+
+        if hasattr(spec, "__dataclass_fields__"):
+            for field_name, _field in spec.__dataclass_fields__.items():
+                value = getattr(spec, field_name)
+                if isinstance(value, Spec):
+                    result[field_name] = self._serialize_spec(
+                        value, max_depth - 1
+                    )
+                elif isinstance(value, list | tuple):
+                    result[field_name] = [
+                        self._serialize_spec(v, max_depth - 1)
+                        if isinstance(v, Spec)
+                        else v
+                        for v in value
+                    ]
+                elif isinstance(value, dict):
+                    result[field_name] = {
+                        k: self._serialize_spec(v, max_depth - 1)
+                        if isinstance(v, Spec)
+                        else v
+                        for k, v in value.items()
+                    }
+                elif hasattr(value, "__dict__"):
+                    result[field_name] = str(value)
+                else:
+                    result[field_name] = value
+
+        return result
 
     def get(self, spec: Spec, context: Context) -> nn.Module | None:
         """Get cached module if available.
@@ -417,8 +376,15 @@ class RealiserConfig:
     max_recursion: int = 100
 
 
-# Global configuration
-_config = RealiserConfig()
+# Thread-local configuration
+_thread_local = threading.local()
+
+
+def _get_config() -> RealiserConfig:
+    """Get thread-local configuration instance."""
+    if not hasattr(_thread_local, "config"):
+        _thread_local.config = RealiserConfig()
+    return cast(RealiserConfig, _thread_local.config)
 
 
 def configure_realisation(**kwargs: Any) -> None:
@@ -434,9 +400,10 @@ def configure_realisation(**kwargs: Any) -> None:
     ValueError
         If unknown configuration option
     """
+    config = _get_config()
     for key, value in kwargs.items():
-        if hasattr(_config, key):
-            setattr(_config, key, value)
+        if hasattr(config, key):
+            setattr(config, key, value)
         else:
             raise ValueError(f"Unknown configuration option: {key}")
 
@@ -493,20 +460,21 @@ class Realiser:
         depth tracking and circular dependency detection.
         """
         # Cache lookup first to avoid unnecessary recursion
-        if cached := _config.cache.get(spec, self.context):
+        config = _get_config()
+        if cached := config.cache.get(spec, self.context):
             return cached
 
         # Apply optimizations and re-check cache
-        if _config.optimizations:
+        if config.optimizations:
             spec = self._optimize_spec(spec)
-            if cached := _config.cache.get(spec, self.context):
+            if cached := config.cache.get(spec, self.context):
                 return cached
 
         # Enforce recursion limit only for uncached specs
-        if self._recursion_depth >= _config.max_recursion:
+        if self._recursion_depth >= config.max_recursion:
             stack_summary = self._get_stack_summary()
             raise RealisationError(
-                f"Maximum recursion depth ({_config.max_recursion}) exceeded",
+                f"Maximum recursion depth ({config.max_recursion}) exceeded",
                 spec=spec,
                 context=self.context,
                 suggestion=(
@@ -535,7 +503,7 @@ class Realiser:
 
         try:
             module = self._realise_impl(spec)
-            _config.cache.put(spec, self.context, module)
+            config.cache.put(spec, self.context, module)
         except Exception as e:
             if not isinstance(e, RealisationError):
                 raise RealisationError(
@@ -579,6 +547,7 @@ class Realiser:
 
     def _realise_impl(self, spec: Spec) -> nn.Module:
         """Implement realisation logic."""
+        config = _get_config()
         # Try registered realisers first
         if module := self._try_registered_realiser(spec):
             return module
@@ -592,7 +561,7 @@ class Realiser:
             return module
 
         # Try auto-import if enabled
-        if _config.auto_import and (module := self._try_auto_import(spec)):
+        if config.auto_import and (module := self._try_auto_import(spec)):
             return module
 
         # No realiser found
@@ -648,12 +617,13 @@ class Realiser:
 
     def _try_plugin_realiser(self, spec: Spec) -> nn.Module | None:
         """Try to realise using plugins."""
-        for plugin in _config.plugins:
+        config = _get_config()
+        for plugin in config.plugins:
             if plugin.can_realise(spec):
                 try:
                     return plugin.realise(spec, self.context)
                 except Exception as e:  # noqa: BLE001
-                    if _config.warnings:
+                    if config.warnings:
                         warnings.warn(
                             f"Plugin {plugin} failed for {spec}: {e}",
                             stacklevel=2,
@@ -667,13 +637,15 @@ class Realiser:
         """
         import logging
 
+        config = _get_config()
+
         logger = logging.getLogger(__name__)
 
         spec_name = spec.__class__.__name__
 
         mapping = module_mappings.get(spec_name)
         if not mapping:
-            if _config.warnings:
+            if config.warnings:
                 logger.debug(
                     "No auto-import mapping for %s. Available mappings: %s",
                     spec_name,
@@ -686,7 +658,7 @@ class Realiser:
         try:
             module = importlib.import_module(module_path)
         except ImportError as e:
-            if _config.warnings:
+            if config.warnings:
                 logger.warning(
                     "Failed to import %s for %s: %s. Is the module installed? Try: pip install energy-transformer",
                     module_path,
@@ -695,7 +667,7 @@ class Realiser:
                 )
             return None
         except Exception as e:
-            if _config.warnings:
+            if config.warnings:
                 logger.exception(
                     "Unexpected error importing %s: %s",
                     module_path,
@@ -706,7 +678,7 @@ class Realiser:
         try:
             cls = getattr(module, class_name)
         except AttributeError:
-            if _config.warnings:
+            if config.warnings:
                 logger.warning(
                     "Module %s has no attribute %s. Available attributes: %s",
                     module_path,
@@ -725,14 +697,14 @@ class Realiser:
                     continue
                 kwargs[field_name] = value
 
-            if _config.warnings and logger.isEnabledFor(logging.DEBUG):
+            if config.warnings and logger.isEnabledFor(logging.DEBUG):
                 logger.debug(
                     "Auto-importing %s with kwargs: %s",
                     class_name,
                     kwargs,
                 )
         except Exception as e:
-            if _config.warnings:
+            if config.warnings:
                 logger.exception(
                     "Failed to extract kwargs from %s: %s",
                     spec_name,
@@ -743,7 +715,7 @@ class Realiser:
         try:
             instance = cls(**kwargs)
             if not isinstance(instance, nn.Module):
-                if _config.warnings:
+                if config.warnings:
                     logger.warning(
                         "Auto-imported %s is not an nn.Module, got %s",
                         class_name,
@@ -751,14 +723,14 @@ class Realiser:
                     )
                 return None
 
-            if _config.warnings:
+            if config.warnings:
                 logger.info(
                     "Successfully auto-imported %s as %s",
                     spec_name,
                     class_name,
                 )
         except TypeError as e:
-            if _config.warnings:
+            if config.warnings:
                 error_msg = str(e)
                 logger.warning(
                     "Failed to instantiate %s: %s. Provided kwargs: %s. This usually means the spec and module have incompatible parameters.",
@@ -768,7 +740,7 @@ class Realiser:
                 )
             return None
         except Exception as e:
-            if _config.warnings:
+            if config.warnings:
                 logger.exception(
                     "Failed to instantiate %s: %s", class_name, type(e).__name__
                 )
@@ -883,12 +855,13 @@ class Realiser:
         times: int,
     ) -> nn.Module:
         """Realise unrolled loop with independent weights."""
+        config = _get_config()
         bodies: list[nn.Module] = []
-        original_cache_enabled = _config.cache.enabled
+        original_cache_enabled = config.cache.enabled
         cache_error: Exception | None = None
 
         try:
-            _config.cache.enabled = False
+            config.cache.enabled = False
             for i in range(times):
                 try:
                     child_realiser = Realiser(
@@ -916,7 +889,7 @@ class Realiser:
             cache_error = e
         finally:
             try:
-                _config.cache.enabled = original_cache_enabled
+                config.cache.enabled = original_cache_enabled
             except Exception as restore_error:
                 import logging
 
@@ -1218,35 +1191,87 @@ class GraphModule(nn.Module):  # type: ignore[misc]
             return output_tensors[0]
         return tuple(output_tensors)
 
-    def _apply_edge_transform(
+    def _apply_edge_transform(  # noqa: C901, PLR0911, PLR0912
         self,
         tensor: torch.Tensor,
         transform: str,
     ) -> torch.Tensor:
-        """Apply named transformation to tensor on graph edge."""
+        """Apply transformation to tensor safely without eval()."""
+        if not transform:
+            return tensor
+
         if transform == "detach":
             return tensor.detach()
-        if transform == "sigmoid":
-            return torch.sigmoid(tensor)
-        if transform == "relu":
-            return torch.relu(tensor)
-        if transform == "normalize":
-            return torch.nn.functional.normalize(tensor, dim=-1)
-        if transform == "stop_gradient":
-            return tensor.detach()
+
         if transform.startswith("[") and transform.endswith("]"):
-            try:
-                from typing import cast
+            index_str = transform[1:-1]
+            if index_str.isdigit():
+                return tensor[int(index_str)]
+            if index_str == "...":
+                return tensor[...]
+            if ":" in index_str:
+                parts = index_str.split(":")
+                if len(parts) == 2:  # noqa: PLR2004
+                    start = int(parts[0]) if parts[0] else None
+                    end = int(parts[1]) if parts[1] else None
+                    return tensor[start:end]
+                if len(parts) == 3:  # noqa: PLR2004
+                    start = int(parts[0]) if parts[0] else None
+                    end = int(parts[1]) if parts[1] else None
+                    step = int(parts[2]) if parts[2] else None
+                    return tensor[start:end:step]
+            if "," in index_str:
+                indices: list[Any] = []
+                for idx in index_str.split(","):
+                    part = idx.strip()
+                    if part == "...":
+                        indices.append(...)
+                    elif part.isdigit():
+                        indices.append(int(part))
+                    elif ":" in part:
+                        slice_parts = part.split(":")
+                        if len(slice_parts) == 2:  # noqa: PLR2004
+                            start = (
+                                int(slice_parts[0]) if slice_parts[0] else None
+                            )
+                            end = (
+                                int(slice_parts[1]) if slice_parts[1] else None
+                            )
+                            indices.append(slice(start, end))
+                        elif len(slice_parts) == 3:  # noqa: PLR2004
+                            start = (
+                                int(slice_parts[0]) if slice_parts[0] else None
+                            )
+                            end = (
+                                int(slice_parts[1]) if slice_parts[1] else None
+                            )
+                            step = (
+                                int(slice_parts[2]) if slice_parts[2] else None
+                            )
+                            indices.append(slice(start, end, step))
+                        else:
+                            raise ValueError(f"Invalid index format: {part}")
+                    else:
+                        raise ValueError(f"Invalid index format: {part}")
+                return tensor[tuple(indices)]
+            raise ValueError(f"Unsupported indexing format: {transform}")
 
-                return cast(torch.Tensor, eval(f"tensor{transform}"))  # noqa: S307
-            except Exception as exc:  # noqa: BLE001
-                import logging
+        transform_registry: dict[str, Callable[[torch.Tensor], torch.Tensor]] = {
+            "sigmoid": torch.sigmoid,
+            "relu": torch.relu,
+            "tanh": torch.tanh,
+            "softmax": lambda t: torch.softmax(t, dim=-1),
+            "abs": torch.abs,
+            "neg": torch.neg,
+            "normalize": lambda t: torch.nn.functional.normalize(t, dim=-1),
+            "stop_gradient": torch.Tensor.detach,
+        }
 
-                logging.getLogger(__name__).debug(
-                    "Failed to evaluate edge transformation",
-                    exc_info=exc,
-                )
-        raise ValueError(f"Unknown edge transformation: {transform}")
+        if transform in transform_registry:
+            func = transform_registry[transform]
+            return func(tensor)
+
+        raise ValueError(f"Unknown transformation: {transform}")
 
 
 class LoopModule(nn.Module):  # type: ignore[misc]
@@ -1342,7 +1367,8 @@ def realise(
         context.set_dim(key, value)
 
     # Validate spec first
-    if _config.strict:
+    config = _get_config()
+    if config.strict:
         issues = spec.validate(context)
         if issues:
             raise ValidationError(
@@ -1528,12 +1554,13 @@ def realise_et_block(
             return x
 
     # Disable cache for this realisation to ensure unique blocks
-    previous = _config.cache.enabled
-    _config.cache.enabled = False
+    config = _get_config()
+    previous = config.cache.enabled
+    config.cache.enabled = False
     try:
         return ETBlock()
     finally:
-        _config.cache.enabled = previous
+        config.cache.enabled = previous
 
 
 @register(library.CLSTokenSpec)

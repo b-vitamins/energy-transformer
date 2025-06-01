@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from torch.nn import Module
 
 from .primitives import Context, Spec
-from .realise import _config
+from .realise import _get_config
 
 
 @contextmanager
@@ -30,12 +30,13 @@ def debug_realisation(
     )
     logger.addHandler(handler)
 
-    old_warnings = _config.warnings
-    _config.warnings = True
+    config = _get_config()
+    old_warnings = config.warnings
+    config.warnings = True
 
     if trace_cache:
-        original_get = _config.cache.get
-        original_put = _config.cache.put
+        original_get = config.cache.get
+        original_put = config.cache.put
 
         def traced_get(spec: Spec, context: Context) -> Module | None:
             result = original_get(spec, context)
@@ -44,7 +45,7 @@ def debug_realisation(
                 "Cache %s: %s (hit rate: %.1f%%)",
                 status,
                 spec.__class__.__name__,
-                _config.cache.hit_rate * 100,
+                config.cache.hit_rate * 100,
             )
             return result
 
@@ -52,8 +53,8 @@ def debug_realisation(
             logger.debug("Cache PUT: %s", spec.__class__.__name__)
             original_put(spec, context, module)
 
-        _config.cache.get = traced_get  # type: ignore[method-assign]
-        _config.cache.put = traced_put  # type: ignore[method-assign]
+        config.cache.get = traced_get  # type: ignore[method-assign]
+        config.cache.put = traced_put  # type: ignore[method-assign]
 
     try:
         yield
@@ -66,16 +67,17 @@ def debug_realisation(
     finally:
         logger.setLevel(old_level)
         logger.removeHandler(handler)
-        _config.warnings = old_warnings
+        config.warnings = old_warnings
 
         if trace_cache:
-            _config.cache.get = original_get  # type: ignore[method-assign]
-            _config.cache.put = original_put  # type: ignore[method-assign]
+            config.cache.get = original_get  # type: ignore[method-assign]
+            config.cache.put = original_put  # type: ignore[method-assign]
 
 
 def inspect_cache_stats() -> None:
     """Print current cache statistics."""
-    cache = _config.cache
+    config = _get_config()
+    cache = config.cache
     print("Cache Statistics:")
     print(f"  Enabled: {cache.enabled}")
     print(f"  Size: {len(cache._cache)}/{cache.max_size}")
@@ -94,5 +96,5 @@ def inspect_cache_stats() -> None:
 
 def clear_cache() -> None:
     """Clear the realisation cache."""
-    _config.cache.clear()
+    _get_config().cache.clear()
     print("Cache cleared")
