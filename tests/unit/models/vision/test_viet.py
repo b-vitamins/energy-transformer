@@ -1,4 +1,5 @@
 import pytest
+pytestmark = pytest.mark.unit
 import torch
 from torch import nn
 

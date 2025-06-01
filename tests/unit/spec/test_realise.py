@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from unittest.mock import MagicMock, patch
 
 import pytest
+pytestmark = pytest.mark.unit
 import torch
 from torch import nn
 
