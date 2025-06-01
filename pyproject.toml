@@ -119,7 +119,7 @@ ignore = [
 convention = "numpy"
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*.py" = ["D", "ANN", "S101", "PLR2004", "PLR0915"]
+"tests/*.py" = ["D", "ANN", "S101", "PLR2004", "PLR0915", "RUF009"]
 "examples/*.py" = ["D", "ANN", "T201"]
 "benchmarks/*.py" = ["D", "ANN"]
 "energy_transformer/spec/*.py" = ["RUF009"]
