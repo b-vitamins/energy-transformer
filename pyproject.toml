@@ -40,6 +40,8 @@ ruff = "0.9.3"
 types-PyYAML = "6.0.12.20240311"
 PyYAML = "6.0.1"
 mutmut = "3.3.0"
+pytest-benchmark = "4.0.0"
+memory-profiler = "0.61.0"
 
 [tool.poetry.group.examples]
 optional = true
@@ -197,6 +199,13 @@ markers = [
     "integration: tests requiring multiple components",
     "functional: end-to-end functional tests",
     "performance: performance benchmark tests",
+    "benchmark: performance benchmark tests",
+
+    # Performance-specific markers
+    "inference_bench: inference speed benchmarks",
+    "memory_bench: memory usage benchmarks",
+    "component_bench: component-level benchmarks",
+    "training_bench: training performance benchmarks",
     "security: security-related tests",
     "regression: regression tests for specific bugs",
     
@@ -209,6 +218,15 @@ markers = [
     "smoke: critical tests for smoke testing",
     "nightly: tests for nightly builds only"
 ]
+
+[tool.pytest.benchmark]
+disable_gc = true
+min_rounds = 5
+min_time = 0.000005
+max_time = 1.0
+calibration_precision = 10
+warmup = true
+warmup_iterations = 100000
 [tool.coverage.run]
 source = ["energy_transformer"]
 omit = ["*/tests/*", "*/examples/*"]
