@@ -50,3 +50,15 @@ def test_inspect_and_clear_cache_output() -> None:
         clear_cache()
         assert "Cache cleared" in buf.getvalue()
     assert len(cache._cache) == 0
+
+
+def test_debug_realisation_break_on_error(monkeypatch) -> None:
+    """``debug_realisation`` invokes ``pdb.post_mortem`` when requested."""
+    called = {}
+    monkeypatch.setattr(
+        "pdb.post_mortem",
+        lambda: called.setdefault("pdb", True),
+    )
+    with pytest.raises(RuntimeError), debug_realisation(break_on_error=True):
+        raise RuntimeError("boom")
+    assert called.get("pdb")
