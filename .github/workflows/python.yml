@@ -146,11 +146,12 @@ jobs:
           name: test-results-${{ matrix.os }}-${{ matrix.python-version }}
           path: junit/test-results-${{ matrix.os }}-${{ matrix.python-version }}.xml
       
-      - name: Upload coverage to Codecov
+      - name: Upload coverage reports to Codecov
         if: matrix.python-version == '3.11' && matrix.os == 'ubuntu-latest'
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+          slug: b-vitamins/energy-transformer
           file: ./coverage.xml
           flags: unittests
           name: codecov-umbrella
