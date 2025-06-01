@@ -19,13 +19,18 @@ class DummyET(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
-        return_energy: bool = False,
-        return_trajectory: bool = False,
+        track: str = "none",
         **_: object,
     ) -> torch.Tensor | ETOutput:
         x = x + 1
+
+        # Handle the track parameter like real ET blocks
+        return_energy = track in ("energy", "both")
+        return_trajectory = track in ("trajectory", "both")
+
         energy = torch.tensor(self.energy) if return_energy else None
         traj = torch.tensor(self.trajectory) if return_trajectory else None
+
         if return_energy or return_trajectory:
             return ETOutput(tokens=x, final_energy=energy, trajectory=traj)
         return x
@@ -122,6 +127,7 @@ def test_factory_functions(monkeypatch: pytest.MonkeyPatch) -> None:
                 "hopfield_hidden_dim": 768,
                 "et_steps": 4,
                 "et_alpha": 0.125,
+                "in_chans": 3,  # Include default value
             },
         ),
         (
@@ -134,6 +140,7 @@ def test_factory_functions(monkeypatch: pytest.MonkeyPatch) -> None:
                 "hopfield_hidden_dim": 1536,
                 "et_steps": 4,
                 "et_alpha": 0.125,
+                "in_chans": 3,  # Include default value
             },
         ),
         (
@@ -146,6 +153,7 @@ def test_factory_functions(monkeypatch: pytest.MonkeyPatch) -> None:
                 "hopfield_hidden_dim": 3072,
                 "et_steps": 4,
                 "et_alpha": 0.125,
+                "in_chans": 3,  # Include default value
             },
         ),
         (
@@ -158,6 +166,7 @@ def test_factory_functions(monkeypatch: pytest.MonkeyPatch) -> None:
                 "hopfield_hidden_dim": 4096,
                 "et_steps": 4,
                 "et_alpha": 0.125,
+                "in_chans": 3,  # Include default value
             },
         ),
         (
