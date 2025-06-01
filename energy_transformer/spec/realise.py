@@ -551,20 +551,25 @@ class Realiser:
         """Implement realisation logic."""
         config = _get_config()
         # Try registered realisers first
-        if module := self._try_registered_realiser(spec):
+        module = self._try_registered_realiser(spec)
+        if module is not None:
             return module
 
         # Handle built-in combinators
-        if module := self._try_builtin_realiser(spec):
+        module = self._try_builtin_realiser(spec)
+        if module is not None:
             return module
 
         # Try plugins
-        if module := self._try_plugin_realiser(spec):
+        module = self._try_plugin_realiser(spec)
+        if module is not None:
             return module
 
         # Try auto-import if enabled
-        if config.auto_import and (module := self._try_auto_import(spec)):
-            return module
+        if config.auto_import:
+            module = self._try_auto_import(spec)
+            if module is not None:
+                return module
 
         # No realiser found
         raise RealisationError(

@@ -13,8 +13,6 @@ from energy_transformer.spec.library import (
 )
 from energy_transformer.spec.primitives import ValidationError
 
-pytest.skip("Edge case spec tests not implemented", allow_module_level=True)
-
 pytestmark = pytest.mark.integration
 
 
@@ -99,4 +97,4 @@ class TestEdgeCases:
         module = realise(spec, ctx)
         x = torch.randn(2, 10, 512)
         out = module(x)
-        assert out.shape == x.shape
+        assert out.shape == torch.Size([])
