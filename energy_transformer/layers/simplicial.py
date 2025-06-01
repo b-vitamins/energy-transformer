@@ -678,7 +678,8 @@ class SimplicialHopfieldNetwork(BaseHopfieldNetwork):
             Shape (..., k, sₘ) containing the products per simplex.
         """
         # gather all vertices for each simplex in a single operation
-        flat_idx = idx.reshape(-1)
+        # ensure indices are on the same device as ``u``
+        flat_idx = idx.to(u.device).reshape(-1)
         gathered = torch.index_select(u, -1, flat_idx)
         gathered = gathered.view(*u.shape[:-1], idx.shape[0], idx.shape[1])
         return gathered.prod(dim=-1)
