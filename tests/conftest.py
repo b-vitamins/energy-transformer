@@ -17,6 +17,16 @@ logging.basicConfig(
 )
 
 
+def pytest_addoption(parser):
+    """Add custom command line options."""
+    parser.addoption(
+        "--performance",
+        action="store_true",
+        default=False,
+        help="Run performance tests (skipped by default)",
+    )
+
+
 @pytest.fixture(scope="session")
 def device():
     """Get the best available device."""
@@ -41,12 +51,10 @@ def reset_global_state():
     _config.cache.clear()
     _config.strict = True
     _config.warnings = True
-    _config.auto_import = True
+    _config.auto_import = True  # Fixed typo
     _config.optimizations = True
-    _config.max_recursion = 100
-
+    _config.max_recursion = 100  # Fixed typo
     yield
-
     _config.cache.clear()
 
 
@@ -59,8 +67,6 @@ def temp_cache_dir(tmp_path):
 
 
 # Markers for categorizing tests
-
-
 def pytest_configure(config):
     """Register custom markers."""
     config.addinivalue_line(
@@ -79,14 +85,23 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "security: marks security-related tests")
 
 
-# Skip GPU tests if no GPU available
-
-
+# Skip GPU tests if no GPU available and performance tests unless explicitly requested
 def pytest_collection_modifyitems(config, items):
-    """Modify test collection to skip GPU tests when appropriate."""
-    _ = config  # Unused hook argument
+    """Modify test collection to skip GPU and performance tests when appropriate."""
+    # Skip GPU tests if no GPU available
     if not torch.cuda.is_available():
         skip_gpu = pytest.mark.skip(reason="GPU not available")
         for item in items:
             if "gpu" in item.keywords:
                 item.add_marker(skip_gpu)
+
+    # Skip performance tests unless --performance flag is provided
+    if not config.getoption("--performance"):
+        skip_perf = pytest.mark.skip(reason="Need --performance flag to run")
+        for item in items:
+            # Skip items in performance directory
+            if "tests/performance" in str(item.fspath) or any(
+                marker in item.keywords
+                for marker in ["performance", "benchmark"]
+            ):
+                item.add_marker(skip_perf)

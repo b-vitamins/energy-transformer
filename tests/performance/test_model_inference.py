@@ -158,7 +158,6 @@ class TestModelInference:
     @pytest.mark.usefixtures("clean_state")
     def test_et_steps_scaling(
         self,
-        benchmark,
         model_name: str,
         device,
     ) -> None:
@@ -201,9 +200,6 @@ class TestModelInference:
                 f"ET steps scaling exceeded: {elapsed:.3f}s > {expected * 1.8:.3f}s for {steps} steps"
             )
 
-        benchmark.extra_info["et_steps_scaling"] = results
-
-    @pytest.mark.slow
     @pytest.mark.usefixtures("clean_state")
     def test_throughput(  # noqa: C901 - complex benchmark logic
         self,
