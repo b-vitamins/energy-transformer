@@ -41,12 +41,15 @@ def debug_realisation(
             result = original_get(spec, context)
             status = "HIT" if result else "MISS"
             logger.debug(
-                f"Cache {status}: {spec.__class__.__name__} (hit rate: {_config.cache.hit_rate:.1%})",
+                "Cache %s: %s (hit rate: %.1f%%)",
+                status,
+                spec.__class__.__name__,
+                _config.cache.hit_rate * 100,
             )
             return result
 
         def traced_put(spec: Spec, context: Context, module: Module) -> None:
-            logger.debug(f"Cache PUT: {spec.__class__.__name__}")
+            logger.debug("Cache PUT: %s", spec.__class__.__name__)
             original_put(spec, context, module)
 
         _config.cache.get = traced_get  # type: ignore[method-assign]

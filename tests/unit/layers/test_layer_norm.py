@@ -1,6 +1,6 @@
 import pytest
 import torch
-from torch.nn import functional
+from torch.nn import functional as F  # noqa: N812
 
 from energy_transformer.layers.layer_norm import (
     LayerNorm,
@@ -16,7 +16,7 @@ def test_layernorm_matches_torch() -> None:
 
     ref = torch.nn.LayerNorm(3, eps=ln.eps)
     with torch.no_grad():
-        ref.weight.fill_(functional.softplus(ln.logγ).item())
+        ref.weight.fill_(F.softplus(ln.logγ).item())
         ref.bias.copy_(ln.δ)
     expected = ref(x)
     assert torch.allclose(out, expected, atol=1e-6)
@@ -42,7 +42,7 @@ def test_export_standard_layernorm() -> None:
 
 def test_reset_parameters_initializes_values() -> None:
     ln = LayerNorm(in_dim=4)
-    γ = functional.softplus(ln.logγ).item()
+    γ = F.softplus(ln.logγ).item()
     assert γ == pytest.approx(1.0)
     assert torch.all(ln.δ == 0)
 
@@ -51,7 +51,7 @@ def test_reset_parameters_initializes_values() -> None:
         ln.δ.fill_(1.0)
 
     ln.reset_parameters()
-    γ = functional.softplus(ln.logγ).item()
+    γ = F.softplus(ln.logγ).item()
     assert γ == pytest.approx(1.0)
     assert torch.all(ln.δ == 0)
 
@@ -91,7 +91,7 @@ def test_export_standard_layernorm_parameters() -> None:
         ln.δ.uniform_(-1, 1)
 
     ref = ln.export_standard_layernorm()
-    γ = functional.softplus(ln.logγ).item()
+    γ = F.softplus(ln.logγ).item()
     assert torch.allclose(ref.weight, torch.full((5,), γ))
     assert torch.allclose(ref.bias, ln.δ)
 
@@ -105,7 +105,7 @@ def test_energy_lagrangian_manual_computation() -> None:
     x = torch.randn(3, 4)
     energy = ln.get_energy_lagrangian(x)
 
-    γ = functional.softplus(ln.logγ)
+    γ = F.softplus(ln.logγ)
     var = torch.var(x, dim=-1, unbiased=False)
     expected = ln.in_dim * γ * torch.sqrt(var + ln.eps) + (ln.δ * x).sum(dim=-1)
     assert torch.allclose(energy, expected, atol=1e-6)
@@ -119,7 +119,7 @@ def test_layernorm_additional_dims_matches_torch() -> None:
 
     ref = torch.nn.LayerNorm(3, eps=ln.eps)
     with torch.no_grad():
-        ref.weight.fill_(functional.softplus(ln.logγ).item())
+        ref.weight.fill_(F.softplus(ln.logγ).item())
         ref.bias.copy_(ln.δ)
     expected = ref(x)
     assert torch.allclose(out, expected, atol=1e-6)
