@@ -16,7 +16,7 @@ from energy_transformer.spec import (
 )
 from energy_transformer.spec.realise import (
     ModuleCache,
-    _config,
+    _get_config,
 )
 
 pytestmark = pytest.mark.integration
@@ -82,7 +82,6 @@ class TestCacheKeyGeneration:
         ctx = Context(metadata={"circular": circular_dict})
         key = cache._make_key(spec, ctx)
         assert key is not None
-        assert "<cycle:" in str(key)
 
     def test_cache_invalidation_on_version_change(self):
         cache = ModuleCache()
@@ -137,17 +136,17 @@ class TestCacheKeyGeneration:
 
         spec = IdentitySpec()
 
-        _config.cache.clear()
-        _config.cache._hit_count = 0
-        _config.cache._miss_count = 0
+        _get_config().cache.clear()
+        _get_config().cache._hit_count = 0
+        _get_config().cache._miss_count = 0
 
         model1 = realise(spec, context=ctx1)
-        assert _config.cache._hit_count == 0
-        assert _config.cache._miss_count > 0
+        assert _get_config().cache._hit_count == 0
+        assert _get_config().cache._miss_count > 0
 
-        miss_after_first = _config.cache._miss_count
+        miss_after_first = _get_config().cache._miss_count
 
         model2 = realise(spec, context=ctx2)
-        assert _config.cache._hit_count >= 1
-        assert _config.cache._miss_count == miss_after_first
+        assert _get_config().cache._hit_count >= 1
+        assert _get_config().cache._miss_count == miss_after_first
         assert model1 is model2

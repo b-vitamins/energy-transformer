@@ -22,7 +22,7 @@ from energy_transformer.spec.primitives import SpecMeta
 from energy_transformer.spec.realise import (
     ModuleCache,
     Realiser,
-    _config,
+    _get_config,
     register,
 )
 
@@ -53,7 +53,7 @@ class TestCacheStateRestoration:
 
     def test_cache_restored_after_exception(self):
         configure_realisation(cache=ModuleCache(enabled=True))
-        assert _config.cache.enabled
+        assert _get_config().cache.enabled
 
         @register(SimpleSpec)
         def realise_simple(_spec, _context):
@@ -83,12 +83,12 @@ class TestCacheStateRestoration:
         with pytest.raises(RealisationError):
             realise(loop_spec)
 
-        assert _config.cache.enabled
+        assert _get_config().cache.enabled
 
         simple = SimpleSpec()
         realise(simple)
         realise(simple)
-        assert _config.cache.hit_rate > 0
+        assert _get_config().cache.hit_rate > 0
         SpecMeta._realisers.pop(SimpleSpec, None)
 
     def test_cache_restored_with_nested_errors(self):
@@ -118,13 +118,13 @@ class TestCacheStateRestoration:
             ),
         )
 
-        initial_state = _config.cache.enabled
+        initial_state = _get_config().cache.enabled
         with pytest.raises(RealisationError):
             realise(nested)
-        assert _config.cache.enabled == initial_state
+        assert _get_config().cache.enabled == initial_state
 
     def test_multiple_cache_errors_handled(self):
-        with patch.object(_config, "cache") as mock_cache:
+        with patch.object(_get_config(), "cache") as mock_cache:
             type(mock_cache).enabled = property(
                 lambda _self: True,
                 lambda _self, _value: (_ for _ in ()).throw(
@@ -158,7 +158,7 @@ class TestCacheStateRestoration:
         )
         from energy_transformer.spec.realise import (
             ModuleCache,
-            _config,
+            _get_config,
             register,
         )
 
@@ -177,7 +177,7 @@ class TestCacheStateRestoration:
             return nn.Identity()
 
         configure_realisation(cache=ModuleCache(enabled=True))
-        initial_state = _config.cache.enabled
+        initial_state = _get_config().cache.enabled
         assert initial_state
 
         with pytest.raises(
@@ -188,7 +188,7 @@ class TestCacheStateRestoration:
                 loop(FailingSpec(), times=3, unroll=True, share_weights=False),
             )
 
-        assert _config.cache.enabled == initial_state, (
+        assert _get_config().cache.enabled == initial_state, (
             "Cache state was not restored!"
         )
 

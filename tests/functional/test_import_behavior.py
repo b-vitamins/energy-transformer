@@ -234,21 +234,21 @@ print("SUCCESS")
         code = """
 # Import and check for side effects
 import energy_transformer.spec
-from energy_transformer.spec.realise import _config
+from energy_transformer.spec.realise import _get_config
 
 # Get initial state
-initial_cache_enabled = _config.cache.enabled
-initial_cache_size = _config.cache.max_size
-initial_strict = _config.strict
+initial_cache_enabled = _get_config().cache.enabled
+initial_cache_size = _get_config().cache.max_size
+initial_strict = _get_config().strict
 
 # Import everything
 from energy_transformer import *
 from energy_transformer.spec import *
 
 # Check if state changed
-assert _config.cache.enabled == initial_cache_enabled, "cache.enabled changed on import!"
-assert _config.cache.max_size == initial_cache_size, "cache.max_size changed on import!"
-assert _config.strict == initial_strict, "strict mode changed on import!"
+assert _get_config().cache.enabled == initial_cache_enabled, "cache.enabled changed on import!"
+assert _get_config().cache.max_size == initial_cache_size, "cache.max_size changed on import!"
+assert _get_config().strict == initial_strict, "strict mode changed on import!"
 
 print("SUCCESS: No side effects detected")
 """

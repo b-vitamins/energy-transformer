@@ -15,7 +15,7 @@ from energy_transformer.spec.debug import (
     debug_realisation,
     inspect_cache_stats,
 )
-from energy_transformer.spec.realise import ModuleCache, _config
+from energy_transformer.spec.realise import ModuleCache, _get_config
 from tests.unit.spec.test_realise import SimpleSpec
 
 pytestmark = pytest.mark.unit
@@ -24,12 +24,12 @@ pytestmark = pytest.mark.unit
 def test_debug_realisation_traces_cache(caplog) -> None:
     """Cache operations are logged when tracing is enabled."""
     cache = ModuleCache()
-    _config.cache = cache
+    _get_config().cache = cache
 
     caplog.set_level(logging.DEBUG)
     with debug_realisation(trace_cache=True):
-        _config.cache.get(SimpleSpec(), Context())
-        _config.cache.put(SimpleSpec(), Context(), nn.Identity())
+        _get_config().cache.get(SimpleSpec(), Context())
+        _get_config().cache.put(SimpleSpec(), Context(), nn.Identity())
 
     assert any("Cache MISS" in rec.message for rec in caplog.records)
     assert any("Cache PUT" in rec.message for rec in caplog.records)
@@ -39,7 +39,7 @@ def test_debug_realisation_traces_cache(caplog) -> None:
 def test_inspect_and_clear_cache_output() -> None:
     """``inspect_cache_stats`` prints stats and ``clear_cache`` empties cache."""
     cache = ModuleCache()
-    _config.cache = cache
+    _get_config().cache = cache
     cache.put(SimpleSpec(), Context(), nn.Identity())
 
     with redirect_stdout(StringIO()) as buf:

@@ -46,16 +46,21 @@ def simple_image_batch():
 @pytest.fixture(autouse=True)
 def reset_global_state():
     """Reset global state before each test."""
-    from energy_transformer.spec.realise import _config
+    from energy_transformer.spec.realise import _get_config, _thread_local
 
-    _config.cache.clear()
-    _config.strict = True
-    _config.warnings = True
-    _config.auto_import = True  # Fixed typo
-    _config.optimizations = True
-    _config.max_recursion = 100  # Fixed typo
+    if hasattr(_thread_local, "config"):
+        delattr(_thread_local, "config")
+    config = _get_config()
+    config.cache.clear()
+    config.strict = True
+    config.warnings = True
+    config.auto_import = True
+    config.optimizations = True
+    config.max_recursion = 100
     yield
-    _config.cache.clear()
+    if hasattr(_thread_local, "config"):
+        _thread_local.config.cache.clear()
+        delattr(_thread_local, "config")
 
 
 @pytest.fixture
