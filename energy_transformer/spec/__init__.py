@@ -384,39 +384,51 @@ def validate_spec_tree(spec: Spec, verbose: bool = False) -> list[str]:
 def benchmark_realisation(
     spec: Spec,
     iterations: int = 100,
+    number: int = 1,
 ) -> dict[str, float]:
-    """Benchmark specification realisation performance.
+    """Benchmark specification realisation performance using timeit.
 
     Parameters
     ----------
     spec : Spec
         Specification to benchmark
     iterations : int
-        Number of iterations for timing
+        Number of timing iterations
+    number : int
+        Number of executions per timing iteration
 
     Returns
     -------
     dict[str, float]
         Timing statistics
     """
-    import time
-
-    times = []
+    import statistics
+    import timeit
 
     # Warm up
     realise(spec)
 
-    # Benchmark
+    # Clear cache to measure cold start performance
+    from .realise import _get_config
+
+    _get_config().cache.clear()
+
+    # Run timings
+    times = []
     for _ in range(iterations):
-        start = time.perf_counter()
-        realise(spec)
-        end = time.perf_counter()
-        times.append(end - start)
+        # Create timer with fresh spec
+        timer = timeit.Timer(
+            "realise(spec)", globals={"realise": realise, "spec": spec}
+        )
+        time_taken = timer.timeit(number=number) / number
+        times.append(time_taken)
 
     return {
-        "mean": sum(times) / len(times),
+        "mean": statistics.mean(times),
         "min": min(times),
         "max": max(times),
+        "stdev": statistics.stdev(times) if len(times) > 1 else 0.0,
+        "median": statistics.median(times),
         "total": sum(times),
         "iterations": iterations,
     }
