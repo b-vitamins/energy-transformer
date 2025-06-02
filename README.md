@@ -3,19 +3,25 @@
 ![GitHub Workflow Status](https://github.com/b-vitamins/energy-transformer/actions/workflows/python.yml/badge.svg)
 [![codecov](https://codecov.io/gh/b-vitamins/energy-transformer/graph/badge.svg?token=6DSB7U0GJF)](https://codecov.io/gh/b-vitamins/energy-transformer)
 
-PyTorch implementation of the **Energy Transformer (ET)**, a neural architecture that replaces traditional transformer components with energy-based alternatives. This implementation includes **Simplicial Energy Transformers (SET)** that extend ET with topology-aware memory through Simplicial Hopfield Networks.
+PyTorch implementation of the **Energy Transformer (ET)** and the
+**Simplicial Energy Transformer (SET)**. The project also provides a
+powerful specification system for declaratively building models and a
+plugin-based realiser that converts specifications into PyTorch modules.
 
-## Overview
+## Key Features
 
-The Energy Transformer reformulates attention and feedforward mechanisms as energy optimization problems:
-- **Multi-Head Energy Attention**: Attention weights derived from energy function gradients
-- **Hopfield Networks**: Associative memory replacing MLPs
-- **Energy-based LayerNorm**: Layer normalization with learnable temperature
-- **Gradient Descent Optimization**: Token updates via energy landscape traversal
-
-The Simplicial Energy Transformer (SET) extension adds:
-- **Simplicial Hopfield Networks**: Topology-aware memory using k-NN graphs and Delaunay triangulation
-- **Higher-order interactions**: Edges, triangles, and beyond for spatial structure preservation
+- **Energy-based Components** – attention, layer norm and memory are all
+  formulated as energy minimisation problems.
+- **Simplicial Hopfield Networks** – optional topology-aware memory that
+  preserves higher-order structure.
+- **Specification System** – declaratively define models using composable
+  specs and realise them into modules.
+- **Graph Realisation** – build computation graphs and visualise them.
+- **Lazy Loading & Auto Import** – modules are discovered on demand to
+  keep import times fast.
+- **Metrics Collector** – measure realisation speed and cache behaviour.
+- **Advanced Debug Tracer** – inspect realisation events and timings.
+- **Type Stubs Included** – full type hints for better editor support.
 
 ## Installation
 
@@ -29,156 +35,79 @@ poetry install
 
 # Or with pip
 pip install -e .
+```
 
-# For experiments (includes visualization tools)
+Optional extras are defined in `pyproject.toml`:
+
+```bash
+# Install example dependencies
 poetry install --with examples
 
-# For development
+# Install development tools
 poetry install --with dev
 ```
 
-## Quick start
+## Quick Start
+
+The packaged builders create fully configured models. After installation
+run the following script:
 
 ```python
-# Using pre-built vision models
+import torch
 from energy_transformer.models.vision import viet_base
 
-# Create Vision Energy Transformer
-model = viet_base(num_classes=1000)
+model = viet_base(img_size=64, patch_size=16, num_classes=10)
+images = torch.randn(2, 3, 64, 64)
+logits = model(images, et_kwargs={"detach": False})
+print(logits.shape)
+```
 
-# Or use the specification system
+This prints `torch.Size([2, 10])`, confirming the model works as a
+stand‑alone script.
+
+## Building with Specifications
+
+The spec system allows declarative model construction:
+
+```python
 from energy_transformer import seq, realise
 from energy_transformer.spec.library import (
     PatchEmbedSpec, CLSTokenSpec, PosEmbedSpec,
-    ETBlockSpec, LayerNormSpec, ClassificationHeadSpec
+    ETBlockSpec, LayerNormSpec, ClassificationHeadSpec,
 )
 
-model_spec = seq(
-    PatchEmbedSpec(img_size=224, patch_size=16, embed_dim=768),
+spec = seq(
+    PatchEmbedSpec(img_size=32, patch_size=4, embed_dim=64),
     CLSTokenSpec(),
     PosEmbedSpec(include_cls=True),
     ETBlockSpec(),
     LayerNormSpec(),
-    ClassificationHeadSpec(num_classes=1000)
+    ClassificationHeadSpec(num_classes=10),
 )
-model = realise(model_spec)
+model = realise(spec)
 ```
 
-## Usage
+The resulting module can be used like any other PyTorch model.
 
-### Vision models
-
-```python
-import torch
-from energy_transformer.models.vision import (
-    vit_base,          # Standard Vision Transformer
-    viet_base,         # Vision Energy Transformer
-    viset_tiny         # Vision Simplicial Energy Transformer
-)
-
-# Standard Vision Transformer (baseline)
-vit = vit_base(img_size=224, patch_size=16, num_classes=1000)
-
-# Vision Energy Transformer
-viet = viet_base(img_size=224, patch_size=16, num_classes=1000)
-
-# Vision Simplicial Energy Transformer
-viset = viset_tiny(img_size=224, patch_size=16, num_classes=1000)
-
-# Forward pass
-images = torch.randn(4, 3, 224, 224)
-
-# For ViT
-logits_vit = vit(images)
-
-# For ViET/ViSET (energy-based models)
-logits_viet = viet(images, et_kwargs={"detach": False})  # For training
-logits_viset = viset(images, et_kwargs={"detach": True})  # For inference
-```
-
-### Building custom models
+### Metrics and Debugging
 
 ```python
-from energy_transformer.models import EnergyTransformer
-from energy_transformer.layers import (
-    LayerNorm,
-    MultiHeadEnergyAttention,
-    HopfieldNetwork
-)
+from energy_transformer.spec import configure_realisation, get_realisation_metrics
+from energy_transformer.spec.debug import DebugTracer
 
-# Create Energy Transformer block
-et_block = EnergyTransformer(
-    layer_norm=LayerNorm(in_dim=768),
-    attention=MultiHeadEnergyAttention(
-        in_dim=768,
-        num_heads=12,
-        head_dim=64
-    ),
-    hopfield=HopfieldNetwork(
-        in_dim=768,
-        hidden_dim=3072
-    ),
-    steps=4,
-    alpha=0.125
-)
+tracer = DebugTracer()
+configure_realisation(enable_metrics=True, debug_tracer=tracer)
 
-# Process tokens
-tokens = torch.randn(4, 100, 768)
-refined_tokens = et_block(tokens)
-```
-
-### Using the specification system
-
-```python
-from energy_transformer import seq, loop, realise
-from energy_transformer.spec.library import (
-    PatchEmbedSpec, CLSTokenSpec, PosEmbedSpec,
-    ETBlockSpec, LayerNormSpec, ClassificationHeadSpec,
-    MHEASpec, HNSpec
-)
-
-# Define architecture declaratively
-vit_spec = seq(
-    # Patch embedding
-    PatchEmbedSpec(
-        img_size=224,
-        patch_size=16,
-        embed_dim=768,
-        in_chans=3
-    ),
-    
-    # Add CLS token
-    CLSTokenSpec(),
-    
-    # Add positional embeddings
-    PosEmbedSpec(include_cls=True),
-    
-    # Stack transformer blocks
-    loop(
-        ETBlockSpec(
-            attention=MHEASpec(num_heads=12, head_dim=64),
-            hopfield=HNSpec(multiplier=4.0),
-            steps=4,
-            alpha=0.125
-        ),
-        times=12
-    ),
-    
-    # Final norm and classification
-    LayerNormSpec(),
-    ClassificationHeadSpec(num_classes=1000)
-)
-
-# Convert to PyTorch module
-model = realise(vit_spec)
+# Realise a spec as above
+model = realise(spec)
+print(get_realisation_metrics())
+tracer.print_summary()
 ```
 
 ## Examples
 
-See the `examples/` directory for:
-- CIFAR-100 experiments comparing topologies
-- Ablation studies
-- Topology visualization
+See the `examples/` directory for CIFAR‑100 experiments, topology
+visualisation and ablation studies.
 
 ## Citation
 
@@ -187,8 +116,8 @@ If you use this code, please cite:
 ```bibtex
 @article{hoover2023energy,
   title={Energy Transformer},
-  author={Hoover, Benjamin and Liang, Yuchen and Pham, Bao and 
-          Panda, Rameswar and Strobelt, Hendrik and Chau, Duen Horng and 
+  author={Hoover, Benjamin and Liang, Yuchen and Pham, Bao and
+          Panda, Rameswar and Strobelt, Hendrik and Chau, Duen Horng and
           Zaki, Mohammed J and Krotov, Dmitry},
   journal={arXiv preprint arXiv:2302.07253},
   year={2023}
@@ -204,4 +133,5 @@ If you use this code, please cite:
 
 ## License
 
-This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the Apache License 2.0 – see the
+[LICENSE](LICENSE) file for details.
