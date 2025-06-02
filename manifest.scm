@@ -14,6 +14,7 @@
    "python-memory-profiler"
    "python-numpy@1"
    "python-scipy"
+   "python-psutil"
    "python-pytest"
    "python-pytest-benchmark"
    "python-pytest-cov"
