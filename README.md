@@ -5,23 +5,17 @@
 
 PyTorch implementation of the **Energy Transformer (ET)** and the
 **Simplicial Energy Transformer (SET)**. The project also provides a
-powerful specification system for declaratively building models and a
-plugin-based realiser that converts specifications into PyTorch modules.
+specification system for declaratively building models and a plugin-based
+realiser that converts specifications into PyTorch modules.
 
 ## Key Features
 
 - **Energy-based Components** – attention, layer norm and memory are all
   formulated as energy minimisation problems.
-- **Simplicial Hopfield Networks** – optional topology-aware memory that
+- **Simplicial Hopfield Networks** – topology-aware memory that
   preserves higher-order structure.
 - **Specification System** – declaratively define models using composable
   specs and realise them into modules.
-- **Graph Realisation** – build computation graphs and visualise them.
-- **Lazy Loading & Auto Import** – modules are discovered on demand to
-  keep import times fast.
-- **Metrics Collector** – measure realisation speed and cache behaviour.
-- **Advanced Debug Tracer** – inspect realisation events and timings.
-- **Type Stubs Included** – full type hints for better editor support.
 
 ## Installation
 
@@ -61,9 +55,6 @@ images = torch.randn(2, 3, 64, 64)
 logits = model(images, et_kwargs={"detach": False})
 print(logits.shape)
 ```
-
-This prints `torch.Size([2, 10])`, confirming the model works as a
-stand‑alone script.
 
 ## Building with Specifications
 
