@@ -1802,25 +1802,18 @@ from . import library  # noqa: E402
 @register(library.ETBlockSpec)
 def realise_et_block(spec: library.ETBlockSpec, context: Context) -> nn.Module:
     """Realise ``ETBlockSpec`` into an :class:`EnergyTransformer`."""
-    from typing import cast
-
-    from energy_transformer.layers.base import (
-        BaseEnergyAttention,
-        BaseHopfieldNetwork,
-        BaseLayerNorm,
-    )
     from energy_transformer.models import EnergyTransformer
 
     realiser = Realiser(context)
 
     context = spec.layer_norm.apply_context(context)
-    layer_norm = cast(BaseLayerNorm, realiser.realise(spec.layer_norm))
+    layer_norm = realiser.realise(spec.layer_norm)
 
     context = spec.attention.apply_context(context)
-    attention = cast(BaseEnergyAttention, realiser.realise(spec.attention))
+    attention = realiser.realise(spec.attention)
 
     context = spec.hopfield.apply_context(context)
-    hopfield = cast(BaseHopfieldNetwork, realiser.realise(spec.hopfield))
+    hopfield = realiser.realise(spec.hopfield)
 
     return EnergyTransformer(
         layer_norm=layer_norm,

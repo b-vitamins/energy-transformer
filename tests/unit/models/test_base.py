@@ -1,32 +1,37 @@
 import pytest
 import torch
+from torch import nn
 
-from energy_transformer.layers.base import (
-    BaseEnergyAttention,
-    BaseHopfieldNetwork,
-    BaseLayerNorm,
-)
 from energy_transformer.models.base import EnergyTransformer, ETOutput
 
 pytestmark = pytest.mark.unit
 
 
-class DummyLayerNorm(BaseLayerNorm):
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+class DummyLayerNorm(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
         # Ensure gradient tracking is preserved
         return x * 2.0
 
+    def reset_parameters(self) -> None:  # type: ignore[override]
+        pass
 
-class DummyEnergyAttention(BaseEnergyAttention):
-    def forward(self, g: torch.Tensor) -> torch.Tensor:
+
+class DummyEnergyAttention(nn.Module):
+    def forward(self, g: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
         # Use operations that preserve gradient tracking
         return torch.sum(g)
 
+    def reset_parameters(self) -> None:  # type: ignore[override]
+        pass
 
-class DummyHopfieldNetwork(BaseHopfieldNetwork):
-    def forward(self, g: torch.Tensor) -> torch.Tensor:
+
+class DummyHopfieldNetwork(nn.Module):
+    def forward(self, g: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
         # Use operations that preserve gradient tracking
         return torch.mean(g)
+
+    def reset_parameters(self) -> None:  # type: ignore[override]
+        pass
 
 
 def test_energy_combines_components() -> None:

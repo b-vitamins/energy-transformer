@@ -5,10 +5,8 @@ import math
 import torch
 from torch import Tensor, nn
 
-from .base import BaseEnergyAttention
 
-
-class MultiHeadEnergyAttention(BaseEnergyAttention):
+class MultiHeadEnergyAttention(nn.Module):
     """Multi-Head Energy Attention.
 
     Defines an energy function whose gradient
