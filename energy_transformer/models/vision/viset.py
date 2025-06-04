@@ -1,9 +1,9 @@
 """Vision Simplicial Energy Transformer (ViSET) implementation.
 
-This module implements the Vision Simplicial Energy Transformer, which enhances
-the Vision Energy Transformer by replacing standard Hopfield Networks with
-Simplicial Hopfield Networks that leverage spatial topology through higher-order
-interactions.
+This module implements the Vision Simplicial Energy Transformer. The current
+implementation uses simplicial Hopfield Networks that operate on token indices
+*after* the class token has been inserted. Spatial topology is disabled to
+avoid mismatched indices; simplices are generated randomly across all tokens.
 
 ViSET combines insights from two key papers:
 1. "Energy Transformer" (Hoover et al., 2023) - Energy-based transformers
@@ -168,8 +168,9 @@ class VisionSimplicialEnergyTransformer(VisionEnergyTransformer):
             Size of representation layer before classification head.
             If None, uses embed_dim directly.
         use_topology : bool, optional
-            Whether to use topology-aware simplex generation.
-            Default is True.
+            Whether to use topology-aware simplex generation. Currently ignored
+            in favour of random simplices over all tokens. Default is True for
+            API compatibility.
         simplex_budget : float, optional
             Fraction of full edge budget to use. Default is 0.15.
         simplex_max_dim : int, optional
@@ -199,14 +200,10 @@ class VisionSimplicialEnergyTransformer(VisionEnergyTransformer):
         # Replace regular Hopfield ET blocks with Simplicial ones
         num_patches = self.patch_embed.num_patches
 
-        # Prepare topology configuration if enabled
-        if use_topology:
-            grid_size = int(num_patches**0.5)  # Assumes square image
-            patch_coords = [
-                (i, j) for i in range(grid_size) for j in range(grid_size)
-            ]
-        else:
-            patch_coords = None
+        # CRITICAL FIX: simplices operate on token indices after CLS insertion
+        # Disable spatial coordinates to avoid index mismatch
+        patch_coords = None
+        use_topology = False
 
         # Default dim_weights if not provided
         if simplex_dim_weights is None:
@@ -225,8 +222,8 @@ class VisionSimplicialEnergyTransformer(VisionEnergyTransformer):
                     hopfield=SimplicialHopfieldNetwork(
                         in_dim=embed_dim,
                         simplices=None,  # Auto-generate
-                        num_vertices=num_patches,
-                        coordinates=patch_coords,
+                        num_vertices=num_patches + 1,  # Include CLS token
+                        coordinates=None,  # No spatial coords
                         max_dim=simplex_max_dim,
                         budget=simplex_budget,
                         dim_weights=simplex_dim_weights,

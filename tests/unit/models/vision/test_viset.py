@@ -87,7 +87,8 @@ def test_viset_initializes_with_topology() -> None:
     assert len(model.et_blocks) == 2
     block = model.et_blocks[0]
     params = block.hopfield.params
-    assert params["coordinates"] == [(0, 0), (0, 1), (1, 0), (1, 1)]
+    # Topology is disabled in the implementation; coordinates should be None
+    assert params["coordinates"] is None
     assert params["dim_weights"] == {1: 0.5, 2: 0.5}
     assert params["budget"] == 0.2
     assert params["max_dim"] == 2

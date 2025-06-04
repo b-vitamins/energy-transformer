@@ -90,8 +90,9 @@ def test_random_simplex_generator_generate() -> None:
     # Should generate some simplices respecting budget
     assert len(simplices) > 0
 
-    with pytest.raises(ValueError, match="Budget too small"):
-        gen.generate(3, 1, budget=0.0)
+    # Budget below 1 now yields a minimal complex instead of error
+    simps = gen.generate(3, 1, budget=0.0)
+    assert len(simps) > 0
 
 
 class FakeArray:

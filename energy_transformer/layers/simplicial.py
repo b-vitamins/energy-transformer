@@ -283,6 +283,9 @@ class RandomSimplexGenerator(SimplexGenerator):
         else:
             edge_budget = int(budget)
 
+        # Ensure minimum connectivity
+        edge_budget = max(edge_budget, num_vertices * 2)
+
         if edge_budget < 1:
             raise ValueError("Budget too small - would generate empty complex.")
 
@@ -393,12 +396,8 @@ class TopologyAwareSimplexGenerator(SimplexGenerator):
         # Remove duplicates
         unique_simplices = self._remove_duplicates(simplices)
 
-        # Apply budget as sampling fraction
-        budget_fraction = budget  # Interpret as fraction for topology-aware
-        if 0 < budget_fraction < 1.0 and len(unique_simplices) > 0:
-            n_keep = max(1, int(len(unique_simplices) * budget_fraction))
-            unique_simplices = self.rng.sample(unique_simplices, n_keep)
-
+        # CRITICAL FIX: do not randomly subsample topology
+        # Returning all generated simplices preserves spatial structure
         return unique_simplices
 
     def _determine_k_neighbors(self, num_vertices: int) -> int:
@@ -726,7 +725,11 @@ class SimplicialHopfieldNetwork(BaseHopfieldNetwork):
         Returns
         -------
         Tensor
-            Scalar energy value summed across batch dimensions.
+            Scalar energy value summed across batch dimensions. The energy is
+            computed as ``-T * logsumexp(phi / T)`` over hidden and simplex
+            dimensions, where ``phi`` are projected token interactions. The
+            previous quadratic regularization term has been removed so the
+            simplicial energy is not dominated by token norms.
 
         Raises
         ------
@@ -762,10 +765,8 @@ class SimplicialHopfieldNetwork(BaseHopfieldNetwork):
         lse = torch.logsumexp(logits, dim=(-2, -1))
         e_shn = -self.T * lse
 
-        # Quadratic regularization: (...,)
-        quad = 0.5 * g.pow(2).sum(dim=(-2, -1))
         # Sum over batch dimensions: scalar
-        return (e_shn + quad).sum()
+        return e_shn.sum()
 
     def reset_parameters(self) -> None:
         """Initialize learnable parameters using Xavier-like initialization."""
