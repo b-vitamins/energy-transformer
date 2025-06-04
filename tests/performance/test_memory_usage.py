@@ -7,8 +7,8 @@ import pytest
 import torch
 
 from energy_transformer.layers import (
+    EnergyLayerNorm,
     HopfieldNetwork,
-    LayerNorm,
     MultiheadEnergyAttention,
     SimplicialHopfieldNetwork,
 )
@@ -345,7 +345,7 @@ class TestComponentMemory:
         batch_size = 32
         seq_len = 256
 
-        energy_ln = LayerNorm(embed_dim).to(device).eval()
+        energy_ln = EnergyLayerNorm(embed_dim).to(device).eval()
         standard_ln = torch.nn.LayerNorm(embed_dim).to(device).eval()
 
         x = torch.randn(batch_size, seq_len, embed_dim, device=device)

@@ -63,7 +63,7 @@ from energy_transformer.layers.embeddings import (
 )
 from energy_transformer.layers.heads import ClassificationHead
 from energy_transformer.layers.hopfield import HopfieldNetwork
-from energy_transformer.layers.layer_norm import LayerNorm
+from energy_transformer.layers.layer_norm import EnergyLayerNorm
 from energy_transformer.layers.tokens import CLSToken
 from energy_transformer.models.base import EnergyTransformer
 
@@ -160,7 +160,7 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
         self.et_blocks = nn.ModuleList(
             [
                 EnergyTransformer(
-                    layer_norm=LayerNorm(embed_dim),
+                    layer_norm=EnergyLayerNorm(embed_dim),
                     attention=MultiheadEnergyAttention(
                         embed_dim=embed_dim,
                         num_heads=num_heads,
@@ -177,7 +177,7 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
         )
 
         # Final layer normalization
-        self.norm = LayerNorm(embed_dim)
+        self.norm = EnergyLayerNorm(embed_dim)
 
         # Classification head
         self.head = ClassificationHead(

@@ -6,8 +6,8 @@ import torch
 from energy_transformer.layers import (
     ClassificationHead,
     CLSToken,
+    EnergyLayerNorm,
     HopfieldNetwork,
-    LayerNorm,
     MultiheadEnergyAttention,
     PatchEmbedding,
     PositionalEmbedding2D,
@@ -131,11 +131,11 @@ class TestComponentEquivalence:
         assert from_spec2.hidden_dim == 3072
 
     def test_layer_norm_equivalence(self):
-        """LayerNormSpec should produce identical LayerNorm."""
+        """LayerNormSpec should produce identical EnergyLayerNorm."""
         spec = LayerNormSpec(eps=1e-5)
         ctx = Context(dimensions={"embed_dim": 768})
         from_spec = realise(spec, ctx)
-        assert isinstance(from_spec, LayerNorm)
+        assert isinstance(from_spec, EnergyLayerNorm)
 
     def test_classification_head_equivalence(self):
         """ClassificationHeadSpec should produce identical ClassificationHead."""
@@ -167,7 +167,7 @@ class TestETBlockEquivalence:
         """ETBlockSpec should produce identical EnergyTransformer."""
         embed_dim = 768
         direct = EnergyTransformer(
-            layer_norm=LayerNorm(embed_dim),
+            layer_norm=EnergyLayerNorm(embed_dim),
             attention=MultiheadEnergyAttention(
                 embed_dim=embed_dim,
                 num_heads=12,

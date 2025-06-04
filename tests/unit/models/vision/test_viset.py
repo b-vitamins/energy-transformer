@@ -58,7 +58,7 @@ class DummySimplicialHopfieldNetwork(nn.Module):
 @pytest.fixture(autouse=True)
 def patch_components(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(viset, "EnergyTransformer", DummyEnergyTransformer)
-    monkeypatch.setattr(viset, "LayerNorm", DummyLayerNorm)
+    monkeypatch.setattr(viset, "EnergyLayerNorm", DummyLayerNorm)
     monkeypatch.setattr(viset, "MultiheadEnergyAttention", DummyAttention)
     monkeypatch.setattr(
         viset,

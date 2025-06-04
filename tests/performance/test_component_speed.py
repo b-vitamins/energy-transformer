@@ -6,8 +6,8 @@ import pytest
 import torch
 
 from energy_transformer.layers import (
+    EnergyLayerNorm,
     HopfieldNetwork,
-    LayerNorm,
     MultiheadEnergyAttention,
     PatchEmbedding,
     SimplicialHopfieldNetwork,
@@ -348,7 +348,7 @@ class TestEnergyTransformerBlock:
 
         et_block = (
             EnergyTransformer(
-                layer_norm=LayerNorm(embed_dim),
+                layer_norm=EnergyLayerNorm(embed_dim),
                 attention=MultiheadEnergyAttention(
                     embed_dim=embed_dim,
                     num_heads=num_heads,
@@ -403,7 +403,7 @@ class TestEnergyTransformerBlock:
 
         et_block = (
             EnergyTransformer(
-                layer_norm=LayerNorm(embed_dim),
+                layer_norm=EnergyLayerNorm(embed_dim),
                 attention=MultiheadEnergyAttention(
                     embed_dim=embed_dim,
                     num_heads=num_heads,
