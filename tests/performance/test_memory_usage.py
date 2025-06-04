@@ -282,7 +282,7 @@ class TestComponentMemory:
         seq_len = 128
 
         hopfield = (
-            HopfieldNetwork(in_dim=in_dim, hidden_dim=hidden_dim)
+            HopfieldNetwork(embed_dim=in_dim, hidden_dim=hidden_dim)
             .to(device)
             .eval()
         )

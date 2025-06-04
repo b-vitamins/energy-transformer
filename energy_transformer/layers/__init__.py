@@ -23,7 +23,7 @@ Example
 >>> # Create layers
 >>> norm = EnergyLayerNorm(768)
 >>> attn = MultiheadEnergyAttention(embed_dim=768, num_heads=12)
->>> hopfield = HopfieldNetwork(in_dim=768, hidden_dim=3072)
+>>> hopfield = HopfieldNetwork(768, hidden_dim=3072)
 >>>
 >>> # Use in forward pass
 >>> x = torch.randn(4, 100, 768)  # (batch, seq_len, embed_dim)

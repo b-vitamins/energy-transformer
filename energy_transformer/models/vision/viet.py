@@ -166,7 +166,7 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
                         num_heads=num_heads,
                     ),
                     hopfield=HopfieldNetwork(
-                        in_dim=embed_dim,
+                        embed_dim,
                         hidden_dim=hopfield_hidden_dim,
                     ),
                     steps=et_steps,

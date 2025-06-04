@@ -118,14 +118,14 @@ class TestComponentEquivalence:
 
     def test_hopfield_network_equivalence(self):
         """HNSpec should produce identical HopfieldNetwork."""
-        direct = HopfieldNetwork(in_dim=768, hidden_dim=3072)
+        direct = HopfieldNetwork(768, hidden_dim=3072)
         spec = HNSpec(hidden_dim=3072)
         ctx = Context(dimensions={"embed_dim": 768})
         from_spec = realise(spec, ctx)
         assert isinstance(from_spec, type(direct))
-        assert direct.in_dim == from_spec.in_dim
+        assert direct.embed_dim == from_spec.embed_dim
         assert direct.hidden_dim == from_spec.hidden_dim
-        assert direct.ξ.shape == from_spec.ξ.shape
+        assert direct.kernel.shape == from_spec.kernel.shape
         spec2 = HNSpec(multiplier=4.0)
         from_spec2 = realise(spec2, ctx)
         assert from_spec2.hidden_dim == 3072
@@ -172,7 +172,7 @@ class TestETBlockEquivalence:
                 embed_dim=embed_dim,
                 num_heads=12,
             ),
-            hopfield=HopfieldNetwork(in_dim=embed_dim, hidden_dim=3072),
+            hopfield=HopfieldNetwork(embed_dim, hidden_dim=3072),
             steps=4,
             alpha=0.125,
         )

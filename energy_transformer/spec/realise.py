@@ -253,7 +253,7 @@ class AutoImporter:
 
     def _handle_hnspec(self, spec: HNSpec, kwargs: dict[str, Any]) -> None:
         if embed_dim := self.context.get_dim("embed_dim"):
-            kwargs["in_dim"] = embed_dim
+            kwargs["embed_dim"] = embed_dim
             if spec.hidden_dim is None and hasattr(spec, "multiplier"):
                 kwargs["hidden_dim"] = int(embed_dim * spec.multiplier)
                 kwargs.pop("multiplier", None)
