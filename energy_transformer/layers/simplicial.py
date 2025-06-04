@@ -23,7 +23,6 @@ try:
 except ImportError:
     HAS_SCIPY = False
 
-from .base import BaseHopfieldNetwork
 
 __all__: Final = [
     "SimplicialHopfieldNetwork",
@@ -589,7 +588,7 @@ def _autogen_simps(
     return simplices
 
 
-class SimplicialHopfieldNetwork(BaseHopfieldNetwork):
+class SimplicialHopfieldNetwork(nn.Module):
     """Continuous Simplicial Hopfield Network with optional auto complex.
 
     This network extends the classical Hopfield model to operate on simplicial

@@ -1,29 +1,34 @@
 import pytest
 import torch
+from torch import nn
 
-from energy_transformer.layers.base import (
-    BaseEnergyAttention,
-    BaseHopfieldNetwork,
-    BaseLayerNorm,
-    _validate_scalar_energy,
-)
+from energy_transformer.layers.base import _validate_scalar_energy
 
 pytestmark = pytest.mark.unit
 
 
-class DummyLayerNorm(BaseLayerNorm):
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+class DummyLayerNorm(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
         return x * 2
 
+    def reset_parameters(self) -> None:  # type: ignore[override]
+        pass
 
-class DummyEnergyAttention(BaseEnergyAttention):
-    def forward(self, g: torch.Tensor) -> torch.Tensor:
+
+class DummyEnergyAttention(nn.Module):
+    def forward(self, g: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
         return g.sum()
 
+    def reset_parameters(self) -> None:  # type: ignore[override]
+        pass
 
-class DummyHopfieldNetwork(BaseHopfieldNetwork):
-    def forward(self, g: torch.Tensor) -> torch.Tensor:
+
+class DummyHopfieldNetwork(nn.Module):
+    def forward(self, g: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
         return g.mean()
+
+    def reset_parameters(self) -> None:  # type: ignore[override]
+        pass
 
 
 def test_validate_scalar_energy_accepts_scalar() -> None:
