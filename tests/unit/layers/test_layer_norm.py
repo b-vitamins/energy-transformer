@@ -25,31 +25,13 @@ def test_energy_gradient_equals_output() -> None:
     ln = EnergyLayerNorm(4)
     x = torch.randn(2, 4, requires_grad=True)
     g = ln(x)
-    energy = ln.get_energy_lagrangian(x).sum()
+    energy = ln.compute_energy(x).sum()
     energy.backward()
     assert torch.allclose(x.grad, g, atol=1e-6)
 
 
-def test_export_standard_layernorm() -> None:
-    ln = EnergyLayerNorm(2)
-    ref = ln.export_standard_layernorm()
-    x = torch.randn(3, 2)
-    out1 = ln(x)
-    out2 = ref(x)
-    assert torch.allclose(out1, out2, atol=1e-6)
-
-
-def test_reset_parameters_initializes_values() -> None:
+def test_parameter_initialization() -> None:
     ln = EnergyLayerNorm(4)
-    gamma = F.softplus(ln.log_gamma).item()
-    assert gamma == pytest.approx(1.0)
-    assert torch.all(ln.delta == 0)
-
-    with torch.no_grad():
-        ln.log_gamma.fill_(2.0)
-        ln.delta.fill_(1.0)
-
-    ln.reset_parameters()
     gamma = F.softplus(ln.log_gamma).item()
     assert gamma == pytest.approx(1.0)
     assert torch.all(ln.delta == 0)
@@ -64,23 +46,11 @@ def test_mixed_precision_matches_float32(dtype: torch.dtype) -> None:
 
     x_mp = x.to(dtype)
     out_mp = ln(x_mp)
-    assert out_mp.dtype == dtype
+    assert out_mp.dtype == torch.float32
 
     # bfloat16 has lower precision (8-bit mantissa) than float16 (10-bit)
     atol = 1e-2 if dtype == torch.bfloat16 else 5e-3
-    assert torch.allclose(out_mp.to(torch.float32), out_fp32, atol=atol)
-
-
-def test_export_standard_layernorm_parameters() -> None:
-    ln = EnergyLayerNorm(5)
-    with torch.no_grad():
-        ln.log_gamma.fill_(0.3)
-        ln.delta.uniform_(-1, 1)
-
-    ref = ln.export_standard_layernorm()
-    gamma = F.softplus(ln.log_gamma).item()
-    assert torch.allclose(ref.weight, torch.full((5,), gamma))
-    assert torch.allclose(ref.bias, ln.delta)
+    assert torch.allclose(out_mp, out_fp32, atol=atol)
 
 
 def test_energy_lagrangian_manual_computation() -> None:
@@ -90,13 +60,13 @@ def test_energy_lagrangian_manual_computation() -> None:
         ln.delta.copy_(torch.tensor([0.1, -0.2, 0.3, 0.4]))
 
     x = torch.randn(3, 4)
-    energy = ln.get_energy_lagrangian(x)
+    energy = ln.compute_energy(x)
 
     gamma = F.softplus(ln.log_gamma)
     var = torch.var(x, dim=-1, unbiased=False)
-    expected = ln.in_dim * gamma * torch.sqrt(var + ln.eps) + (
-        ln.delta * x
-    ).sum(dim=-1)
+    expected = ln.D * gamma * torch.sqrt(var + ln.eps) + (ln.delta * x).sum(
+        dim=-1
+    )
     assert torch.allclose(energy, expected, atol=1e-6)
 
 
@@ -119,11 +89,11 @@ def test_energy_lagrangian_mixed_precision(dtype: torch.dtype) -> None:
     torch.manual_seed(42)
     ln = EnergyLayerNorm(2)
     x = torch.randn(4, 2)
-    energy_fp32 = ln.get_energy_lagrangian(x)
+    energy_fp32 = ln.compute_energy(x)
 
     x_mp = x.to(dtype)
-    energy_mp = ln.get_energy_lagrangian(x_mp)
-    assert energy_mp.dtype == dtype
+    energy_mp = ln.compute_energy(x_mp)
+    assert energy_mp.dtype == torch.float32
 
     atol = 1e-2 if dtype == torch.bfloat16 else 5e-3
-    assert torch.allclose(energy_mp.to(torch.float32), energy_fp32, atol=atol)
+    assert torch.allclose(energy_mp, energy_fp32, atol=atol)

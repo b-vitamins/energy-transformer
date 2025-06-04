@@ -62,7 +62,7 @@ class TestLayerSpecs:
 
             assert isinstance(from_spec, EnergyLayerNorm)
             assert type(from_spec) is type(direct)
-            assert from_spec.in_dim == direct.in_dim
+            assert from_spec.normalized_shape == direct.normalized_shape
             assert from_spec.eps == direct.eps
 
             x = torch.randn(2, 10, tc["embed_dim"])
