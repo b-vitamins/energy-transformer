@@ -129,7 +129,7 @@ class TestVisionEnergyTransformerModels:
             "embed_dim": 192,
             "depth": 12,
             "num_heads": 3,
-            "head_dim": 64,
+            "_head_dim": 64,
             "hopfield_hidden_dim": 768,
             "et_steps": 4,
             "et_alpha": 0.125,
@@ -151,7 +151,7 @@ class TestVisionEnergyTransformerModels:
                     alpha=config["et_alpha"],
                     attention=MHEASpec(
                         num_heads=config["num_heads"],
-                        head_dim=config["head_dim"],
+                        head_dim=config["_head_dim"],
                     ),
                     hopfield=HNSpec(hidden_dim=config["hopfield_hidden_dim"]),
                 ),

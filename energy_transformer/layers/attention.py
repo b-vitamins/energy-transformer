@@ -1,215 +1,356 @@
 """Energy-based multi-head attention module implementation."""
 
 import math
+from typing import ClassVar
 
 import torch
+import torch.nn.functional as F  # noqa: N812
 from torch import Tensor, nn
 
+_EPS = 1e-6
 
-class MultiHeadEnergyAttention(nn.Module):
-    """Multi-Head Energy Attention.
 
-    Defines an energy function whose gradient
-    implicitly defines the attention operation.
+class MultiheadEnergyAttention(nn.Module):
+    r"""Multi-head energy-based attention.
+
+    This module implements energy-based attention where attention patterns emerge
+    from minimizing an energy function rather than explicit softmax normalization.
+    The energy function implicitly defines the attention operation through its
+    gradient.
 
     Parameters
     ----------
-    in_dim : int
-        Input dimension D of token vectors
+    embed_dim : int
+        Total dimension of the model.
     num_heads : int
-        Number of attention heads H
-    head_dim : int
-        Dimension of the key/query space Y
-    beta : float, optional
-        Temperature parameter β. If None, defaults to **1 / √(head_dim)**.
-    bias : bool, optional
-        Whether to include bias terms for key/query projections. Default is False
-    init_std : float, optional
-        Standard deviation for weight initialization. Default is 0.002
+        Number of parallel attention heads. Note that ``embed_dim`` will be split
+        across ``num_heads`` (i.e. each head will have dimension
+        ``embed_dim // num_heads``).
+    beta : float | Tensor | None, default=None
+        Temperature parameter(s). Can be:
+        - None: defaults to ``1 / sqrt(head_dim)``
+        - float: same temperature for all heads
+        - Tensor of shape (num_heads,): per-head temperatures
+    init_std : float, default=0.002
+        Standard deviation for parameter initialization.
+    batch_first : bool, default=True
+        If ``True``, then the input and output tensors are provided
+        as (batch, seq, feature). Default: ``True``.
+    device : torch.device, optional
+        Device for parameters.
+    dtype : torch.dtype, optional
+        Data type for parameters.
+
+    Examples
+    --------
+    >>> # Default initialization
+    >>> attn = MultiheadAttention(embed_dim=768, num_heads=12)
+    >>> x = torch.randn(32, 100, 768)  # (batch, seq, feature)
+    >>> energy = attn(x)  # scalar energy
+
+    >>> # With per-head temperatures
+    >>> betas = torch.linspace(0.1, 0.3, 12)
+    >>> attn = MultiheadAttention(768, 12, beta=betas)
+
+    >>> # Get gradient without autograd
+    >>> grad = attn.compute_grad(x)  # (32, 100, 768)
 
     Notes
     -----
-    The energy-based attention operation is
-    described by the following energy function:
+    The energy function is defined as:
 
-    E^ATT = -(1/β)·∑ₕ₌₁ᴴ·∑ᶜ₌₁ᴺ·log(∑ᴮ≠ᶜ exp(β·Aₕᴮᶜ))
+    .. math::
+        E = -\\sum_{h=1}^H \frac{1}{\beta_h} \\sum_{n=1}^N \
+        \\log\\left(\\sum_{m=1}^N \\exp(\beta_h \\cdot s_{h,n,m})\right)
 
-    where the attention matrix A is computed from query and key tensors:
-
-    Aₕᴮᶜ = ∑ₐ Kₐₕᴮ·Qₐₕᶜ,       A ∈ ℝᴴˣᴺˣᴺ
-    Kₐₕᴮ = ∑ⱼ W^K_ₐₕⱼ·gⱼᴮ,    K ∈ ℝʸˣᴴˣᴺ
-    Qₐₕᶜ = ∑ⱼ W^Q_ₐₕⱼ·gⱼᶜ,    Q ∈ ℝʸˣᴴˣᴺ
-
-    - The tensors W^K ∈ ℝʸˣᴴˣᴰ and W^Q ∈ ℝʸˣᴴˣᴰ are learnable parameters,
-    - N is the sequence length (number of tokens),
-    - H is the number of attention heads,
-    - D is the input dimension of each token,
-    - Y is the key/query projection dimension.
-
-    Each token generates two representations:
-    - query: where should it look for prompts on how to evolve?
-    - key: what should be the contents of tokens that attend to it?
+    where :math:`s_{h,n,m} = q_{h,n}^\top k_{h,m}` are the attention scores,
+    and :math:`\beta_h` is the temperature for head :math:`h`.
     """
+
+    __constants__: ClassVar[list[str]] = [
+        "embed_dim",
+        "num_heads",
+        "head_dim",
+        "batch_first",
+    ]
+    beta: Tensor
 
     def __init__(
         self,
-        in_dim: int,
-        num_heads: int = 12,
-        head_dim: int = 64,
-        beta: float | None = None,
-        bias: bool = False,
+        embed_dim: int,
+        num_heads: int,
+        beta: float | Tensor | None = None,
         init_std: float = 0.002,
+        batch_first: bool = True,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
     ) -> None:
-        """Initialize the Energy Attention layer.
-
-        Parameters
-        ----------
-        in_dim : int
-            Input dimension D of token vectors
-        num_heads : int
-            Number of attention heads H
-        head_dim : int
-            Dimension of the key/query space Y
-        beta : float, optional
-            Temperature parameter β. If None, defaults to **1 / √(head_dim)**.
-        bias : bool, optional
-            Whether to include bias terms for key/query projections
-        init_std : float, optional
-            Standard deviation for weight initialization
-        """
         super().__init__()
-        self.in_dim = in_dim
+
+        self.embed_dim = embed_dim
         self.num_heads = num_heads
-        self.head_dim = head_dim
+        self.batch_first = batch_first
+        self.head_dim = embed_dim // num_heads
 
-        # W^K ∈ ℝʸˣᴴˣᴰ
-        # Note: [H, Y, D] for computational efficiency in PyTorch
-        self.w_k = nn.Parameter(
-            torch.empty(num_heads, head_dim, in_dim),
-        )  # shape: [H, Y, D]
+        if self.head_dim * num_heads != embed_dim:
+            raise ValueError("embed_dim must be divisible by num_heads")
 
-        # W^Q ∈ ℝʸˣᴴˣᴰ
-        # Note: [H, Y, D] for computational efficiency in PyTorch
-        self.w_q = nn.Parameter(
-            torch.empty(num_heads, head_dim, in_dim),
-        )  # shape: [H, Y, D]
+        # Projection weights
+        self.q_proj_weight = nn.Parameter(
+            torch.empty(
+                num_heads,
+                self.head_dim,
+                embed_dim,
+                device=device,
+                dtype=dtype,
+            )
+        )
+        self.k_proj_weight = nn.Parameter(
+            torch.empty(
+                num_heads,
+                self.head_dim,
+                embed_dim,
+                device=device,
+                dtype=dtype,
+            )
+        )
 
-        # Optional bias terms
-        if bias:
-            self.b_k = nn.Parameter(torch.zeros(head_dim))  # shape: [Y]
-            self.b_q = nn.Parameter(torch.zeros(head_dim))  # shape: [Y]
-            # Note: Current bias broadcasts across both N and H dimensions.
-            # For per-head bias, use shape (num_heads, head_dim) instead.
-        else:
-            self.register_parameter("b_k", None)
-            self.register_parameter("b_q", None)
+        # Temperature parameters
+        default_beta = 1.0 / math.sqrt(self.head_dim)
 
-        # beta - same default as the original ET implementation
-        self.beta = beta if beta is not None else 1.0 / math.sqrt(head_dim)
+        match beta:
+            case None:
+                beta_tensor = torch.full(
+                    (num_heads,), default_beta, device=device, dtype=dtype
+                )
+            case float() | int():
+                beta_tensor = torch.full(
+                    (num_heads,), float(beta), device=device, dtype=dtype
+                )
+            case Tensor():
+                if beta.shape != (num_heads,):
+                    raise ValueError(
+                        f"beta tensor must have shape ({num_heads},), "
+                        f"got {beta.shape}"
+                    )
+                beta_tensor = beta.clone().to(device=device, dtype=dtype)
+            case _:
+                raise TypeError(
+                    f"beta must be float, Tensor, or None, got {type(beta)}"
+                )
 
-        # Store initialization std for reset_parameters
+        self.register_buffer("beta", beta_tensor)
+
+        # Initialize
         self.init_std = init_std
+        self._reset_parameters()
 
-        self.reset_parameters()
-
-    def reset_parameters(self) -> None:
-        """Initialize learnable parameters."""
-        nn.init.normal_(self.w_k, std=self.init_std)
-        nn.init.normal_(self.w_q, std=self.init_std)
-        if self.b_k is not None:
-            nn.init.zeros_(self.b_k)
-        if self.b_q is not None:
-            nn.init.zeros_(self.b_q)
+    def _reset_parameters(self) -> None:
+        """Initialize parameters."""
+        nn.init.normal_(self.q_proj_weight, std=self.init_std)
+        nn.init.normal_(self.k_proj_weight, std=self.init_std)
 
     def forward(
         self,
-        g: Tensor,
+        x: Tensor,
         attn_mask: Tensor | None = None,
-        include_diag: bool = True,
+        is_causal: bool = False,
     ) -> Tensor:
-        """Compute attention energy.
+        """Forward pass computing energy.
 
         Parameters
         ----------
-        g : Tensor
-            Input tensor of shape [..., N, D] where N is the number
-            of tokens and D is the embedding dimension
+        x : Tensor
+            Input tensor of shape (batch, seq, embed_dim) if batch_first,
+            else (seq, batch, embed_dim).
         attn_mask : Tensor, optional
-            Attention mask of shape [..., H, N, N] or broadcastable.
-            Added to attention logits before logsumexp. Use 0 for allowed
-            positions and -∞ for masked positions (not 0/1 masks).
-            Compatible with causal masks: `torch.triu(torch.full((N, N), -inf), 1)`
-        include_diag : bool, optional
-            Whether to include diagonal (self-attention) entries.
-            Default is True for exact ET behavior
+            Attention mask of shape (seq, seq) or (batch * num_heads, seq, seq).
+            Use float('-inf') for positions to mask.
+        is_causal : bool, default=False
+            If set, applies causal mask (prevents attending to future positions).
 
         Returns
         -------
         Tensor
-            Scalar energy value (summed over batch, heads, and tokens).
-            Returns zero for inputs with sequence length N=1, as
-            self-attention is undefined for single-token sequences.
+            Scalar energy value.
         """
-        # Extract sequence length
-        seq_len = g.shape[-2]
+        # Handle input shape
+        match self.batch_first:
+            case True:
+                batch_size, seq_len, _ = x.shape
+            case False:
+                seq_len, batch_size, _ = x.shape
+                x = x.transpose(
+                    0, 1
+                )  # (seq, batch, embed_dim) -> (batch, seq, embed_dim)
 
-        # Single token edge case - return 0 energy (scalar)
+        # Special case: single token
         if seq_len == 1:
-            return torch.zeros((), device=g.device, dtype=g.dtype)
+            return torch.zeros((), device=x.device, dtype=x.dtype)
 
-        # Mixed-precision safety: cast weights to input dtype for pure bf16
-        if g.dtype in {torch.float16, torch.bfloat16}:
-            w_k_cast = self.w_k.to(g.dtype)
-            w_q_cast = self.w_q.to(g.dtype)
-        else:
-            w_k_cast = self.w_k
-            w_q_cast = self.w_q
+        # Mixed precision safety
+        compute_dtype = (
+            torch.float32
+            if x.dtype in {torch.float16, torch.bfloat16}
+            else x.dtype
+        )
 
-        # Kₐₕᴮ = ∑ⱼ W^K_ₐₕⱼ·gⱼᴮ,    K ∈ ℝʸˣᴴˣᴺ
-        k = torch.einsum(
-            "...nd,hyd->...nhy",
-            g,
-            w_k_cast,
-        )  # shape: [..., N, H, Y]
-
-        # Qₐₕᶜ = ∑ⱼ W^Q_ₐₕⱼ·gⱼᶜ,    Q ∈ ℝʸˣᴴˣᴺ
+        # Projections
         q = torch.einsum(
-            "...nd,hyd->...nhy",
-            g,
-            w_q_cast,
-        )  # shape: [..., N, H, Y]
+            "bse,hde->bshd",
+            x.to(compute_dtype),
+            self.q_proj_weight.to(compute_dtype),
+        )  # (batch, seq, heads, dim)
+        k = torch.einsum(
+            "bse,hde->bshd",
+            x.to(compute_dtype),
+            self.k_proj_weight.to(compute_dtype),
+        )  # (batch, seq, heads, dim)
 
-        # Add bias if present
-        if self.b_k is not None:
-            k = k + self.b_k  # shape: [..., N, H, Y]
-        if self.b_q is not None:
-            q = q + self.b_q  # shape: [..., N, H, Y]
+        # Compute attention scores with temperature
+        scores = torch.einsum(
+            "bshd,bthd,h->bhst", q, k, self.beta.to(compute_dtype)
+        )  # (batch, heads, seq, seq)
 
-        # Aₕᴮᶜ = ∑ₐ Kₐₕᴮ·Qₐₕᶜ,     A ∈ ℝᴴˣᴺˣᴺ
-        a = torch.einsum("...nhy,...mhy->...hnm", k, q)  # shape: [..., H, N, N]
-        # TODO: avoid full N x N materialization
+        # Apply masks
+        if is_causal:
+            if attn_mask is not None:
+                raise ValueError("Cannot use both is_causal and attn_mask")
+            causal_mask = torch.triu(
+                torch.full(
+                    (seq_len, seq_len),
+                    float("-inf"),
+                    device=scores.device,
+                    dtype=scores.dtype,
+                ),
+                diagonal=1,
+            )
+            scores = scores + causal_mask
 
-        # Mask diagonal (self-token) entries if requested
-        if not include_diag:
-            # ∑ᴮ≠ᶜ - Create mask for self-attention exclusion
-            diag_mask = torch.eye(seq_len, device=g.device, dtype=torch.bool)
-            diag_mask = diag_mask[
-                None,
-                None,
-            ]  # Broadcast for heads [..., 1, 1, N, N]
-            a = a.masked_fill(diag_mask, float("-inf"))  # shape: [..., H, N, N]
-
-        # Apply external attention mask if provided
         if attn_mask is not None:
-            # Use additive masking (compatible with -inf values)
-            a = a + attn_mask  # shape: [..., H, N, N]
+            match attn_mask.dim():
+                case 2:  # (seq, seq)
+                    scores = scores + attn_mask.to(scores.dtype)
+                case 3:  # (batch * heads, seq, seq)
+                    scores = scores.view(-1, seq_len, seq_len) + attn_mask.to(
+                        scores.dtype
+                    )
+                    scores = scores.view(
+                        batch_size, self.num_heads, seq_len, seq_len
+                    )
+                case _:
+                    raise ValueError(
+                        f"attn_mask must be 2D or 3D, got {attn_mask.dim()}D"
+                    )
 
-        # β·Aₕᴮᶜ - Scale attention matrix by temperature
-        beta_a = self.beta * a  # shape: [..., H, N, N]
+        # Compute energy
+        lse = torch.logsumexp(scores, dim=-1)  # (batch, heads, seq)
+        energy = -(lse / self.beta.view(1, -1, 1).to(compute_dtype)).sum()
 
-        # log(∑ᴮ exp(β·Aₕᴮᶜ)) - LogSumExp over keys dimension
-        lse = torch.logsumexp(beta_a, dim=-2)  # shape: [..., H, N]
+        return energy.to(x.dtype)
 
-        # E^ATT = -(1/β)·∑ₕ₌₁ᴴ·∑ᶜ₌₁ᴺ·log(∑ᴮ exp(β·Aₕᴮᶜ))
-        beta_inv = 1.0 / self.beta
-        return -(beta_inv * lse).sum()  # scalar
+    def compute_energy(self, x: Tensor) -> Tensor:
+        """Compute mean energy per sample.
+
+        Parameters
+        ----------
+        x : Tensor
+            Input tensor of shape (batch, seq, embed_dim) if batch_first.
+
+        Returns
+        -------
+        Tensor
+            Mean energy value.
+        """
+        batch_size = x.shape[0] if self.batch_first else x.shape[1]
+        energy = self.forward(x)
+        return energy / batch_size
+
+    def compute_grad(self, x: Tensor) -> Tensor:
+        """Compute gradient directly.
+
+        Parameters
+        ----------
+        x : Tensor
+            Input tensor of shape (batch, seq, embed_dim) if batch_first.
+
+        Returns
+        -------
+        Tensor
+            Gradient tensor of same shape as input.
+        """
+        # Store original shape info
+        needs_transpose = not self.batch_first
+        if needs_transpose:
+            x = x.transpose(0, 1)
+
+        batch_size, seq_len, _ = x.shape
+
+        # Mixed precision safety
+        compute_dtype = (
+            torch.float32
+            if x.dtype in {torch.float16, torch.bfloat16}
+            else x.dtype
+        )
+
+        # Projections
+        q = torch.einsum(
+            "bse,hde->bshd",
+            x.to(compute_dtype),
+            self.q_proj_weight.to(compute_dtype),
+        )  # (batch, seq, heads, dim)
+        k = torch.einsum(
+            "bse,hde->bshd",
+            x.to(compute_dtype),
+            self.k_proj_weight.to(compute_dtype),
+        )  # (batch, seq, heads, dim)
+
+        # Attention weights
+        scores = torch.einsum(
+            "bshd,bthd,h->bhst", q, k, self.beta.to(compute_dtype)
+        )  # (batch, heads, seq, seq)
+        attn = F.softmax(scores, dim=-1)  # (batch, heads, seq, seq)
+
+        # Gradient computation
+        f1 = torch.einsum(
+            "hde,bthd->bthe", self.q_proj_weight.to(compute_dtype), k
+        )  # (batch, seq, heads, embed_dim)
+        f2 = torch.einsum(
+            "hde,bshd->bshe", self.k_proj_weight.to(compute_dtype), q
+        )  # (batch, seq, heads, embed_dim)
+
+        grad1 = -torch.einsum(
+            "bthe,bhst->bse", f1, attn
+        )  # (batch, seq, embed_dim)
+        grad2 = -torch.einsum(
+            "bshe,bhst->bte", f2, attn
+        )  # (batch, seq, embed_dim)
+
+        grad = (grad1 + grad2).to(x.dtype)
+
+        # Restore original shape
+        if needs_transpose:
+            grad = grad.transpose(0, 1)
+
+        return grad
+
+    def extra_repr(self) -> str:
+        """Extra representation string."""
+        s = f"{self.embed_dim}, {self.num_heads}"
+
+        # Check if beta is non-default
+        default_beta = 1.0 / math.sqrt(self.head_dim)
+        is_default = torch.allclose(
+            self.beta, torch.full_like(self.beta, default_beta)
+        )
+
+        if not is_default:
+            if self.beta.std() < _EPS:  # All same value
+                s += f", beta={self.beta[0].item():.4f}"
+            else:
+                s += ", beta=per_head"
+
+        if not self.batch_first:
+            s += ", batch_first=False"
+
+        return s

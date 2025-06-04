@@ -9,7 +9,7 @@ import torch
 from energy_transformer.layers import (
     HopfieldNetwork,
     LayerNorm,
-    MultiHeadEnergyAttention,
+    MultiheadEnergyAttention,
     SimplicialHopfieldNetwork,
 )
 from energy_transformer.models.vision import (
@@ -212,14 +212,12 @@ class TestComponentMemory:
 
         embed_dim = 768
         num_heads = 12
-        head_dim = 64
         batch_size = 4
 
         attention = (
-            MultiHeadEnergyAttention(
-                in_dim=embed_dim,
+            MultiheadEnergyAttention(
+                embed_dim=embed_dim,
                 num_heads=num_heads,
-                head_dim=head_dim,
             )
             .to(device)
             .eval()

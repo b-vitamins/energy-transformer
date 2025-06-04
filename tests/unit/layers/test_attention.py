@@ -3,7 +3,7 @@ import math
 import pytest
 import torch
 
-from energy_transformer.layers.attention import MultiHeadEnergyAttention
+from energy_transformer.layers.attention import MultiheadEnergyAttention
 
 pytestmark = pytest.mark.unit
 
@@ -12,145 +12,150 @@ def _manual_energy(
     g: torch.Tensor,
     w_k: torch.Tensor,
     w_q: torch.Tensor,
-    beta: float = 1.0,
+    beta: float | torch.Tensor = 1.0,
     attn_mask: torch.Tensor | None = None,
-    include_diag: bool = True,
+    is_causal: bool = False,
 ) -> torch.Tensor:
-    k = torch.einsum("...nd,hyd->...nhy", g, w_k)
-    q = torch.einsum("...nd,hyd->...nhy", g, w_q)
-    a = torch.einsum("...nhy,...mhy->...hnm", k, q)
-    if not include_diag:
-        diag = torch.eye(g.shape[-2], device=g.device, dtype=torch.bool)
-        diag = diag[None, None]
-        a = a.masked_fill(diag, float("-inf"))
+    if isinstance(beta, torch.Tensor):
+        beta_tensor = beta
+    else:
+        beta_tensor = torch.full(
+            (w_k.shape[0],), beta, device=g.device, dtype=g.dtype
+        )
+    compute_dtype = (
+        torch.float32 if g.dtype in {torch.float16, torch.bfloat16} else g.dtype
+    )
+    k = torch.einsum(
+        "bse,hde->bshd", g.to(compute_dtype), w_k.to(compute_dtype)
+    )
+    q = torch.einsum(
+        "bse,hde->bshd", g.to(compute_dtype), w_q.to(compute_dtype)
+    )
+    scores = torch.einsum(
+        "bshd,bthd,h->bhst", q, k, beta_tensor.to(compute_dtype)
+    )
+    if is_causal:
+        seq_len = scores.shape[-1]
+        causal = torch.triu(
+            torch.full((seq_len, seq_len), float("-inf"), device=g.device), 1
+        )
+        scores = scores + causal
     if attn_mask is not None:
-        a = a + attn_mask
-    beta_a = beta * a
-    lse = torch.logsumexp(beta_a, dim=-2)
-    return -(1.0 / beta * lse).sum()
+        scores = scores + attn_mask
+    lse = torch.logsumexp(scores, dim=-1)
+    beta_view = (
+        beta_tensor.view(1, -1, 1) if isinstance(beta, torch.Tensor) else beta
+    )
+    return (-(lse / beta_view).sum()).to(g.dtype)
 
 
 def test_attention_energy_matches_manual() -> None:
-    attn = MultiHeadEnergyAttention(
-        in_dim=2,
+    attn = MultiheadEnergyAttention(
+        embed_dim=4,
         num_heads=1,
-        head_dim=2,
         beta=1.0,
-        bias=False,
     )
     with torch.no_grad():
-        attn.w_k.copy_(torch.eye(2).unsqueeze(0))
-        attn.w_q.copy_(torch.eye(2).unsqueeze(0))
-    g = torch.tensor([[1.0, 0.0], [0.0, 1.0]])
+        attn.k_proj_weight.copy_(torch.eye(4).unsqueeze(0))
+        attn.q_proj_weight.copy_(torch.eye(4).unsqueeze(0))
+    g = torch.tensor([[[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0]]])
     energy = attn(g)
-    expected = _manual_energy(g, attn.w_k, attn.w_q)
+    expected = _manual_energy(g, attn.k_proj_weight, attn.q_proj_weight)
     assert torch.allclose(energy, expected, atol=1e-6)
 
 
 def test_attention_excludes_diagonal() -> None:
-    attn = MultiHeadEnergyAttention(
-        in_dim=1,
+    attn = MultiheadEnergyAttention(
+        embed_dim=1,
         num_heads=1,
-        head_dim=1,
         beta=1.0,
-        bias=False,
     )
     with torch.no_grad():
-        attn.w_k.fill_(1.0)
-        attn.w_q.fill_(1.0)
+        attn.k_proj_weight.fill_(1.0)
+        attn.q_proj_weight.fill_(1.0)
     g = torch.ones(1, 2, 1)
-    e1 = attn(g, include_diag=True)
-    e2 = attn(g, include_diag=False)
-    exp1 = _manual_energy(g, attn.w_k, attn.w_q, include_diag=True)
-    exp2 = _manual_energy(g, attn.w_k, attn.w_q, include_diag=False)
+    mask = torch.tensor([[[0.0, float("-inf")], [0.0, 0.0]]])
+    e1 = attn(g)
+    e2 = attn(g, attn_mask=mask)
+    exp1 = _manual_energy(g, attn.k_proj_weight, attn.q_proj_weight)
+    exp2 = _manual_energy(
+        g, attn.k_proj_weight, attn.q_proj_weight, attn_mask=mask
+    )
     assert torch.allclose(e1, exp1, atol=1e-6)
     assert torch.allclose(e2, exp2, atol=1e-6)
 
 
 def test_attention_applies_mask() -> None:
-    attn = MultiHeadEnergyAttention(
-        in_dim=1,
+    attn = MultiheadEnergyAttention(
+        embed_dim=1,
         num_heads=1,
-        head_dim=1,
         beta=1.0,
-        bias=False,
     )
     with torch.no_grad():
-        attn.w_k.fill_(1.0)
-        attn.w_q.fill_(1.0)
+        attn.k_proj_weight.fill_(1.0)
+        attn.q_proj_weight.fill_(1.0)
     g = torch.ones(1, 2, 1)
-    mask = torch.tensor([[[[0.0, float("-inf")], [0.0, 0.0]]]])
+    mask = torch.tensor([[[0.0, float("-inf")], [0.0, 0.0]]])
     energy = attn(g, attn_mask=mask)
-    expected = _manual_energy(g, attn.w_k, attn.w_q, attn_mask=mask)
+    expected = _manual_energy(
+        g, attn.k_proj_weight, attn.q_proj_weight, attn_mask=mask
+    )
     assert torch.allclose(energy, expected, atol=1e-6)
 
 
 def test_attention_single_token_zero() -> None:
-    attn = MultiHeadEnergyAttention(in_dim=3, num_heads=1, head_dim=2)
+    attn = MultiheadEnergyAttention(embed_dim=3, num_heads=1)
     g = torch.randn(1, 1, 3)
     energy = attn(g)
     assert torch.allclose(energy, torch.tensor(0.0))
 
 
-def test_attention_parameter_shapes_and_bias() -> None:
-    attn_no_bias = MultiHeadEnergyAttention(
-        in_dim=3,
+def test_attention_parameter_shapes() -> None:
+    attn = MultiheadEnergyAttention(
+        embed_dim=4,
         num_heads=2,
-        head_dim=4,
-        bias=False,
     )
-    assert attn_no_bias.w_k.shape == (2, 4, 3)
-    assert attn_no_bias.w_q.shape == (2, 4, 3)
-    assert attn_no_bias.b_k is None
-    assert attn_no_bias.b_q is None
-
-    attn_bias = MultiHeadEnergyAttention(
-        in_dim=3,
-        num_heads=2,
-        head_dim=4,
-        bias=True,
-    )
-    assert attn_bias.b_k.shape == (4,)
-    assert attn_bias.b_q.shape == (4,)
+    assert attn.k_proj_weight.shape == (2, 2, 4)
+    assert attn.q_proj_weight.shape == (2, 2, 4)
 
 
 def test_attention_default_beta_matches_manual() -> None:
     head_dim = 4
-    attn = MultiHeadEnergyAttention(
-        in_dim=2,
+    attn = MultiheadEnergyAttention(
+        embed_dim=4,
         num_heads=1,
-        head_dim=head_dim,
         beta=None,
-        bias=False,
     )
     assert attn.beta == pytest.approx(1.0 / math.sqrt(head_dim))
     with torch.no_grad():
-        attn.w_k.zero_()
-        attn.w_q.zero_()
-        attn.w_k[0, :2].copy_(torch.eye(2))
-        attn.w_q[0, :2].copy_(torch.eye(2))
-    g = torch.tensor([[1.0, 0.0], [0.0, 1.0]])
+        attn.k_proj_weight.zero_()
+        attn.q_proj_weight.zero_()
+        attn.k_proj_weight[0, :2, :2].copy_(torch.eye(2))
+        attn.q_proj_weight[0, :2, :2].copy_(torch.eye(2))
+    g = torch.tensor([[[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0]]])
     energy = attn(g)
-    expected = _manual_energy(g, attn.w_k, attn.w_q, beta=attn.beta)
+    expected = _manual_energy(
+        g, attn.k_proj_weight, attn.q_proj_weight, beta=attn.beta
+    )
     assert torch.allclose(energy, expected, atol=1e-6)
 
 
 @pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
 def test_attention_mixed_precision(dtype: torch.dtype) -> None:
     torch.manual_seed(42)
-    attn = MultiHeadEnergyAttention(
-        in_dim=1,
+    attn = MultiheadEnergyAttention(
+        embed_dim=1,
         num_heads=1,
-        head_dim=1,
         beta=1.0,
-        bias=False,
     )
     with torch.no_grad():
-        attn.w_k.fill_(1.0)
-        attn.w_q.fill_(1.0)
+        attn.k_proj_weight.fill_(1.0)
+        attn.q_proj_weight.fill_(1.0)
     g = torch.ones(1, 2, 1, dtype=dtype)
     energy = attn(g)
-    expected = _manual_energy(g, attn.w_k.to(dtype), attn.w_q.to(dtype))
+    expected = _manual_energy(
+        g, attn.k_proj_weight.to(dtype), attn.q_proj_weight.to(dtype)
+    )
     assert energy.dtype == dtype
 
     # bfloat16 has lower precision than float16
@@ -159,22 +164,22 @@ def test_attention_mixed_precision(dtype: torch.dtype) -> None:
 
 
 def test_attention_mask_broadcast() -> None:
-    attn = MultiHeadEnergyAttention(
-        in_dim=1,
+    attn = MultiheadEnergyAttention(
+        embed_dim=2,
         num_heads=2,
-        head_dim=1,
         beta=1.0,
-        bias=False,
     )
     with torch.no_grad():
-        attn.w_k.fill_(1.0)
-        attn.w_q.fill_(1.0)
+        attn.k_proj_weight.fill_(1.0)
+        attn.q_proj_weight.fill_(1.0)
     g = torch.ones(1, 3, 1)
     mask = torch.tensor(
         [[0.0, float("-inf"), 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]],
     )
-    mask = mask.unsqueeze(0).unsqueeze(0)  # shape [1, 1, N, N]
+    mask = mask.unsqueeze(0)  # shape [1, N, N]
     energy = attn(g, attn_mask=mask)
-    expanded_mask = mask.expand(1, 2, 3, 3)
-    expected = _manual_energy(g, attn.w_k, attn.w_q, attn_mask=expanded_mask)
+    expanded_mask = mask.expand(2, 3, 3)
+    expected = _manual_energy(
+        g, attn.k_proj_weight, attn.q_proj_weight, attn_mask=expanded_mask
+    )
     assert torch.allclose(energy, expected, atol=1e-6)

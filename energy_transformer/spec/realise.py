@@ -85,7 +85,7 @@ module_mappings = {
     ),
     "MHEASpec": (
         "energy_transformer.layers.attention",
-        "MultiHeadEnergyAttention",
+        "MultiheadEnergyAttention",
     ),
     "MHASpec": ("torch.nn", "MultiheadAttention"),
     "HNSpec": ("energy_transformer.layers.hopfield", "HopfieldNetwork"),
@@ -239,9 +239,13 @@ class AutoImporter:
         if handler:
             handler(spec, kwargs)
 
-    def _handle_mheaspec(self, _spec: MHEASpec, kwargs: dict[str, Any]) -> None:
-        if embed_dim := self.context.get_dim("embed_dim"):
-            kwargs["in_dim"] = embed_dim
+    def _handle_mheaspec(self, spec: MHEASpec, kwargs: dict[str, Any]) -> None:
+        embed_dim = self.context.get_dim("embed_dim")
+        if embed_dim is None:
+            embed_dim = spec.num_heads * spec.head_dim
+        kwargs["embed_dim"] = embed_dim
+        kwargs.pop("head_dim", None)
+        kwargs.pop("bias", None)
 
     def _handle_mhaspec(self, _spec: Spec, kwargs: dict[str, Any]) -> None:
         if embed_dim := self.context.get_dim("embed_dim"):
@@ -1917,6 +1921,32 @@ def realise_mha(
         dropout=spec.attn_drop,
         bias=spec.qkv_bias,
         batch_first=True,
+    )
+
+
+@register(library.MHEASpec)
+def realise_mhea(
+    spec: library.MHEASpec,
+    context: Context,
+) -> nn.Module:
+    """Realise ``MHEASpec`` into :class:`MultiheadEnergyAttention`."""
+    from energy_transformer.layers.attention import MultiheadEnergyAttention
+
+    embed_dim = context.get_dim("embed_dim")
+    if embed_dim is None:
+        embed_dim = spec.num_heads * spec.head_dim
+
+    if spec.bias:
+        warnings.warn(
+            "bias parameter is ignored in MultiheadEnergyAttention",
+            stacklevel=2,
+        )
+
+    return MultiheadEnergyAttention(
+        embed_dim=embed_dim,
+        num_heads=spec.num_heads,
+        beta=spec.beta,
+        init_std=spec.init_std,
     )
 
 

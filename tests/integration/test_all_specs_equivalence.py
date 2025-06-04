@@ -1,5 +1,7 @@
 """Exhaustive equivalence tests for all specifications in library.py."""
 
+import math
+
 import pytest
 import torch
 from torch import nn
@@ -10,7 +12,7 @@ from energy_transformer.layers import (
     FeatureHead,
     HopfieldNetwork,
     LayerNorm,
-    MultiHeadEnergyAttention,
+    MultiheadEnergyAttention,
     PatchEmbedding,
     PositionalEmbedding2D,
 )
@@ -303,35 +305,34 @@ class TestAttentionSpecs:
         ]
 
         for tc in test_cases:
-            direct = MultiHeadEnergyAttention(
-                in_dim=tc["in_dim"],
+            direct = MultiheadEnergyAttention(
+                embed_dim=tc["in_dim"],
                 num_heads=tc["num_heads"],
-                head_dim=tc["head_dim"],
                 beta=tc["beta"],
-                bias=tc["bias"],
                 init_std=tc["init_std"],
             )
             spec = MHEASpec(
                 num_heads=tc["num_heads"],
                 head_dim=tc["head_dim"],
                 beta=tc["beta"],
-                bias=tc["bias"],
                 init_std=tc["init_std"],
             )
             ctx = Context(dimensions={"embed_dim": tc["in_dim"]})
             from_spec = realise(spec, ctx)
 
-            assert isinstance(from_spec, MultiHeadEnergyAttention)
+            assert isinstance(from_spec, MultiheadEnergyAttention)
             assert from_spec.num_heads == direct.num_heads
             assert from_spec.head_dim == direct.head_dim
             if tc["beta"] is not None:
-                assert from_spec.beta == direct.beta
+                assert torch.allclose(from_spec.beta, direct.beta)
             else:
-                assert from_spec.beta == pytest.approx(
-                    1.0 / (tc["head_dim"] ** 0.5)
+                expected_beta = torch.full(
+                    (tc["num_heads"],),
+                    1.0 / math.sqrt(tc["in_dim"] // tc["num_heads"]),
+                    device=from_spec.beta.device,
+                    dtype=from_spec.beta.dtype,
                 )
-            assert (from_spec.b_k is not None) == tc["bias"]
-            assert (from_spec.b_q is not None) == tc["bias"]
+                assert torch.allclose(from_spec.beta, expected_beta)
 
     def test_mha_spec(self):
         """Test standard MHA spec (should create nn.MultiheadAttention)."""
@@ -641,10 +642,9 @@ class TestCompositeSpecs:
         for tc in test_cases:
             direct = EnergyTransformer(
                 layer_norm=LayerNorm(tc["embed_dim"]),
-                attention=MultiHeadEnergyAttention(
-                    in_dim=tc["embed_dim"],
+                attention=MultiheadEnergyAttention(
+                    embed_dim=tc["embed_dim"],
                     num_heads=tc["num_heads"],
-                    head_dim=tc["head_dim"],
                 ),
                 hopfield=HopfieldNetwork(
                     in_dim=tc["embed_dim"],

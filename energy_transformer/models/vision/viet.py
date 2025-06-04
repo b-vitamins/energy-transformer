@@ -56,7 +56,7 @@ from typing import Any
 
 from torch import Tensor, nn
 
-from energy_transformer.layers.attention import MultiHeadEnergyAttention
+from energy_transformer.layers.attention import MultiheadEnergyAttention
 from energy_transformer.layers.embeddings import (
     PatchEmbedding,
     PositionalEmbedding2D,
@@ -117,7 +117,7 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
         embed_dim: int,
         depth: int,
         num_heads: int,
-        head_dim: int,
+        _head_dim: int,
         hopfield_hidden_dim: int,
         et_steps: int,
         et_alpha: float,
@@ -161,10 +161,9 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
             [
                 EnergyTransformer(
                     layer_norm=LayerNorm(embed_dim),
-                    attention=MultiHeadEnergyAttention(
-                        in_dim=embed_dim,
+                    attention=MultiheadEnergyAttention(
+                        embed_dim=embed_dim,
                         num_heads=num_heads,
-                        head_dim=head_dim,
                     ),
                     hopfield=HopfieldNetwork(
                         in_dim=embed_dim,
@@ -327,7 +326,7 @@ def viet_tiny(**kwargs: Any) -> VisionEnergyTransformer:
         "embed_dim": 192,
         "depth": 12,
         "num_heads": 3,
-        "head_dim": 64,
+        "_head_dim": 64,
         "hopfield_hidden_dim": 768,  # 4x embed_dim
         "et_steps": 4,
         "et_alpha": 0.125,
@@ -343,7 +342,7 @@ def viet_small(**kwargs: Any) -> VisionEnergyTransformer:
         "embed_dim": 384,
         "depth": 12,
         "num_heads": 6,
-        "head_dim": 64,
+        "_head_dim": 64,
         "hopfield_hidden_dim": 1536,  # 4x embed_dim
         "et_steps": 4,
         "et_alpha": 0.125,
@@ -359,7 +358,7 @@ def viet_base(**kwargs: Any) -> VisionEnergyTransformer:
         "embed_dim": 768,
         "depth": 12,
         "num_heads": 12,
-        "head_dim": 64,
+        "_head_dim": 64,
         "hopfield_hidden_dim": 3072,  # 4x embed_dim
         "et_steps": 4,
         "et_alpha": 0.125,
@@ -375,7 +374,7 @@ def viet_large(**kwargs: Any) -> VisionEnergyTransformer:
         "embed_dim": 1024,
         "depth": 24,
         "num_heads": 16,
-        "head_dim": 64,
+        "_head_dim": 64,
         "hopfield_hidden_dim": 4096,  # 4x embed_dim
         "et_steps": 4,
         "et_alpha": 0.125,
@@ -401,7 +400,7 @@ def viet_tiny_cifar(
         "embed_dim": 192,
         "depth": 12,
         "num_heads": 3,
-        "head_dim": 64,
+        "_head_dim": 64,
         "hopfield_hidden_dim": 768,
         "et_steps": 4,
         "et_alpha": 0.125,
@@ -424,7 +423,7 @@ def viet_small_cifar(
         "embed_dim": 384,
         "depth": 12,
         "num_heads": 6,
-        "head_dim": 64,
+        "_head_dim": 64,
         "hopfield_hidden_dim": 1536,
         "et_steps": 4,
         "et_alpha": 0.125,
@@ -450,7 +449,7 @@ def viet_2l_cifar(
         "embed_dim": 192,
         "depth": 2,  # Shallow!
         "num_heads": 8,
-        "head_dim": 64,
+        "_head_dim": 64,
         "hopfield_hidden_dim": 576,  # 3x embed_dim
         "et_steps": 6,
         "et_alpha": 10.0,
@@ -473,7 +472,7 @@ def viet_4l_cifar(
         "embed_dim": 192,
         "depth": 4,
         "num_heads": 8,
-        "head_dim": 64,
+        "_head_dim": 64,
         "hopfield_hidden_dim": 576,
         "et_steps": 5,
         "et_alpha": 5.0,
@@ -496,7 +495,7 @@ def viet_6l_cifar(
         "embed_dim": 192,
         "depth": 6,
         "num_heads": 8,
-        "head_dim": 64,
+        "_head_dim": 64,
         "hopfield_hidden_dim": 576,
         "et_steps": 4,
         "et_alpha": 2.5,
