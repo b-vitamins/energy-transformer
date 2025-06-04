@@ -30,9 +30,27 @@ class TestCompositionPatterns:
     def test_mixed_depth_composition(self):
         """Test mixing different depth blocks."""
         spec = seq(
-            loop(ETBlockSpec(steps=2, alpha=1.0), times=2),
-            loop(ETBlockSpec(steps=10, alpha=0.1), times=4),
-            ETBlockSpec(steps=3, alpha=0.5),
+            loop(
+                ETBlockSpec(
+                    steps=2,
+                    alpha=1.0,
+                    attention=MHEASpec(num_heads=8, head_dim=32),
+                ),
+                times=2,
+            ),
+            loop(
+                ETBlockSpec(
+                    steps=10,
+                    alpha=0.1,
+                    attention=MHEASpec(num_heads=8, head_dim=32),
+                ),
+                times=4,
+            ),
+            ETBlockSpec(
+                steps=3,
+                alpha=0.5,
+                attention=MHEASpec(num_heads=8, head_dim=32),
+            ),
         )
         ctx = Context(dimensions={"embed_dim": 256})
         module = realise(spec, ctx)
@@ -63,11 +81,27 @@ class TestCompositionPatterns:
         spec = switch(
             key="model_size",
             cases={
-                "tiny": ETBlockSpec(steps=2, alpha=1.0),
-                "small": ETBlockSpec(steps=4, alpha=0.5),
-                "base": ETBlockSpec(steps=6, alpha=0.125),
+                "tiny": ETBlockSpec(
+                    steps=2,
+                    alpha=1.0,
+                    attention=MHEASpec(num_heads=8, head_dim=32),
+                ),
+                "small": ETBlockSpec(
+                    steps=4,
+                    alpha=0.5,
+                    attention=MHEASpec(num_heads=8, head_dim=32),
+                ),
+                "base": ETBlockSpec(
+                    steps=6,
+                    alpha=0.125,
+                    attention=MHEASpec(num_heads=8, head_dim=32),
+                ),
             },
-            default=ETBlockSpec(steps=4, alpha=0.25),
+            default=ETBlockSpec(
+                steps=4,
+                alpha=0.25,
+                attention=MHEASpec(num_heads=8, head_dim=32),
+            ),
         )
         for size, expected_steps in [
             ("tiny", 2),

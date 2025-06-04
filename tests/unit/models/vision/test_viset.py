@@ -23,11 +23,11 @@ class DummyLayerNorm(nn.Module):
 
 
 class DummyAttention(nn.Module):
-    def __init__(self, in_dim: int, num_heads: int, head_dim: int):
+    def __init__(self, embed_dim: int, num_heads: int):
         super().__init__()
-        self.in_dim = in_dim
+        self.embed_dim = embed_dim
         self.num_heads = num_heads
-        self.head_dim = head_dim
+        self.head_dim = embed_dim // num_heads
 
 
 class DummySimplicialHopfieldNetwork(nn.Module):
@@ -76,7 +76,7 @@ def test_viset_initializes_with_topology() -> None:
         embed_dim=8,
         depth=2,
         num_heads=2,
-        _head_dim=4,
+        head_dim=4,
         hopfield_hidden_dim=16,
         et_steps=3,
         et_alpha=0.1,
@@ -102,7 +102,7 @@ def test_viset_without_topology_custom_weights() -> None:
         embed_dim=8,
         depth=1,
         num_heads=2,
-        _head_dim=4,
+        head_dim=4,
         hopfield_hidden_dim=16,
         et_steps=1,
         et_alpha=0.2,

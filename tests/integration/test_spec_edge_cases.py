@@ -66,9 +66,9 @@ class TestEdgeCases:
         module1 = realise(spec, ctx1)
         module2 = realise(spec, ctx2)
         module3 = realise(spec, ctx3)
-        assert module1.in_dim == 512
-        assert module2.in_dim == 768
-        assert module3.in_dim == 1024
+        assert module1.embed_dim == 512
+        assert module2.embed_dim == 768
+        assert module3.embed_dim == 1024
 
     def test_conditional_specs(self):
         """Test conditional specification behavior."""

@@ -1,5 +1,7 @@
 """Exhaustive equivalence tests for all specifications in library.py."""
 
+import math
+
 import pytest
 import torch
 from torch import nn
@@ -322,11 +324,15 @@ class TestAttentionSpecs:
             assert from_spec.num_heads == direct.num_heads
             assert from_spec.head_dim == direct.head_dim
             if tc["beta"] is not None:
-                assert from_spec.beta == direct.beta
+                assert torch.allclose(from_spec.beta, direct.beta)
             else:
-                assert from_spec.beta == pytest.approx(
-                    1.0 / (tc["head_dim"] ** 0.5)
+                expected_beta = torch.full(
+                    (tc["num_heads"],),
+                    1.0 / math.sqrt(tc["in_dim"] // tc["num_heads"]),
+                    device=from_spec.beta.device,
+                    dtype=from_spec.beta.dtype,
                 )
+                assert torch.allclose(from_spec.beta, expected_beta)
 
     def test_mha_spec(self):
         """Test standard MHA spec (should create nn.MultiheadAttention)."""
@@ -637,9 +643,8 @@ class TestCompositeSpecs:
             direct = EnergyTransformer(
                 layer_norm=LayerNorm(tc["embed_dim"]),
                 attention=MultiheadEnergyAttention(
-                    in_dim=tc["embed_dim"],
+                    embed_dim=tc["embed_dim"],
                     num_heads=tc["num_heads"],
-                    head_dim=tc["head_dim"],
                 ),
                 hopfield=HopfieldNetwork(
                     in_dim=tc["embed_dim"],
