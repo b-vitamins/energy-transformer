@@ -1,272 +1,185 @@
-"""Energy-based LayerNorm implementation."""
+r"""Energy-based LayerNorm implementation following Energy Transformer theory."""
 
-import math
+from collections.abc import Sequence
+from typing import Any
 
 import torch
 import torch.nn.functional as F  # noqa: N812
-from torch import Tensor, nn
+from torch import nn
 
 
-class LayerNorm(nn.Module):
-    """Layer normalized token representation with strict energy interpretation.
+class EnergyLayerNorm(nn.Module):
+    r"""Energy-based Layer Normalization.
+
+    Implements layer normalization as described in Energy Transformer theory,
+    where the operation emerges as the gradient of an energy function.
 
     Parameters
     ----------
-    in_dim : int
-        Feature dimension D of token vectors
-    eps : float, optional
-        Epsilon for numerical stability, by default 1e-5
+    normalized_shape : int or tuple of ints
+        Input shape from an expected input of size
+        ``[* x normalized_shape[0] x normalized_shape[1] x ... x normalized_shape[-1]]``.
+        If a single integer is used, it is treated as a singleton list.
+    eps : float, default=1e-5
+        Small constant for numerical stability in the denominator.
+    regularization : float, default=0.0
+        Regularization coefficient \u03bb that adds \u03bbx to preserve input information.
+    enforce_positive_gamma : bool, default=True
+        If True, uses log-parameterization with softplus to ensure \u03b3 > 0.
+        This guarantees the energy L is bounded below, essential for
+        probability distributions proportional to e^(-L) to be normalizable.
+    device : torch.device, optional
+        Device for parameters.
+    dtype : torch.dtype, optional
+        Data type for parameters.
+
+    Attributes
+    ----------
+    gamma : nn.Parameter
+        Scalar scaling parameter \u03b3. If enforce_positive_gamma=True,
+        this is actually log(\u03b3) and \u03b3 is computed as softplus(log_gamma).
+    delta : nn.Parameter
+        Vector bias parameter \u03b4 \u2208 \u211d\u1d05.
 
     Notes
     -----
-    Each token is represented by a vector x ∈ ℝᴰ.
-    ET block operations use a layer-normalized token representation:
+    The layer normalization operation is defined as:
 
-    gᵢ = gamma·(xᵢ - x̄)/√(1/D·∑ⱼ(xⱼ - x̄)² + ε) + deltaᵢ
+    .. math::
+        g_i = \\gamma \frac{x_i - \bar{x}}{\\sqrt{\frac{1}{D}\\sum_j(x_j - \bar{x})^2 + \varepsilon}} + \\delta_i + \\lambda x_i
 
-    where x̄ = 1/D·∑ₖ₌₁ᴰ xₖ
+    where :math:`\bar{x} = \frac{1}{D}\\sum_{k=1}^D x_k` is the mean.
 
-    The scalar gamma > 0 and vector elements deltaᵢ are learnable parameters.
-    ε is a small regularization constant.
+    This operation is the gradient of the Lagrangian (energy) function:
 
-    This operation can be defined as a partial derivative
-    of the Lagrangian (energy) function:
+    .. math::
+        L = D \\cdot \\gamma \\cdot \\sqrt{\frac{1}{D}\\sum_j(x_j - \bar{x})^2 + \varepsilon} + \\sum_j \\delta_j x_j
 
-    L = D·gamma·√(1/D·∑ⱼ(xⱼ - x̄)² + ε) + ∑ⱼdeltaⱼ·xⱼ
+    such that :math:`g_i = \frac{\\partial L}{\\partial x_i}` (without regularization).
 
-    such that gᵢ = ∂L/∂xᵢ
+    Examples
+    --------
+    >>> # Standard energy layer norm
+    >>> layer = EnergyLayerNorm(768)
+    >>> x = torch.randn(32, 100, 768)
+    >>> output = layer(x)  # (32, 100, 768)
 
-    The positivity constraint on gamma ensures that L is bounded below,
-    which is essential for a valid energy-based interpretation where
-    probability distributions proportional to e^(-L) must be normalizable.
+    >>> # With regularization
+    >>> layer = EnergyLayerNorm(768, regularization=0.001)
+
+    >>> # Compute the energy Lagrangian
+    >>> energy = layer.compute_energy(x)  # (32, 100)
     """
 
     def __init__(
         self,
-        in_dim: int,
+        normalized_shape: int | Sequence[int],
         eps: float = 1e-5,
+        regularization: float = 0.0,
+        enforce_positive_gamma: bool = True,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
     ) -> None:
-        """Initialize LayerNorm module.
-
-        Parameters
-        ----------
-        in_dim : int
-            Feature dimension D of token vectors
-        eps : float, optional
-            Small constant for numerical stability, by default 1e-5
-        """
+        factory_kwargs: dict[str, Any] = {"device": device, "dtype": dtype}
         super().__init__()
-        self.in_dim = in_dim
+
+        if isinstance(normalized_shape, int):
+            normalized_shape = (normalized_shape,)
+        self.normalized_shape = tuple(normalized_shape)
         self.eps = eps
+        self.regularization = regularization
+        self.enforce_positive_gamma = enforce_positive_gamma
 
-        # Store log(gamma) and apply softplus to ensure gamma > 0
-        # Initialize to make softplus(log_gamma) = 1.0
-        self.log_gamma = nn.Parameter(
-            torch.tensor(math.log(math.exp(1.0) - 1)),
-        )  # shape: scalar
+        self.D = 1
+        for dim in self.normalized_shape:
+            self.D *= dim
 
-        # delta ∈ ℝᴰ
-        self.delta = nn.Parameter(torch.empty(in_dim))  # shape: [D]
+        if self.enforce_positive_gamma:
+            init_val = torch.log(torch.expm1(torch.tensor(1.0))).item()
+            self.log_gamma = nn.Parameter(
+                torch.full((), init_val, **factory_kwargs)
+            )
+        else:
+            self.gamma = nn.Parameter(torch.ones((), **factory_kwargs))
 
-        self.reset_parameters()
+        self.delta = nn.Parameter(
+            torch.zeros(normalized_shape, **factory_kwargs)
+        )
 
-    def reset_parameters(self) -> None:
-        """Initialize learnable parameters.
-
-        log_gamma is initialized to make softplus(log_gamma) = 1.0,
-        maintaining the standard identity initialization.
-        """
-        # Initialize log_gamma to make softplus(log_gamma) = 1.0
-        with torch.no_grad():
-            self.log_gamma.fill_(math.log(math.exp(1.0) - 1.0))
-        nn.init.zeros_(self.delta)
-
-    def forward(self, x: Tensor) -> Tensor:
-        """Apply layer normalization to input tensor.
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply energy-based layer normalization.
 
         Parameters
         ----------
-        x : Tensor
-            Input tensor of shape [..., D] where D is the
-            feature dimension
+        x : torch.Tensor
+            Input tensor of shape ``[*, normalized_shape[0], ..., normalized_shape[-1]]``
+            where * means any number of additional dimensions.
 
         Returns
         -------
-        Tensor
-            Normalized output tensor of shape [..., D]
+        torch.Tensor
+            Normalized tensor of same shape as input.
         """
-        orig_dtype = x.dtype
+        dims = [-(i + 1) for i in range(len(self.normalized_shape))]
 
-        # For mixed precision calculations, use at least float32 internally
-        # Handle both float16 and bfloat16 for mixed precision training
-        calc_dtype = orig_dtype
-        if orig_dtype in {torch.float16, torch.bfloat16}:
-            # For numerical stability, use float32 for internal calculations
-            x = x.to(torch.float32)
-            calc_dtype = torch.float32
+        if self.enforce_positive_gamma:
+            gamma = F.softplus(self.log_gamma)
+        else:
+            gamma = self.gamma
 
-        # Get positive gamma using softplus
-        gamma = F.softplus(self.log_gamma).to(dtype=calc_dtype)
+        x_mean = x.mean(dim=dims, keepdim=True)  # [..., 1, ..., 1]
+        x_centered = x - x_mean  # [..., normalized_shape]
+        var = x_centered.pow(2).mean(dim=dims, keepdim=True)  # [..., 1, ..., 1]
 
-        # Ensure delta has the correct dtype
-        delta = self.delta.to(dtype=calc_dtype)
+        g = (
+            gamma * x_centered / torch.sqrt(var + self.eps) + self.delta
+        )  # [..., normalized_shape]
 
-        # x̄ = 1/D·∑ₖ₌₁ᴰ xₖ
-        x_mean = x.mean(dim=-1, keepdim=True)  # shape: [..., 1]
-
-        # More efficient variance computation using torch.var
-        # 1/D·∑ⱼ(xⱼ - x̄)² computed in-kernel
-        var = torch.var(
-            x,
-            dim=-1,
-            unbiased=False,
-            keepdim=True,
-        )  # shape: [..., 1]
-
-        # xᵢ - x̄
-        x_c = x - x_mean  # shape: [..., D]
-
-        # gᵢ = gamma·(xᵢ - x̄)/√(1/D·∑ⱼ(xⱼ - x̄)² + ε) + deltaᵢ
-        g = gamma * x_c / torch.sqrt(var + self.eps) + delta  # shape: [..., D]
-
-        # Convert back to original dtype if necessary
-        if calc_dtype != orig_dtype:
-            g = g.to(orig_dtype)
+        if self.regularization != 0:
+            g = g + self.regularization * x
 
         return g
 
-    def export_standard_layernorm(self) -> nn.LayerNorm:
-        """Export as standard PyTorch LayerNorm for optimized inference.
-
-        Returns
-        -------
-        nn.LayerNorm
-            Equivalent standard LayerNorm module with frozen parameters
-
-        Notes
-        -----
-        This creates a standard nn.LayerNorm instance with the same
-        normalization behavior as this energy-based implementation.
-        Useful for deployment when you want maximum inference speed
-        and don't need the energy interpretation or gradient computation.
-        """
-        # Create standard LayerNorm
-        standard_ln = nn.LayerNorm(
-            normalized_shape=self.in_dim,
-            eps=self.eps,
-            elementwise_affine=True,
-        )
-
-        # Copy the learned parameters
-        with torch.no_grad():
-            # gamma parameter (weight in standard LayerNorm)
-            gamma = F.softplus(self.log_gamma)
-            standard_ln.weight.fill_(gamma.item())
-
-            # delta parameter (bias in standard LayerNorm)
-            standard_ln.bias.copy_(self.delta)
-
-        return standard_ln
-
-    def get_energy_lagrangian(self, x: Tensor) -> Tensor:
-        """Compute the energy Lagrangian L for given input.
+    def compute_energy(self, x: torch.Tensor) -> torch.Tensor:
+        r"""Compute the energy Lagrangian L.
 
         Parameters
         ----------
-        x : Tensor
-            Input tensor of shape [..., D]
+        x : torch.Tensor
+            Input tensor of shape ``[*, normalized_shape[0], ..., normalized_shape[-1]]``.
 
         Returns
         -------
-        Tensor
-            Energy Lagrangian L of shape [...] (scalar per sample)
+        torch.Tensor
+            Energy values of shape ``[*]`` (one per sample).
 
         Notes
         -----
-        Computes: L = D·gamma·√(1/D·∑ⱼ(xⱼ - x̄)² + ε) + ∑ⱼdeltaⱼ·xⱼ
+        Computes:
 
-        This is the energy function whose partial derivative gives
-        the layer normalization operation: gᵢ = ∂L/∂xᵢ
+        .. math::
+            L = D \\cdot \\gamma \\cdot \\sqrt{\frac{1}{D}\\sum_j(x_j - \bar{x})^2 + \varepsilon} + \\sum_j \\delta_j x_j
         """
-        # Handle mixed precision
-        orig_dtype = x.dtype
-        calc_dtype = orig_dtype
-        if orig_dtype in {torch.float16, torch.bfloat16}:
-            x = x.to(torch.float32)
-            calc_dtype = torch.float32
+        dims = [-(i + 1) for i in range(len(self.normalized_shape))]
 
-        # Get positive gamma
-        gamma = F.softplus(self.log_gamma).to(dtype=calc_dtype)
-        delta = self.delta.to(dtype=calc_dtype)
+        if self.enforce_positive_gamma:
+            gamma = F.softplus(self.log_gamma)
+        else:
+            gamma = self.gamma
 
-        # Compute variance term: 1/D·∑ⱼ(xⱼ - x̄)²
-        var = torch.var(
-            x,
-            dim=-1,
-            unbiased=False,
-            keepdim=False,
-        )  # shape: [...]
+        x_mean = x.mean(dim=dims, keepdim=True)  # [..., 1, ..., 1]
+        var = (x - x_mean).pow(2).mean(dim=dims, keepdim=False)  # [...]
 
-        # First term: D·gamma·√(1/D·∑ⱼ(xⱼ - x̄)² + ε)
-        energy_norm = self.in_dim * gamma * torch.sqrt(var + self.eps)
+        energy_norm = self.D * gamma * torch.sqrt(var + self.eps)  # [...]
+        energy_bias = (self.delta * x).sum(dim=dims)  # [...]
 
-        # Second term: ∑ⱼdeltaⱼ·xⱼ
-        energy_bias = torch.sum(delta * x, dim=-1)  # shape: [...]
+        return energy_norm + energy_bias
 
-        # Total Lagrangian
-        lagrangian = energy_norm + energy_bias
-
-        # Convert back to original dtype
-        if calc_dtype != orig_dtype:
-            lagrangian = lagrangian.to(orig_dtype)
-
-        return lagrangian
-
-
-# Utility function for TorchInductor optimization preparation
-def _functional_layernorm_energy(
-    x: Tensor,
-    log_gamma: Tensor,
-    delta: Tensor,
-    eps: float = 1e-5,
-) -> Tensor:
-    """Functional version of energy LayerNorm for compilation optimization.
-
-    This can be used with torch.func.functional_call for better
-    TorchInductor kernel generation and graph optimization.
-
-    Parameters
-    ----------
-    x : Tensor
-        Input tensor
-    log_gamma : Tensor
-        Log-gamma parameter (scalar)
-    delta : Tensor
-        Delta bias parameter
-    eps : float
-        Epsilon for numerical stability
-
-    Returns
-    -------
-    Tensor
-        Normalized output
-    """
-    # Handle mixed precision
-    orig_dtype = x.dtype
-    if orig_dtype in {torch.float16, torch.bfloat16}:
-        x = x.to(torch.float32)
-
-    # Get positive gamma
-    gamma = F.softplus(log_gamma)
-
-    # Compute normalization
-    x_mean = x.mean(dim=-1, keepdim=True)
-    var = torch.var(x, dim=-1, unbiased=False, keepdim=True)
-    x_c = x - x_mean
-    g = gamma * x_c / torch.sqrt(var + eps) + delta
-
-    # Convert back to original dtype
-    if orig_dtype in {torch.float16, torch.bfloat16}:
-        g = g.to(orig_dtype)
-
-    return g
+    def extra_repr(self) -> str:
+        """Extra representation string for printing."""
+        s = f"{self.normalized_shape}, eps={self.eps}"
+        if self.regularization != 0:
+            s += f", regularization={self.regularization}"
+        if not self.enforce_positive_gamma:
+            s += ", enforce_positive_gamma=False"
+        return s

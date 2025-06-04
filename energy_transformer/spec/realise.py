@@ -73,7 +73,7 @@ class RealisationConstants:
 
 # Default mappings for auto-importing modules based on Spec names
 module_mappings = {
-    "LayerNormSpec": ("energy_transformer.layers", "LayerNorm"),
+    "LayerNormSpec": ("energy_transformer.layers", "EnergyLayerNorm"),
     "PatchEmbedSpec": (
         "energy_transformer.layers.embeddings",
         "PatchEmbedding",
@@ -1869,7 +1869,7 @@ def realise_layer_norm(
     context: Context,
 ) -> nn.Module:
     """Realise layer normalization using custom implementation."""
-    from energy_transformer.layers import LayerNorm
+    from energy_transformer.layers import EnergyLayerNorm
 
     embed_dim = context.get_dim("embed_dim")
     if embed_dim is None:
@@ -1879,7 +1879,7 @@ def realise_layer_norm(
             context=context,
         )
 
-    return LayerNorm(in_dim=embed_dim, eps=spec.eps)
+    return EnergyLayerNorm(embed_dim, eps=spec.eps)
 
 
 @register(library.ClassificationHeadSpec)

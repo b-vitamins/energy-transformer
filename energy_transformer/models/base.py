@@ -98,7 +98,7 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
         Tensor
             Scalar energy value E^TOTAL
         """
-        # g = LayerNorm(x): x ∈ ℝᴺˣᴰ → g ∈ ℝᴺˣᴷ
+        # g = EnergyLayerNorm(x): x ∈ ℝᴺˣᴰ → g ∈ ℝᴺˣᴷ
         g = self.layer_norm(x)
 
         # E^ATT = attention(g, mask)

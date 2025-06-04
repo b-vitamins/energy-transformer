@@ -64,7 +64,7 @@ from typing import Any
 from torch import nn
 
 from energy_transformer.layers.attention import MultiheadEnergyAttention
-from energy_transformer.layers.layer_norm import LayerNorm
+from energy_transformer.layers.layer_norm import EnergyLayerNorm
 from energy_transformer.layers.simplicial import SimplicialHopfieldNetwork
 from energy_transformer.models.base import EnergyTransformer
 from energy_transformer.models.vision.viet import VisionEnergyTransformer
@@ -216,7 +216,7 @@ class VisionSimplicialEnergyTransformer(VisionEnergyTransformer):
         self.et_blocks = nn.ModuleList(
             [
                 EnergyTransformer(
-                    layer_norm=LayerNorm(embed_dim),
+                    layer_norm=EnergyLayerNorm(embed_dim),
                     attention=MultiheadEnergyAttention(
                         embed_dim=embed_dim,
                         num_heads=num_heads,
