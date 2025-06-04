@@ -50,7 +50,7 @@ class TestAutoImporter:
         spec = MHEASpec(num_heads=12, head_dim=64)
         kwargs = importer._get_base_kwargs(spec)
         importer._apply_spec_specific_logic(spec, "MHEASpec", kwargs)
-        assert kwargs["in_dim"] == 768
+        assert kwargs["embed_dim"] == 768
 
         spec = HNSpec(multiplier=4.0)
         kwargs = importer._get_base_kwargs(spec)

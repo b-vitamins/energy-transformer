@@ -113,8 +113,8 @@ class TestComponentEquivalence:
         assert isinstance(from_spec, type(direct))
         assert direct.num_heads == from_spec.num_heads
         assert direct.embed_dim == from_spec.embed_dim
-        assert direct.w_k.shape == from_spec.w_k.shape
-        assert direct.w_q.shape == from_spec.w_q.shape
+        assert direct.k_proj_weight.shape == from_spec.k_proj_weight.shape
+        assert direct.q_proj_weight.shape == from_spec.q_proj_weight.shape
 
     def test_hopfield_network_equivalence(self):
         """HNSpec should produce identical HopfieldNetwork."""
