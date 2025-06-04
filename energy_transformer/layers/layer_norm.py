@@ -6,10 +6,8 @@ import torch
 import torch.nn.functional as F  # noqa: N812
 from torch import Tensor, nn
 
-from .base import BaseLayerNorm
 
-
-class LayerNorm(BaseLayerNorm):
+class LayerNorm(nn.Module):
     """Layer normalized token representation with strict energy interpretation.
 
     Parameters

@@ -6,10 +6,8 @@ import torch
 import torch.nn.functional as F  # noqa: N812
 from torch import Tensor, nn
 
-from .base import BaseHopfieldNetwork
 
-
-class HopfieldNetwork(BaseHopfieldNetwork):
+class HopfieldNetwork(nn.Module):
     """Modern Hopfield Network with energy-based formulation.
 
     Parameters

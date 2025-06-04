@@ -6,12 +6,6 @@ from typing import Literal, NamedTuple, cast
 import torch
 from torch import Tensor, nn
 
-from energy_transformer.layers.base import (
-    BaseEnergyAttention,
-    BaseHopfieldNetwork,
-    BaseLayerNorm,
-)
-
 __all__ = ["DescentMode", "ETOutput", "EnergyTransformer", "Track"]
 
 # Registry for model classes to enable lookups from realiser
@@ -60,11 +54,11 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
 
     Parameters
     ----------
-    layer_norm : BaseLayerNorm
+    layer_norm : nn.Module
         Layer normalization component that transforms input tokens
-    attention : BaseEnergyAttention
+    attention : nn.Module
         Energy-based attention component
-    hopfield : BaseHopfieldNetwork
+    hopfield : nn.Module
         Hopfield network component for memory-based associations
     steps : int, optional
         Number of gradient descent steps T, by default 12
@@ -74,9 +68,9 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
 
     def __init__(
         self,
-        layer_norm: BaseLayerNorm,
-        attention: BaseEnergyAttention,
-        hopfield: BaseHopfieldNetwork,
+        layer_norm: nn.Module,
+        attention: nn.Module,
+        hopfield: nn.Module,
         steps: int = 12,
         alpha: float = 1.0,
     ) -> None:
