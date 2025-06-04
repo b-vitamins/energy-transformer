@@ -27,13 +27,13 @@ Example
 >>> import torch
 >>> from energy_transformer.models import EnergyTransformer
 >>> from energy_transformer.layers import (
-...     LayerNorm, MultiHeadEnergyAttention, HopfieldNetwork
+...     LayerNorm, MultiheadEnergyAttention, HopfieldNetwork
 ... )
 >>>
 >>> # Create an Energy Transformer block
 >>> et_block = EnergyTransformer(
 ...     layer_norm=LayerNorm(768),
-...     attention=MultiHeadEnergyAttention(768, num_heads=12, head_dim=64),
+...     attention=MultiheadEnergyAttention(embed_dim=768, num_heads=12),
 ...     hopfield=HopfieldNetwork(768, hidden_dim=3072),
 ...     steps=4,
 ...     alpha=0.125

@@ -17,12 +17,12 @@ Example
 >>> # Build a simple Energy Transformer block
 >>> import torch
 >>> from energy_transformer.layers import (
-...     LayerNorm, MultiHeadEnergyAttention, HopfieldNetwork
+...     LayerNorm, MultiheadEnergyAttention, HopfieldNetwork
 ... )
 >>>
 >>> # Create layers
 >>> norm = LayerNorm(in_dim=768)
->>> attn = MultiHeadEnergyAttention(in_dim=768, num_heads=12, head_dim=64)
+>>> attn = MultiheadEnergyAttention(embed_dim=768, num_heads=12)
 >>> hopfield = HopfieldNetwork(in_dim=768, hidden_dim=3072)
 >>>
 >>> # Use in forward pass
@@ -31,7 +31,7 @@ Example
 >>> energy = attn(x_norm) + hopfield(x_norm)
 """
 
-from .attention import MultiHeadEnergyAttention
+from .attention import MultiheadEnergyAttention
 from .embeddings import PatchEmbedding, PositionalEmbedding2D
 from .heads import ClassificationHead, FeatureHead
 from .hopfield import HopfieldNetwork
@@ -47,7 +47,7 @@ __all__ = [
     "FeatureHead",
     "HopfieldNetwork",
     "LayerNorm",
-    "MultiHeadEnergyAttention",
+    "MultiheadEnergyAttention",
     "PatchEmbedding",
     "PositionalEmbedding2D",
     "SimplicialHopfieldNetwork",

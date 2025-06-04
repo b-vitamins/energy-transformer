@@ -85,7 +85,7 @@ module_mappings = {
     ),
     "MHEASpec": (
         "energy_transformer.layers.attention",
-        "MultiHeadEnergyAttention",
+        "MultiheadEnergyAttention",
     ),
     "MHASpec": ("torch.nn", "MultiheadAttention"),
     "HNSpec": ("energy_transformer.layers.hopfield", "HopfieldNetwork"),
@@ -241,7 +241,7 @@ class AutoImporter:
 
     def _handle_mheaspec(self, _spec: MHEASpec, kwargs: dict[str, Any]) -> None:
         if embed_dim := self.context.get_dim("embed_dim"):
-            kwargs["in_dim"] = embed_dim
+            kwargs["embed_dim"] = embed_dim
 
     def _handle_mhaspec(self, _spec: Spec, kwargs: dict[str, Any]) -> None:
         if embed_dim := self.context.get_dim("embed_dim"):

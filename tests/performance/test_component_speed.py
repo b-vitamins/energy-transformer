@@ -8,7 +8,7 @@ import torch
 from energy_transformer.layers import (
     HopfieldNetwork,
     LayerNorm,
-    MultiHeadEnergyAttention,
+    MultiheadEnergyAttention,
     PatchEmbedding,
     SimplicialHopfieldNetwork,
 )
@@ -32,16 +32,14 @@ class TestLayerPerformance:
         device,
         performance_tracker,
     ) -> None:
-        """Benchmark MultiHeadEnergyAttention performance."""
+        """Benchmark MultiheadEnergyAttention performance."""
         embed_dim = 768
-        head_dim = embed_dim // num_heads
         batch_size = 4
 
         attention = (
-            MultiHeadEnergyAttention(
-                in_dim=embed_dim,
+            MultiheadEnergyAttention(
+                embed_dim=embed_dim,
                 num_heads=num_heads,
-                head_dim=head_dim,
             )
             .to(device)
             .eval()
@@ -344,7 +342,6 @@ class TestEnergyTransformerBlock:
         """Test how ET block performance scales with optimization steps."""
         embed_dim = 768
         num_heads = 12
-        head_dim = 64
         hidden_dim = 3072
         batch_size = 4
         seq_len = 128
@@ -352,10 +349,9 @@ class TestEnergyTransformerBlock:
         et_block = (
             EnergyTransformer(
                 layer_norm=LayerNorm(embed_dim),
-                attention=MultiHeadEnergyAttention(
-                    in_dim=embed_dim,
+                attention=MultiheadEnergyAttention(
+                    embed_dim=embed_dim,
                     num_heads=num_heads,
-                    head_dim=head_dim,
                 ),
                 hopfield=HopfieldNetwork(
                     in_dim=embed_dim, hidden_dim=hidden_dim
@@ -408,10 +404,9 @@ class TestEnergyTransformerBlock:
         et_block = (
             EnergyTransformer(
                 layer_norm=LayerNorm(embed_dim),
-                attention=MultiHeadEnergyAttention(
-                    in_dim=embed_dim,
+                attention=MultiheadEnergyAttention(
+                    embed_dim=embed_dim,
                     num_heads=num_heads,
-                    head_dim=embed_dim // num_heads,
                 ),
                 hopfield=HopfieldNetwork(
                     in_dim=embed_dim, hidden_dim=hidden_dim

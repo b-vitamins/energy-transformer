@@ -56,7 +56,7 @@ from typing import Any
 
 from torch import Tensor, nn
 
-from energy_transformer.layers.attention import MultiHeadEnergyAttention
+from energy_transformer.layers.attention import MultiheadEnergyAttention
 from energy_transformer.layers.embeddings import (
     PatchEmbedding,
     PositionalEmbedding2D,
@@ -117,7 +117,7 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
         embed_dim: int,
         depth: int,
         num_heads: int,
-        head_dim: int,
+        _head_dim: int,
         hopfield_hidden_dim: int,
         et_steps: int,
         et_alpha: float,
@@ -161,10 +161,9 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
             [
                 EnergyTransformer(
                     layer_norm=LayerNorm(embed_dim),
-                    attention=MultiHeadEnergyAttention(
-                        in_dim=embed_dim,
+                    attention=MultiheadEnergyAttention(
+                        embed_dim=embed_dim,
                         num_heads=num_heads,
-                        head_dim=head_dim,
                     ),
                     hopfield=HopfieldNetwork(
                         in_dim=embed_dim,

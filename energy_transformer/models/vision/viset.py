@@ -63,7 +63,7 @@ from typing import Any
 
 from torch import nn
 
-from energy_transformer.layers.attention import MultiHeadEnergyAttention
+from energy_transformer.layers.attention import MultiheadEnergyAttention
 from energy_transformer.layers.layer_norm import LayerNorm
 from energy_transformer.layers.simplicial import SimplicialHopfieldNetwork
 from energy_transformer.models.base import EnergyTransformer
@@ -188,7 +188,7 @@ class VisionSimplicialEnergyTransformer(VisionEnergyTransformer):
             embed_dim=embed_dim,
             depth=depth,
             num_heads=num_heads,
-            head_dim=head_dim,
+            _head_dim=head_dim,
             hopfield_hidden_dim=hopfield_hidden_dim,
             et_steps=et_steps,
             et_alpha=et_alpha,
@@ -217,10 +217,9 @@ class VisionSimplicialEnergyTransformer(VisionEnergyTransformer):
             [
                 EnergyTransformer(
                     layer_norm=LayerNorm(embed_dim),
-                    attention=MultiHeadEnergyAttention(
-                        in_dim=embed_dim,
+                    attention=MultiheadEnergyAttention(
+                        embed_dim=embed_dim,
                         num_heads=num_heads,
-                        head_dim=head_dim,
                     ),
                     hopfield=SimplicialHopfieldNetwork(
                         in_dim=embed_dim,

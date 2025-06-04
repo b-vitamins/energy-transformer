@@ -8,7 +8,7 @@ from energy_transformer.layers import (
     CLSToken,
     HopfieldNetwork,
     LayerNorm,
-    MultiHeadEnergyAttention,
+    MultiheadEnergyAttention,
     PatchEmbedding,
     PositionalEmbedding2D,
 )
@@ -96,28 +96,23 @@ class TestComponentEquivalence:
         assert direct.init_std == from_spec.init_std
 
     def test_mhea_equivalence(self):
-        """MHEASpec should produce identical MultiHeadEnergyAttention."""
-        direct = MultiHeadEnergyAttention(
-            in_dim=768,
+        """MHEASpec should produce identical MultiheadEnergyAttention."""
+        direct = MultiheadEnergyAttention(
+            embed_dim=768,
             num_heads=12,
-            head_dim=64,
             beta=None,
-            bias=False,
             init_std=0.002,
         )
         spec = MHEASpec(
             num_heads=12,
-            head_dim=64,
             beta=None,
-            bias=False,
             init_std=0.002,
         )
         ctx = Context(dimensions={"embed_dim": 768})
         from_spec = realise(spec, ctx)
         assert isinstance(from_spec, type(direct))
         assert direct.num_heads == from_spec.num_heads
-        assert direct.head_dim == from_spec.head_dim
-        assert direct.in_dim == from_spec.in_dim
+        assert direct.embed_dim == from_spec.embed_dim
         assert direct.w_k.shape == from_spec.w_k.shape
         assert direct.w_q.shape == from_spec.w_q.shape
 
@@ -173,8 +168,9 @@ class TestETBlockEquivalence:
         embed_dim = 768
         direct = EnergyTransformer(
             layer_norm=LayerNorm(embed_dim),
-            attention=MultiHeadEnergyAttention(
-                in_dim=embed_dim, num_heads=12, head_dim=64
+            attention=MultiheadEnergyAttention(
+                embed_dim=embed_dim,
+                num_heads=12,
             ),
             hopfield=HopfieldNetwork(in_dim=embed_dim, hidden_dim=3072),
             steps=4,

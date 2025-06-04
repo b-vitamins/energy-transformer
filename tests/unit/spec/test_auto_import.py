@@ -24,7 +24,7 @@ class TestAutoImporter:
         with patch("importlib.import_module") as mock_import:
             mock_module = Mock()
             mock_class = Mock(return_value=Mock(spec=nn.Module))
-            mock_module.MultiHeadEnergyAttention = mock_class
+            mock_module.MultiheadEnergyAttention = mock_class
             mock_import.return_value = mock_module
 
             result = importer.try_import(spec)

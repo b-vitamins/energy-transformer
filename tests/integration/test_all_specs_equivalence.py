@@ -10,7 +10,7 @@ from energy_transformer.layers import (
     FeatureHead,
     HopfieldNetwork,
     LayerNorm,
-    MultiHeadEnergyAttention,
+    MultiheadEnergyAttention,
     PatchEmbedding,
     PositionalEmbedding2D,
 )
@@ -303,25 +303,22 @@ class TestAttentionSpecs:
         ]
 
         for tc in test_cases:
-            direct = MultiHeadEnergyAttention(
-                in_dim=tc["in_dim"],
+            direct = MultiheadEnergyAttention(
+                embed_dim=tc["in_dim"],
                 num_heads=tc["num_heads"],
-                head_dim=tc["head_dim"],
                 beta=tc["beta"],
-                bias=tc["bias"],
                 init_std=tc["init_std"],
             )
             spec = MHEASpec(
                 num_heads=tc["num_heads"],
                 head_dim=tc["head_dim"],
                 beta=tc["beta"],
-                bias=tc["bias"],
                 init_std=tc["init_std"],
             )
             ctx = Context(dimensions={"embed_dim": tc["in_dim"]})
             from_spec = realise(spec, ctx)
 
-            assert isinstance(from_spec, MultiHeadEnergyAttention)
+            assert isinstance(from_spec, MultiheadEnergyAttention)
             assert from_spec.num_heads == direct.num_heads
             assert from_spec.head_dim == direct.head_dim
             if tc["beta"] is not None:
@@ -330,8 +327,6 @@ class TestAttentionSpecs:
                 assert from_spec.beta == pytest.approx(
                     1.0 / (tc["head_dim"] ** 0.5)
                 )
-            assert (from_spec.b_k is not None) == tc["bias"]
-            assert (from_spec.b_q is not None) == tc["bias"]
 
     def test_mha_spec(self):
         """Test standard MHA spec (should create nn.MultiheadAttention)."""
@@ -641,7 +636,7 @@ class TestCompositeSpecs:
         for tc in test_cases:
             direct = EnergyTransformer(
                 layer_norm=LayerNorm(tc["embed_dim"]),
-                attention=MultiHeadEnergyAttention(
+                attention=MultiheadEnergyAttention(
                     in_dim=tc["embed_dim"],
                     num_heads=tc["num_heads"],
                     head_dim=tc["head_dim"],
