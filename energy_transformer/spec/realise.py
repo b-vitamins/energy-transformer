@@ -78,7 +78,6 @@ module_mappings = {
         "energy_transformer.layers.embeddings",
         "ConvPatchEmbed",
     ),
-    "CLSTokenSpec": ("energy_transformer.layers.tokens", "CLSToken"),
     "PosEmbedSpec": (
         "energy_transformer.layers.embeddings",
         "PosEmbed2D",
@@ -1838,11 +1837,20 @@ def realise_cls_token(
     context: Context,
 ) -> nn.Module:
     """Realise a CLS token using context embed dimension."""
-    from energy_transformer.layers.tokens import CLSToken
-
     embed_dim = context.get_dim("embed_dim")
     assert embed_dim is not None
-    return CLSToken(embed_dim)
+
+    class _CLSToken(nn.Module):
+        def __init__(self, embed_dim: int) -> None:
+            super().__init__()
+            self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
+            nn.init.trunc_normal_(self.cls_token, std=0.02)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            cls_tokens = self.cls_token.expand(x.size(0), -1, -1)
+            return torch.cat([cls_tokens, x], dim=1)
+
+    return _CLSToken(embed_dim)
 
 
 @register(library.PosEmbedSpec)

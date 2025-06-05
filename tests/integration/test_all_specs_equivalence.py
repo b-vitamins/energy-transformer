@@ -8,7 +8,6 @@ from torch import nn
 
 from energy_transformer.layers import (
     ClassifierHead,
-    CLSToken,
     ConvPatchEmbed,
     EnergyLayerNorm,
     HopfieldNetwork,
@@ -141,14 +140,13 @@ class TestLayerSpecs:
     def test_cls_token_context_variations(self):
         """Test CLSTokenSpec with different embedding dimensions."""
         for embed_dim in [192, 384, 768, 1024, 1280]:
-            direct = CLSToken(embed_dim)
             spec = CLSTokenSpec()
             ctx = Context(dimensions={"embed_dim": embed_dim})
             from_spec = realise(spec, ctx)
 
-            assert isinstance(from_spec, CLSToken)
+            assert hasattr(from_spec, "cls_token")
+            assert from_spec.cls_token.shape == (1, 1, embed_dim)
             assert from_spec.cls_token.shape[2] == embed_dim
-            assert from_spec.cls_token.shape == direct.cls_token.shape
 
     def test_pos_embed_all_configurations(self):
         """Test PosEmbedSpec with various settings."""

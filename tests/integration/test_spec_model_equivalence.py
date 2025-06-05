@@ -5,7 +5,6 @@ import torch
 
 from energy_transformer.layers import (
     ClassifierHead,
-    CLSToken,
     ConvPatchEmbed,
     EnergyLayerNorm,
     HopfieldNetwork,
@@ -67,14 +66,13 @@ class TestComponentEquivalence:
         assert direct.proj.stride == from_spec.proj.stride
 
     def test_cls_token_equivalence(self):
-        """CLSTokenSpec should produce identical CLSToken."""
+        """CLSTokenSpec should produce correct CLS token parameter."""
         embed_dim = 768
-        direct = CLSToken(embed_dim)
         spec = CLSTokenSpec()
         ctx = Context(dimensions={"embed_dim": embed_dim})
         from_spec = realise(spec, ctx)
-        assert isinstance(from_spec, type(direct))
-        assert direct.cls_token.shape == from_spec.cls_token.shape
+        assert hasattr(from_spec, "cls_token")
+        assert from_spec.cls_token.shape == (1, 1, embed_dim)
 
     def test_positional_embedding_equivalence(self):
         """PosEmbedSpec should produce identical PosEmbed2D."""

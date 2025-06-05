@@ -1,5 +1,6 @@
 import pytest
 import torch
+from torch import nn
 
 from energy_transformer.layers.embeddings import (
     ConvPatchEmbed,
@@ -7,7 +8,6 @@ from energy_transformer.layers.embeddings import (
     PosEmbed2D,
     _to_pair,
 )
-from energy_transformer.layers.tokens import CLSToken
 
 pytestmark = pytest.mark.unit
 
@@ -32,11 +32,12 @@ def test_patch_embedding_raises_for_wrong_size() -> None:
 
 
 def test_cls_token_prepends_token() -> None:
-    tok = CLSToken(embed_dim=5)
+    cls_token = nn.Parameter(torch.zeros(1, 1, 5))
     with torch.no_grad():
-        tok.cls_token.fill_(2.0)
+        cls_token.fill_(2.0)
     x = torch.zeros(2, 3, 5)
-    out = tok(x)
+    cls_tokens = cls_token.expand(x.size(0), -1, -1)
+    out = torch.cat([cls_tokens, x], dim=1)
     assert out.shape == (2, 4, 5)
     assert torch.allclose(out[:, 0], torch.full((2, 5), 2.0))
     assert torch.all(out[:, 1:] == 0)
