@@ -106,7 +106,7 @@ class TestLayerPerformance:
         seq_len = 128
 
         hopfield = (
-            HopfieldNetwork(in_dim=in_dim, hidden_dim=hidden_dim)
+            HopfieldNetwork(embed_dim=in_dim, hidden_dim=hidden_dim)
             .to(device)
             .eval()
         )
@@ -147,7 +147,7 @@ class TestLayerPerformance:
         seq_len = 64
 
         standard = (
-            HopfieldNetwork(in_dim=in_dim, hidden_dim=hidden_dim)
+            HopfieldNetwork(embed_dim=in_dim, hidden_dim=hidden_dim)
             .to(device)
             .eval()
         )
@@ -354,7 +354,8 @@ class TestEnergyTransformerBlock:
                     num_heads=num_heads,
                 ),
                 hopfield=HopfieldNetwork(
-                    in_dim=embed_dim, hidden_dim=hidden_dim
+                    embed_dim=embed_dim,
+                    hidden_dim=hidden_dim,
                 ),
                 steps=et_steps,
                 alpha=0.125,
@@ -409,7 +410,8 @@ class TestEnergyTransformerBlock:
                     num_heads=num_heads,
                 ),
                 hopfield=HopfieldNetwork(
-                    in_dim=embed_dim, hidden_dim=hidden_dim
+                    embed_dim=embed_dim,
+                    hidden_dim=hidden_dim,
                 ),
                 steps=4,
                 alpha=0.125,

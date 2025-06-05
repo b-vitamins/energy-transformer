@@ -253,10 +253,15 @@ class AutoImporter:
 
     def _handle_hnspec(self, spec: HNSpec, kwargs: dict[str, Any]) -> None:
         if embed_dim := self.context.get_dim("embed_dim"):
-            kwargs["in_dim"] = embed_dim
+            kwargs["embed_dim"] = embed_dim
             if spec.hidden_dim is None and hasattr(spec, "multiplier"):
                 kwargs["hidden_dim"] = int(embed_dim * spec.multiplier)
                 kwargs.pop("multiplier", None)
+        if energy_fn := kwargs.pop("energy_fn", None):
+            if energy_fn == "relu_squared":
+                kwargs["activation"] = "relu"
+            elif energy_fn == "softmax":
+                kwargs["activation"] = "softmax"
 
     def _handle_shnspec(self, spec: SHNSpec, kwargs: dict[str, Any]) -> None:
         if embed_dim := self.context.get_dim("embed_dim"):

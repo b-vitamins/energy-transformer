@@ -400,9 +400,7 @@ class TestMemorySpecs:
             else:
                 expected_hidden = int(tc["in_dim"] * tc["multiplier"])
 
-            direct = HopfieldNetwork(
-                in_dim=tc["in_dim"], hidden_dim=expected_hidden
-            )
+            direct = HopfieldNetwork(tc["in_dim"], hidden_dim=expected_hidden)
 
             if "hidden_dim" in tc:
                 spec = HNSpec(
@@ -419,9 +417,9 @@ class TestMemorySpecs:
             from_spec = realise(spec, ctx)
 
             assert isinstance(from_spec, HopfieldNetwork)
-            assert from_spec.in_dim == direct.in_dim
+            assert from_spec.embed_dim == direct.embed_dim
             assert from_spec.hidden_dim == expected_hidden
-            assert from_spec.ξ.shape == (expected_hidden, tc["in_dim"])
+            assert from_spec.kernel.shape == (tc["in_dim"], expected_hidden)
 
     def test_simplicial_hopfield_comprehensive(self):
         """Test SHNSpec with various topological configurations."""
@@ -647,7 +645,7 @@ class TestCompositeSpecs:
                     num_heads=tc["num_heads"],
                 ),
                 hopfield=HopfieldNetwork(
-                    in_dim=tc["embed_dim"],
+                    tc["embed_dim"],
                     hidden_dim=tc.get(
                         "hidden_dim",
                         int(tc["embed_dim"] * tc.get("multiplier", 4.0)),
