@@ -1810,6 +1810,7 @@ from . import library  # noqa: E402
 def realise_et_block(spec: library.ETBlockSpec, context: Context) -> nn.Module:
     """Realise ``ETBlockSpec`` into an :class:`EnergyTransformer`."""
     from energy_transformer.models import EnergyTransformer
+    from energy_transformer.utils.optimizers import SGD
 
     realiser = Realiser(context)
 
@@ -1827,7 +1828,7 @@ def realise_et_block(spec: library.ETBlockSpec, context: Context) -> nn.Module:
         attention=attention,
         hopfield=hopfield,
         steps=spec.steps,
-        alpha=spec.alpha,
+        optimizer=SGD(alpha=spec.alpha),
     )
 
 

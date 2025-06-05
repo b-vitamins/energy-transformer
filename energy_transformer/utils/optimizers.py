@@ -90,7 +90,7 @@ class Momentum:
     def __init__(self, alpha: float = 0.1, momentum: float = 0.9):
         self.alpha = alpha
         self.momentum = momentum
-        self.velocity = None
+        self.velocity: Tensor | None = None
 
     def step(
         self,

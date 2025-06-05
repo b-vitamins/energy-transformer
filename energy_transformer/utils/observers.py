@@ -71,7 +71,7 @@ class EnergyTracker:
         rel_change = (energies[:-1] - energies[1:]).abs() / (
             energies[:-1].abs() + 1e-8
         )
-        return rel_change.max() < self.convergence_threshold
+        return bool(rel_change.max() < self.convergence_threshold)
 
     def get_batch_statistics(self) -> dict[str, Tensor]:
         """Get statistics over the current batch."""
@@ -90,7 +90,9 @@ class EnergyTracker:
             "grad_norm_std": last_step.grad_norm.std(),
         }
 
-    def get_trajectory(self) -> dict[str, np.ndarray]:
+    def get_trajectory(
+        self,
+    ) -> dict[str, np.ndarray[Any, np.dtype[np.float64]]]:
         """Get complete trajectory of all tracked values."""
         if not self.history:
             return {}
@@ -121,7 +123,9 @@ class EnergyTracker:
 # Hook factories for common monitoring tasks
 
 
-def make_logger_hook(log_fn: Callable = print, log_every: int = 1) -> Callable:
+def make_logger_hook(
+    log_fn: Callable[[str], None] = print, log_every: int = 1
+) -> Callable[[nn.Module, StepInfo], None]:
     """Create a hook that logs energy values.
 
     Parameters
@@ -152,7 +156,7 @@ def make_logger_hook(log_fn: Callable = print, log_every: int = 1) -> Callable:
 
 def make_tensorboard_hook(
     writer: SummaryWriter, tag_prefix: str = "et", global_step_offset: int = 0
-) -> Callable:
+) -> Callable[[nn.Module, StepInfo], None]:
     """Create a hook for TensorBoard logging.
 
     Parameters
@@ -177,7 +181,7 @@ def make_tensorboard_hook(
         # Log scalars
         for key, value in stats.items():
             if key != "iteration":
-                writer.add_scalar(f"{tag_prefix}/{key}", value, global_step)
+                writer.add_scalar(f"{tag_prefix}/{key}", value, global_step)  # type: ignore[no-untyped-call]
 
         # Log energy breakdown
         att_ratio = info.attention_energy.mean() / (
@@ -185,14 +189,14 @@ def make_tensorboard_hook(
         )
         writer.add_scalar(
             f"{tag_prefix}/attention_ratio", att_ratio, global_step
-        )
+        )  # type: ignore[no-untyped-call]
 
     return hook
 
 
 def make_convergence_hook(
     callback: Callable[[int], None], window: int = 10, threshold: float = 1e-5
-) -> Callable:
+) -> Callable[[nn.Module, StepInfo], None]:
     """Create a hook that detects convergence.
 
     Parameters
@@ -220,7 +224,10 @@ def make_convergence_hook(
     return hook
 
 
-def make_wandb_hook(run: object, prefix: str = "et") -> Callable:
+def make_wandb_hook(
+    run: Any,  # noqa: ANN401
+    prefix: str = "et",
+) -> Callable[[nn.Module, StepInfo], None]:
     """Create a hook for Weights & Biases logging.
 
     Parameters
@@ -245,6 +252,8 @@ def make_wandb_hook(run: object, prefix: str = "et") -> Callable:
         metrics[f"{prefix}/energy_ratio_att"] = (
             info.attention_energy.mean() / (info.total_energy.mean() + 1e-8)
         ).item()
-        run.log(metrics, step=info.iteration)
+        from typing import cast
+
+        cast(Any, run).log(metrics, step=info.iteration)
 
     return hook
