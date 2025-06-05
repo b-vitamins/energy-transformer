@@ -7,6 +7,8 @@ transformer architectures, particularly vision transformers.
 from dataclasses import dataclass
 from typing import Literal
 
+from energy_transformer.layers.types import PoolType
+
 from .primitives import (
     Context,
     Dimension,
@@ -378,7 +380,7 @@ class ClassificationHeadSpec(Spec):
     ----------
     num_classes : int
         Number of output classes.
-    pool_type : str
+    pool_type : PoolType
         Pooling type: ``"avg"``, ``"max"``, ``"token"``, or ``"none"``.
     drop_rate : float
         Dropout rate before classification.
@@ -389,7 +391,7 @@ class ClassificationHeadSpec(Spec):
     """
 
     num_classes: int = param(validator=validate_positive)
-    pool_type: str = param(default="token")
+    pool_type: PoolType = param(default="token")
     drop_rate: float = param(default=0.0, validator=validate_probability)
     use_conv: bool = param(default=False)
     bias: bool = param(default=True)
