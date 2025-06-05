@@ -127,10 +127,12 @@ class ConvPatchEmbed(nn.Module):
         """
         b, c, h, w = x.shape
         assert h == self.img_size[0], (
-            f"Input size height {h} doesn't match model {self.img_size[0]}"
+            f"Input image height ({h}) doesn't match model's expected height ({self.img_size[0]}). "
+            f"Expected {self.img_size[0]}x{self.img_size[1]} images."
         )
         assert w == self.img_size[1], (
-            f"Input size width {w} doesn't match model {self.img_size[1]}"
+            f"Input image width ({w}) doesn't match model's expected width ({self.img_size[1]}). "
+            f"Expected {self.img_size[0]}x{self.img_size[1]} images."
         )
 
         x = self.proj(x)  # shape: [B, D, H/p, W/p]
@@ -233,10 +235,12 @@ class PatchifyEmbed(nn.Module):
         """
         b, c, h, w = x.shape
         assert h == self.img_size[0], (
-            f"Input size height {h} doesn't match model {self.img_size[0]}"
+            f"Input image height ({h}) doesn't match model's expected height ({self.img_size[0]}). "
+            f"Expected {self.img_size[0]}x{self.img_size[1]} images."
         )
         assert w == self.img_size[1], (
-            f"Input size width {w} doesn't match model {self.img_size[1]}"
+            f"Input image width ({w}) doesn't match model's expected width ({self.img_size[1]}). "
+            f"Expected {self.img_size[0]}x{self.img_size[1]} images."
         )
 
         ph, pw = self.patch_size
