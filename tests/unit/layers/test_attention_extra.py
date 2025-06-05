@@ -1,5 +1,6 @@
 import pytest
 import torch
+import pathlib
 
 from energy_transformer.layers.attention import MultiheadEnergyAttention
 
@@ -49,3 +50,49 @@ def test_attention_properties() -> None:
     assert isinstance(attn.device, torch.device)
     assert isinstance(attn.dtype, torch.dtype)
     assert not attn.is_mixed_precision
+
+
+def test_memory_efficient_matches_full(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "energy_transformer.layers.attention.MEMORY_EFFICIENT_SEQ_THRESHOLD", 2
+    )
+    attn = MultiheadEnergyAttention(embed_dim=3, num_heads=1)
+    g = torch.randn(1, 5, 3)
+    full = attn(g)
+    efficient = attn(g, use_memory_efficient=True)
+    assert torch.allclose(full, efficient, atol=1e-6)
+
+
+def test_memory_efficient_with_mask(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "energy_transformer.layers.attention.MEMORY_EFFICIENT_SEQ_THRESHOLD", 2
+    )
+    attn = MultiheadEnergyAttention(embed_dim=2, num_heads=1)
+    g = torch.randn(1, 4, 2)
+    mask = torch.zeros(4, 4)
+    mask[0, 1] = float("-inf")
+    full = attn(g, attn_mask=mask)
+    efficient = attn(g, attn_mask=mask, use_memory_efficient=True)
+    assert torch.allclose(full, efficient, atol=1e-6)
+
+
+def test_memory_efficient_causal(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "energy_transformer.layers.attention.MEMORY_EFFICIENT_SEQ_THRESHOLD", 2
+    )
+    attn = MultiheadEnergyAttention(embed_dim=2, num_heads=1)
+    g = torch.randn(1, 4, 2)
+    full = attn(g, is_causal=True)
+    efficient = attn(g, is_causal=True, use_memory_efficient=True)
+    assert torch.allclose(full, efficient, atol=1e-6)
+
+
+def test_state_dict_includes_metadata(tmp_path: pathlib.Path) -> None:
+    attn = MultiheadEnergyAttention(embed_dim=4, num_heads=2)
+    path = tmp_path / "model.pth"
+    torch.save(attn.state_dict(), path)
+    state = torch.load(path)
+    assert state["_metadata.version"] == "1.0"
+    cfg = state["_metadata.config"]
+    assert cfg["embed_dim"] == 4
+    assert cfg["num_heads"] == 2
