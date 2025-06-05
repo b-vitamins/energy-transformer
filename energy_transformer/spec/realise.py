@@ -34,8 +34,31 @@ from typing import (
     get_type_hints,
 )
 
-import torch
-from torch import nn
+if TYPE_CHECKING:  # pragma: no cover - only for type checkers
+    import torch
+    from torch import nn
+else:  # pragma: no cover - runtime lazy import
+    import importlib
+    import types
+
+    class _LazyModule(types.ModuleType):
+        """Lazy loader for optional heavy dependencies."""
+
+        def __init__(self, name: str) -> None:
+            super().__init__(name)
+            self._module: types.ModuleType | None = None
+
+        def _load(self) -> types.ModuleType:
+            if self._module is None:
+                self._module = importlib.import_module(self.__name__)
+            return self._module
+
+        def __getattr__(self, item: str) -> object:
+            module = self._load()
+            return getattr(module, item)
+
+    torch = _LazyModule("torch")
+    nn = _LazyModule("torch.nn")
 
 from .combinators import (
     Conditional,
