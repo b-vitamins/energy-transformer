@@ -223,10 +223,10 @@ class MultiheadEnergyAttention(nn.Module):
                     f"{x.dim()}D tensor."
                 )
             batch_size, seq_len, embed_dim = x.shape
-            if embed_dim != self.embed_dim:
+            if embed_dim not in {self.embed_dim, 1}:
                 raise ValueError(
                     "MultiheadEnergyAttention: Embedding dimension mismatch. "
-                    f"Expected {self.embed_dim}, got {embed_dim}."
+                    f"Expected {self.embed_dim} or 1, got {embed_dim}."
                 )
         else:
             if x.dim() != 3:  # noqa: PLR2004
@@ -236,10 +236,10 @@ class MultiheadEnergyAttention(nn.Module):
                     f"{x.dim()}D tensor."
                 )
             seq_len, batch_size, embed_dim = x.shape
-            if embed_dim != self.embed_dim:
+            if embed_dim not in {self.embed_dim, 1}:
                 raise ValueError(
                     "MultiheadEnergyAttention: Embedding dimension mismatch. "
-                    f"Expected {self.embed_dim}, got {embed_dim}."
+                    f"Expected {self.embed_dim} or 1, got {embed_dim}."
                 )
             x = x.transpose(0, 1)
 
@@ -323,10 +323,10 @@ class MultiheadEnergyAttention(nn.Module):
                     0
                 ).unsqueeze(0)
             elif attn_mask.dim() == 3:  # noqa: PLR2004
-                if attn_mask.size(0) != batch_size * self.num_heads:
+                if attn_mask.size(0) not in {1, batch_size * self.num_heads}:
                     raise ValueError(
                         "MultiheadEnergyAttention: Attention mask batch dimension mismatch. "
-                        f"Expected {batch_size * self.num_heads}, got {attn_mask.size(0)}."
+                        f"Expected 1 or {batch_size * self.num_heads}, got {attn_mask.size(0)}."
                     )
                 scores_flat = scores.view(-1, seq_len, seq_len)
                 scores_flat = scores_flat + attn_mask.to(scores.dtype)
