@@ -81,13 +81,13 @@ class EnergyTracker:
         last_step = self.history[-1]
         return {
             "energy_mean": last_step.total_energy.mean(),
-            "energy_std": last_step.total_energy.std(),
+            "energy_std": last_step.total_energy.std(unbiased=False),
             "attention_mean": last_step.attention_energy.mean(),
-            "attention_std": last_step.attention_energy.std(),
+            "attention_std": last_step.attention_energy.std(unbiased=False),
             "hopfield_mean": last_step.hopfield_energy.mean(),
-            "hopfield_std": last_step.hopfield_energy.std(),
+            "hopfield_std": last_step.hopfield_energy.std(unbiased=False),
             "grad_norm_mean": last_step.grad_norm.mean(),
-            "grad_norm_std": last_step.grad_norm.std(),
+            "grad_norm_std": last_step.grad_norm.std(unbiased=False),
         }
 
     def get_trajectory(
