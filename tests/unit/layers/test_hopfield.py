@@ -99,3 +99,45 @@ def test_hopfield_hidden_dim_override() -> None:
     net = HopfieldNetwork(2, hidden_dim=5, hidden_ratio=0.1)
     assert net.hidden_dim == 5
     assert net.kernel.shape == (2, 5)
+
+
+def test_hopfield_compute_grad_relu() -> None:
+    net = HopfieldNetwork(2, hidden_dim=2)
+    with torch.no_grad():
+        net.kernel.copy_(torch.tensor([[1.0, 0.0], [0.0, 1.0]]))
+    g = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
+    grad = net.compute_grad(g)
+    h = torch.matmul(g, net.kernel)
+    expected = -torch.matmul(torch.relu(h), net.kernel.t())
+    assert torch.allclose(grad, expected)
+
+
+def test_hopfield_compute_grad_softmax() -> None:
+    beta = 0.2
+    net = HopfieldNetwork(2, hidden_dim=2, activation="softmax", beta=beta)
+    with torch.no_grad():
+        net.kernel.copy_(torch.tensor([[1.0, 0.0], [0.0, 1.0]]))
+    g = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
+    grad = net.compute_grad(g)
+    h = torch.matmul(g, net.kernel)
+    expected = -torch.matmul(torch.softmax(beta * h, dim=-1), net.kernel.t())
+    assert torch.allclose(grad, expected)
+
+
+def test_hopfield_beta_preserved_after_reset() -> None:
+    net = HopfieldNetwork(3, activation="softmax", beta=0.5)
+    before = net.beta.clone()
+    net._reset_parameters()
+    assert torch.allclose(net.beta, before)
+
+
+def test_hopfield_extra_repr() -> None:
+    net = HopfieldNetwork(
+        2, hidden_dim=4, activation="softmax", beta=0.1, bias=True
+    )
+    rep = net.extra_repr()
+    assert "2" in rep
+    assert "hidden_dim=4" in rep
+    assert "activation='softmax'" in rep
+    assert "beta=0.100" in rep
+    assert "bias=True" in rep
