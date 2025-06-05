@@ -18,29 +18,93 @@ __all__ = [
 ]
 
 
+class _TokenPool(nn.Module):
+    """Extract first token (CLS token)."""
+
+    def forward(self, x: Tensor) -> Tensor:
+        return x[:, 0]
+
+
+class _GlobalAvgPool(nn.Module):
+    """Global average pooling over sequence dimension."""
+
+    def forward(self, x: Tensor) -> Tensor:
+        if x.dim() == 3:  # noqa: PLR2004
+            return x.mean(dim=1)
+        if x.dim() == 2:  # noqa: PLR2004
+            return x
+        raise ValueError(f"Expected 2D or 3D input, got {x.dim()}D")
+
+
+class _GlobalMaxPool(nn.Module):
+    """Global max pooling over sequence dimension."""
+
+    def forward(self, x: Tensor) -> Tensor:
+        if x.dim() == 3:  # noqa: PLR2004
+            return x.max(dim=1)[0]
+        if x.dim() == 2:  # noqa: PLR2004
+            return x
+        raise ValueError(f"Expected 2D or 3D input, got {x.dim()}D")
+
+
+class BaseClassifierHead(nn.Module):
+    """Base class for classifier heads with common functionality."""
+
+    def __init__(
+        self,
+        in_features: int,
+        num_classes: int,
+        pool_type: str = PoolType.TOKEN,
+        drop_rate: float = 0.0,
+    ) -> None:
+        super().__init__()
+        self.in_features = in_features
+        self.num_classes = num_classes
+        self.pool_type = pool_type
+        self.drop_rate = drop_rate
+
+        self.pool = self._create_pool(pool_type)
+        self.drop = nn.Dropout(drop_rate) if drop_rate > 0 else nn.Identity()
+
+    @staticmethod
+    def _create_pool(pool_type: str) -> nn.Module:
+        if pool_type == PoolType.AVG:
+            return _GlobalAvgPool()
+        if pool_type == PoolType.MAX:
+            return _GlobalMaxPool()
+        if pool_type == PoolType.TOKEN:
+            return _TokenPool()
+        if pool_type == PoolType.NONE:
+            return nn.Identity()
+        raise ValueError(
+            f"BaseClassifierHead: Unknown pool_type '{pool_type}'. "
+            "Expected one of: 'avg', 'max', 'token', 'none'."
+        )
+
+    def _init_linear_zero(self, layer: nn.Linear) -> None:
+        nn.init.zeros_(layer.weight)
+        if layer.bias is not None:
+            nn.init.zeros_(layer.bias)
+
+    def _init_linear_normal(self, layer: nn.Linear, std: float = 0.02) -> None:
+        nn.init.trunc_normal_(layer.weight, std=std)
+        if layer.bias is not None:
+            nn.init.zeros_(layer.bias)
+
+    def _pool_features(self, x: Tensor) -> Tensor:
+        return cast(Tensor, self.pool(x))
+
+    def extra_repr(self) -> str:
+        return (
+            f"in_features={self.in_features}, "
+            f"num_classes={self.num_classes}, "
+            f"pool_type='{self.pool_type}'"
+        )
+
+
 def _create_pool(pool_type: str = PoolType.AVG) -> nn.Module:
-    """Create pooling layer for sequence inputs.
-
-    Parameters
-    ----------
-    pool_type : str
-        Type of pooling: 'avg', 'max', 'token', or 'none'.
-
-    Returns
-    -------
-    nn.Module
-        Pooling module.
-    """
-    if pool_type == PoolType.AVG:
-        return nn.Sequential(nn.AdaptiveAvgPool1d(1), nn.Flatten(1))
-    if pool_type == PoolType.MAX:
-        return nn.Sequential(nn.AdaptiveMaxPool1d(1), nn.Flatten(1))
-    if pool_type == PoolType.TOKEN:
-        # Use first token (CLS token)
-        return nn.Identity()
-    if pool_type == PoolType.NONE:
-        return nn.Identity()
-    raise ValueError(f"Unknown pool_type: {pool_type}")
+    """Create pooling layer for sequence inputs."""
+    return BaseClassifierHead._create_pool(pool_type)
 
 
 class ClassifierHead(nn.Module):
@@ -92,7 +156,7 @@ class ClassifierHead(nn.Module):
         self.use_conv = use_conv
 
         # Pooling layer
-        self.pool = _create_pool(pool_type)
+        self.pool = BaseClassifierHead._create_pool(pool_type)
 
         # Dropout
         self.drop = nn.Dropout(drop_rate)
@@ -146,7 +210,6 @@ class ClassifierHead(nn.Module):
             x = x[:, 0]  # (B, C)
         elif self.pool_type in [PoolType.AVG, PoolType.MAX]:
             # Pool sequence dimension
-            x = x.transpose(1, 2)  # (B, C, N)
             x = self.pool(x)  # (B, C)
 
         # Apply dropout
@@ -165,7 +228,7 @@ class ClassifierHead(nn.Module):
         return x
 
 
-class LinearClassifierHead(nn.Module):
+class LinearClassifierHead(BaseClassifierHead):
     """Simple linear classifier head.
 
     Minimal classifier head that just applies pooling, dropout, and
@@ -193,16 +256,9 @@ class LinearClassifierHead(nn.Module):
         drop_rate: float = 0.0,
         bias: bool = True,
     ) -> None:
-        super().__init__()
-        self.pool_type = pool_type
-        self.pool = _create_pool(pool_type)
-        self.drop = nn.Dropout(drop_rate)
+        super().__init__(in_features, num_classes, pool_type, drop_rate)
         self.fc = nn.Linear(in_features, num_classes, bias=bias)
-
-        # Zero init
-        nn.init.zeros_(self.fc.weight)
-        if self.fc.bias is not None:
-            nn.init.zeros_(self.fc.bias)
+        self._init_linear_zero(self.fc)
 
     def forward(self, x: Tensor) -> Tensor:
         """Forward pass.
@@ -217,24 +273,12 @@ class LinearClassifierHead(nn.Module):
         Tensor
             Logits of shape (B, num_classes).
         """
-        if self.pool_type != PoolType.NONE and x.dim() not in [2, 3]:
-            raise ValueError(
-                f"{self.__class__.__name__}: Input must be 2D or 3D when pool_type='{self.pool_type}'. "
-                f"Got {x.dim()}D input with shape {list(x.shape)}."
-            )
-
-        if x.ndim == 3:  # noqa: PLR2004
-            if self.pool_type == PoolType.TOKEN:
-                x = x[:, 0]
-            elif self.pool_type in [PoolType.AVG, PoolType.MAX]:
-                x = x.transpose(1, 2)
-                x = self.pool(x)
-
+        x = self._pool_features(x)
         x = self.drop(x)
         return cast(Tensor, self.fc(x))
 
 
-class NormMLPClassifierHead(nn.Module):
+class NormMLPClassifierHead(BaseClassifierHead):
     """Norm + MLP classifier head.
 
     Classifier head with layer normalization and a two-layer MLP
@@ -271,30 +315,16 @@ class NormMLPClassifierHead(nn.Module):
         norm_layer: Callable[..., nn.Module] | None = nn.LayerNorm,
         bias: bool = True,
     ) -> None:
-        super().__init__()
+        super().__init__(in_features, num_classes, pool_type, drop_rate)
         hidden_features = hidden_features or in_features
 
-        self.pool_type = pool_type
-        self.pool = _create_pool(pool_type)
         self.norm = norm_layer(in_features) if norm_layer else nn.Identity()
         self.fc1 = nn.Linear(in_features, hidden_features, bias=bias)
         self.act = act_layer() if act_layer else nn.Identity()
-        self.drop = nn.Dropout(drop_rate)
         self.fc2 = nn.Linear(hidden_features, num_classes, bias=bias)
 
-        self._init_weights()
-
-    def _init_weights(self) -> None:
-        """Initialize weights."""
-        # Hidden layer with normal init
-        nn.init.trunc_normal_(self.fc1.weight, std=HEAD_INIT_STD)
-        if self.fc1.bias is not None:
-            nn.init.zeros_(self.fc1.bias)
-
-        # Output layer with zero init
-        nn.init.zeros_(self.fc2.weight)
-        if self.fc2.bias is not None:
-            nn.init.zeros_(self.fc2.bias)
+        self._init_linear_normal(self.fc1, std=HEAD_INIT_STD)
+        self._init_linear_zero(self.fc2)
 
     def forward(self, x: Tensor) -> Tensor:
         """Forward pass.
@@ -309,21 +339,7 @@ class NormMLPClassifierHead(nn.Module):
         Tensor
             Logits of shape (B, num_classes).
         """
-        if self.pool_type != PoolType.NONE and x.dim() not in [2, 3]:
-            raise ValueError(
-                f"{self.__class__.__name__}: Input must be 2D or 3D when pool_type='{self.pool_type}'. "
-                f"Got {x.dim()}D input with shape {list(x.shape)}."
-            )
-
-        # Handle pooling for sequence inputs
-        if x.ndim == 3:  # noqa: PLR2004
-            if self.pool_type == PoolType.TOKEN:
-                x = x[:, 0]
-            elif self.pool_type in [PoolType.AVG, PoolType.MAX]:
-                x = x.transpose(1, 2)
-                x = self.pool(x)
-
-        # MLP with norm
+        x = self._pool_features(x)
         x = self.norm(x)  # (B, C)
         x = self.fc1(x)  # (B, hidden)
         x = self.act(x)  # (B, hidden)
@@ -331,7 +347,7 @@ class NormMLPClassifierHead(nn.Module):
         return cast(Tensor, self.fc2(x))  # (B, num_classes)
 
 
-class NormLinearClassifierHead(nn.Module):
+class NormLinearClassifierHead(BaseClassifierHead):
     """Normalized linear classifier head.
 
     Simple classifier with layer normalization followed by linear projection.
@@ -361,17 +377,10 @@ class NormLinearClassifierHead(nn.Module):
         norm_layer: Callable[..., nn.Module] | None = nn.LayerNorm,
         bias: bool = True,
     ) -> None:
-        super().__init__()
-        self.pool_type = pool_type
-        self.pool = _create_pool(pool_type)
+        super().__init__(in_features, num_classes, pool_type, drop_rate)
         self.norm = norm_layer(in_features) if norm_layer else nn.Identity()
-        self.drop = nn.Dropout(drop_rate)
         self.fc = nn.Linear(in_features, num_classes, bias=bias)
-
-        # Zero init for output
-        nn.init.zeros_(self.fc.weight)
-        if self.fc.bias is not None:
-            nn.init.zeros_(self.fc.bias)
+        self._init_linear_zero(self.fc)
 
     def forward(self, x: Tensor) -> Tensor:
         """Forward pass.
@@ -386,14 +395,7 @@ class NormLinearClassifierHead(nn.Module):
         Tensor
             Logits of shape (B, num_classes).
         """
-        # Handle pooling for sequence inputs
-        if x.ndim == 3:  # noqa: PLR2004
-            if self.pool_type == PoolType.TOKEN:
-                x = x[:, 0]
-            elif self.pool_type in [PoolType.AVG, PoolType.MAX]:
-                x = x.transpose(1, 2)
-                x = self.pool(x)
-
+        x = self._pool_features(x)
         x = self.norm(x)
         x = self.drop(x)
         return cast(Tensor, self.fc(x))
@@ -476,7 +478,6 @@ class ReLUMLPClassifierHead(nn.Module):
             if self.pool_type == PoolType.TOKEN:
                 x = x[:, 0]
             elif self.pool_type in [PoolType.AVG, PoolType.MAX]:
-                x = x.transpose(1, 2)
                 x = self.pool(x)
 
         # MLP with norm
