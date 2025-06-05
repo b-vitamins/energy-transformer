@@ -1,7 +1,9 @@
 r"""Energy-based LayerNorm implementation following Energy Transformer theory."""
 
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Sequence, Union
+
+from .types import Device, Dtype
 
 import torch
 import torch.nn.functional as F  # noqa: N812
@@ -45,6 +47,8 @@ class EnergyLayerNorm(nn.Module):
         this is actually log(\u03b3) and \u03b3 is computed as softplus(log_gamma).
     delta : nn.Parameter
         Vector bias parameter \u03b4 \u2208 \u211d\u1d05.
+    normalized_shape: tuple[int, ...]
+        Normalized shape stored as a tuple.
 
     Notes
     -----
@@ -106,15 +110,15 @@ class EnergyLayerNorm(nn.Module):
         eps: float = DEFAULT_EPSILON,
         regularization: float = DEFAULT_LAYER_NORM_REGULARIZATION,
         enforce_positive_gamma: bool = True,
-        device: torch.device | None = None,
-        dtype: torch.dtype | None = None,
+        device: Device = None,
+        dtype: Dtype = None,
     ) -> None:
         factory_kwargs: dict[str, Any] = {"device": device, "dtype": dtype}
         super().__init__()
 
         if isinstance(normalized_shape, int):
             normalized_shape = (normalized_shape,)
-        self.normalized_shape = tuple(normalized_shape)
+        self.normalized_shape: tuple[int, ...] = tuple(normalized_shape)
         self.eps = eps
         self.regularization = regularization
         self.enforce_positive_gamma = enforce_positive_gamma

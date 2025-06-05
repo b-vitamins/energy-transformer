@@ -1,11 +1,20 @@
 """Energy-based multi-head attention module implementation."""
 
 import math
-from typing import ClassVar
+from typing import ClassVar, Literal, Optional, Union, overload
 
 import torch
 import torch.nn.functional as F  # noqa: N812
 from torch import Tensor, nn
+
+from .types import (
+    BatchSize,
+    Device,
+    Dtype,
+    EmbedDim,
+    NumHeads,
+    SequenceLength,
+)
 
 from .constants import (
     ATTENTION_EPSILON,
@@ -126,13 +135,13 @@ class MultiheadEnergyAttention(nn.Module):
 
     def __init__(
         self,
-        embed_dim: int,
-        num_heads: int,
+        embed_dim: EmbedDim,
+        num_heads: NumHeads,
         beta: float | Tensor | None = None,
         init_std: float = ATTENTION_INIT_STD,
         batch_first: bool = True,
-        device: torch.device | None = None,
-        dtype: torch.dtype | None = None,
+        device: Device = None,
+        dtype: Dtype = None,
     ) -> None:
         super().__init__()
 
@@ -399,13 +408,46 @@ class MultiheadEnergyAttention(nn.Module):
         grad2 = -torch.einsum("bshe,bhst->bte", f2, attn)
         return grad1, grad2
 
+    @overload
     def forward(
         self,
         x: Tensor,
-        attn_mask: Tensor | None = None,
+        *,
+        attn_mask: None = None,
+        is_causal: Literal[False] = False,
+    ) -> Tensor: ...
+
+    @overload
+    def forward(
+        self,
+        x: Tensor,
+        *,
+        attn_mask: Tensor,
+        is_causal: Literal[False] = False,
+    ) -> Tensor: ...
+
+    @overload
+    def forward(
+        self,
+        x: Tensor,
+        *,
+        attn_mask: None = None,
+        is_causal: Literal[True],
+    ) -> Tensor: ...
+
+    def forward(
+        self,
+        x: Tensor,
+        attn_mask: Optional[Tensor] = None,
         is_causal: bool = False,
     ) -> Tensor:
         """Forward pass computing energy."""
+        if __debug__ and not isinstance(x, Tensor):
+            raise TypeError(
+                "MultiheadEnergyAttention: Expected Tensor input, "
+                f"got {type(x).__name__}"
+            )
+
         x, batch_size, seq_len = self._validate_and_prepare_input(x)
 
         if seq_len == 1:

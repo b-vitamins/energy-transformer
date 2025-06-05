@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
-from typing import cast
+from typing import Optional, Tuple, Union, cast, overload
 
 import torch
 from einops import rearrange
 from torch import Tensor, nn
 
 from .constants import DEFAULT_IMAGE_CHANNELS, DEFAULT_INIT_STD
+from .types import ModuleFactory
+
+ImageSize = Union[int, Tuple[int, int]]
+PatchSize = Union[int, Tuple[int, int]]
 
 __all__ = [
     "ConvPatchEmbed",
@@ -17,7 +21,15 @@ __all__ = [
 ]
 
 
-def _to_pair(x: int | tuple[int, int]) -> tuple[int, int]:
+@overload
+def _to_pair(x: int) -> tuple[int, int]: ...
+
+
+@overload
+def _to_pair(x: tuple[int, int]) -> tuple[int, int]: ...
+
+
+def _to_pair(x: Union[int, tuple[int, int]]) -> tuple[int, int]:
     """Convert input to pair of integers.
 
     Parameters
@@ -83,13 +95,16 @@ class ConvPatchEmbed(nn.Module):
         Normalization layer.
     """
 
+    img_size: tuple[int, int]
+    patch_size: tuple[int, int]
+
     def __init__(
         self,
-        img_size: int | tuple[int, int],
-        patch_size: int | tuple[int, int],
+        img_size: ImageSize,
+        patch_size: PatchSize,
         embed_dim: int,
         in_chans: int = DEFAULT_IMAGE_CHANNELS,
-        norm_layer: nn.Module | None = None,
+        norm_layer: Optional[ModuleFactory] = None,
         flatten: bool = True,
         bias: bool = True,
     ) -> None:
@@ -215,13 +230,16 @@ class PatchifyEmbed(nn.Module):
         Normalization layer.
     """
 
+    img_size: tuple[int, int]
+    patch_size: tuple[int, int]
+
     def __init__(
         self,
-        img_size: int | tuple[int, int],
-        patch_size: int | tuple[int, int],
+        img_size: ImageSize,
+        patch_size: PatchSize,
         embed_dim: int,
         in_chans: int = DEFAULT_IMAGE_CHANNELS,
-        norm_layer: nn.Module | None = None,
+        norm_layer: Optional[ModuleFactory] = None,
         bias: bool = True,
     ) -> None:
         super().__init__()
