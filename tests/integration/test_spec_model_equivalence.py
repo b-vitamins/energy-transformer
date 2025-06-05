@@ -4,7 +4,7 @@ import pytest
 import torch
 
 from energy_transformer.layers import (
-    ClassificationHead,
+    ClassifierHead,
     CLSToken,
     ConvPatchEmbed,
     EnergyLayerNorm,
@@ -137,26 +137,23 @@ class TestComponentEquivalence:
         assert isinstance(from_spec, EnergyLayerNorm)
 
     def test_classification_head_equivalence(self):
-        """ClassificationHeadSpec should produce identical ClassificationHead."""
-        direct = ClassificationHead(
-            embed_dim=768,
+        """ClassificationHeadSpec should produce identical ClassifierHead."""
+        direct = ClassifierHead(
+            in_features=768,
             num_classes=1000,
-            representation_size=None,
+            pool_type="token",
             drop_rate=0.0,
-            use_cls_token=True,
         )
         spec = ClassificationHeadSpec(
             num_classes=1000,
-            representation_size=None,
+            pool_type="token",
             drop_rate=0.0,
-            use_cls_token=True,
         )
         ctx = Context(dimensions={"embed_dim": 768})
         from_spec = realise(spec, ctx)
         assert isinstance(from_spec, type(direct))
-        assert direct.use_cls_token == from_spec.use_cls_token
-        assert direct.head.in_features == from_spec.head.in_features
-        assert direct.head.out_features == from_spec.head.out_features
+        assert from_spec.pool_type == direct.pool_type
+        assert from_spec.fc.out_features == direct.fc.out_features
 
 
 class TestETBlockEquivalence:
@@ -225,7 +222,7 @@ class TestFullModelEquivalence:
                 times=depth,
             ),
             LayerNormSpec(),
-            ClassificationHeadSpec(num_classes=num_classes, use_cls_token=True),
+            ClassificationHeadSpec(num_classes=num_classes, pool_type="token"),
         )
         spec_model = realise(model_spec)
         direct_model = viet_base(
@@ -258,7 +255,7 @@ class TestFullModelEquivalence:
                 times=2,
             ),
             LayerNormSpec(),
-            ClassificationHeadSpec(num_classes=100),
+            ClassificationHeadSpec(num_classes=100, pool_type="token"),
         )
         spec_model = realise(model_spec)
         direct_model = viet_2l_cifar(num_classes=100)
@@ -292,7 +289,7 @@ class TestFullModelEquivalence:
                 times=2,
             ),
             LayerNormSpec(),
-            ClassificationHeadSpec(num_classes=100),
+            ClassificationHeadSpec(num_classes=100, pool_type="token"),
         )
         spec_model = realise(model_spec)
         direct_model = viset_2l_e50_t50_cifar(num_classes=100)

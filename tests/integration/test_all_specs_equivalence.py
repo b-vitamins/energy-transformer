@@ -7,11 +7,10 @@ import torch
 from torch import nn
 
 from energy_transformer.layers import (
-    ClassificationHead,
+    ClassifierHead,
     CLSToken,
     ConvPatchEmbed,
     EnergyLayerNorm,
-    FeatureHead,
     HopfieldNetwork,
     MultiheadEnergyAttention,
     PosEmbed2D,
@@ -24,7 +23,6 @@ from energy_transformer.spec.library import (
     CLSTokenSpec,
     DropoutSpec,
     ETBlockSpec,
-    FeatureHeadSpec,
     HNSpec,
     IdentitySpec,
     LayerNormSpec,
@@ -521,80 +519,44 @@ class TestHeadSpecs:
     """Test output head specifications."""
 
     def test_classification_head_all_variants(self):
-        """Test ClassificationHeadSpec with all configurations."""
+        """Test ClassificationHeadSpec with various configurations."""
         test_cases = [
             {
                 "embed_dim": 768,
                 "num_classes": 1000,
-                "representation_size": None,
+                "pool_type": "token",
                 "drop_rate": 0.0,
-                "use_cls_token": True,
+                "use_conv": False,
             },
             {
                 "embed_dim": 512,
                 "num_classes": 100,
-                "representation_size": None,
+                "pool_type": "avg",
                 "drop_rate": 0.1,
-                "use_cls_token": True,
-            },
-            {
-                "embed_dim": 1024,
-                "num_classes": 21843,
-                "representation_size": None,
-                "drop_rate": 0.0,
-                "use_cls_token": False,
-            },
-            {
-                "embed_dim": 768,
-                "num_classes": 1000,
-                "representation_size": 1024,
-                "drop_rate": 0.0,
-                "use_cls_token": True,
-            },
-            {
-                "embed_dim": 768,
-                "num_classes": 1000,
-                "representation_size": 512,
-                "drop_rate": 0.2,
-                "use_cls_token": True,
+                "use_conv": False,
             },
             {
                 "embed_dim": 192,
                 "num_classes": 10,
-                "representation_size": None,
+                "pool_type": "max",
                 "drop_rate": 0.0,
-                "use_cls_token": True,
+                "use_conv": False,
             },
         ]
 
         for tc in test_cases:
             spec = ClassificationHeadSpec(
                 num_classes=tc["num_classes"],
-                representation_size=tc["representation_size"],
+                pool_type=tc["pool_type"],
                 drop_rate=tc["drop_rate"],
-                use_cls_token=tc["use_cls_token"],
+                use_conv=tc["use_conv"],
             )
             ctx = Context(dimensions={"embed_dim": tc["embed_dim"]})
             from_spec = realise(spec, ctx)
 
-            assert isinstance(from_spec, ClassificationHead)
-            assert from_spec.head.out_features == tc["num_classes"]
-            assert from_spec.use_cls_token == tc["use_cls_token"]
-            if tc["representation_size"] is not None:
-                assert hasattr(from_spec, "pre_logits")
-                assert isinstance(from_spec.pre_logits, nn.Sequential)
-
-    def test_feature_head_spec(self):
-        """Test FeatureHeadSpec."""
-        test_cases = [{"use_cls_token": True}, {"use_cls_token": False}]
-
-        for tc in test_cases:
-            spec = FeatureHeadSpec(use_cls_token=tc["use_cls_token"])
-            ctx = Context(dimensions={"embed_dim": 768})
-            from_spec = realise(spec, ctx)
-
-            assert isinstance(from_spec, FeatureHead)
-            assert from_spec.use_cls_token == tc["use_cls_token"]
+            assert isinstance(from_spec, ClassifierHead)
+            assert from_spec.fc.out_features == tc["num_classes"]
+            assert from_spec.pool_type == tc["pool_type"]
 
 
 class TestCompositeSpecs:

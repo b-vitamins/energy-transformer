@@ -123,7 +123,6 @@ _LIBRARY_SPECS = [
     "SHNSpec",
     "ETBlockSpec",
     "ClassificationHeadSpec",
-    "FeatureHeadSpec",
     "DropoutSpec",
     "IdentitySpec",
     "VisionEmbeddingSpec",

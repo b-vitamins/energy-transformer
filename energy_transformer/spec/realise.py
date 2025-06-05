@@ -95,9 +95,8 @@ module_mappings = {
     ),
     "ClassificationHeadSpec": (
         "energy_transformer.layers.heads",
-        "ClassificationHead",
+        "ClassifierHead",
     ),
-    "FeatureHeadSpec": ("energy_transformer.layers.heads", "FeatureHead"),
     "MLPSpec": ("energy_transformer.layers.mlp", "MLP"),
     "DropoutSpec": ("torch.nn", "Dropout"),
     "IdentitySpec": ("torch.nn", "Identity"),
@@ -1892,16 +1891,17 @@ def realise_cls_head(
     context: Context,
 ) -> nn.Module:
     """Realise classification head module."""
-    from energy_transformer.layers.heads import ClassificationHead
+    from energy_transformer.layers.heads import ClassifierHead
 
     embed_dim = context.get_dim("embed_dim")
     assert embed_dim is not None
-    return ClassificationHead(
+    return ClassifierHead(
         embed_dim,
         num_classes=spec.num_classes,
-        representation_size=spec.representation_size,
+        pool_type=spec.pool_type,
         drop_rate=spec.drop_rate,
-        use_cls_token=spec.use_cls_token,
+        use_conv=spec.use_conv,
+        bias=spec.bias,
     )
 
 

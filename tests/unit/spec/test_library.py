@@ -13,7 +13,6 @@ from energy_transformer.spec.library import (
     CLSTokenSpec,
     DropoutSpec,
     ETBlockSpec,
-    FeatureHeadSpec,
     HNSpec,
     IdentitySpec,
     LayerNormSpec,
@@ -531,20 +530,22 @@ class TestClassificationHeadSpec:
         """Test basic creation."""
         head = ClassificationHeadSpec(num_classes=1000)
         assert head.num_classes == 1000
-        assert head.representation_size is None
+        assert head.pool_type == "token"
         assert head.drop_rate == 0.0
-        assert head.use_cls_token is True
+        assert head.use_conv is False
 
         head2 = ClassificationHeadSpec(
             num_classes=10,
-            representation_size=512,
+            pool_type="avg",
             drop_rate=0.1,
-            use_cls_token=False,
+            use_conv=True,
+            bias=False,
         )
         assert head2.num_classes == 10
-        assert head2.representation_size == 512
+        assert head2.pool_type == "avg"
         assert head2.drop_rate == 0.1
-        assert head2.use_cls_token is False
+        assert head2.use_conv is True
+        assert head2.bias is False
 
     def test_validation(self):
         """Test parameter validation."""
@@ -584,30 +585,6 @@ class TestClassificationHeadSpec:
         ctx = Context()
         issues = head.validate(ctx)
         assert any("embed_dim" in issue for issue in issues)
-
-
-class TestFeatureHeadSpec:
-    """Test FeatureHeadSpec."""
-
-    def test_creation(self):
-        """Test basic creation."""
-        head = FeatureHeadSpec()
-        assert head.use_cls_token is True
-
-        head2 = FeatureHeadSpec(use_cls_token=False)
-        assert head2.use_cls_token is False
-
-    def test_requires_embed_dim(self):
-        """Test embed_dim requirement."""
-        head = FeatureHeadSpec()
-
-        ctx = Context()
-        issues = head.validate(ctx)
-        assert any("embed_dim" in issue for issue in issues)
-
-        ctx = Context(dimensions={"embed_dim": 768})
-        issues = head.validate(ctx)
-        assert len(issues) == 0
 
 
 class TestVisionEmbeddingSpec:
@@ -979,7 +956,7 @@ class TestComplexCompositions:
             ClassificationHeadSpec(
                 num_classes=1000,
                 drop_rate=0.1,
-                use_cls_token=True,
+                pool_type="token",
             ),
         )
 
@@ -1010,7 +987,6 @@ class TestSpecMetadata:
             SHNSpec,
             ETBlockSpec,
             ClassificationHeadSpec,
-            FeatureHeadSpec,
             VisionEmbeddingSpec,
             MHASpec,
             MLPSpec,
@@ -1037,7 +1013,6 @@ class TestSpecMetadata:
             SHNSpec,
             ETBlockSpec,
             ClassificationHeadSpec,
-            FeatureHeadSpec,
             MHASpec,
             MLPSpec,
             TransformerBlockSpec,
