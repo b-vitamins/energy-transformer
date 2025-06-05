@@ -27,7 +27,9 @@ def test_patch_embedding_output_shape() -> None:
 def test_patch_embedding_raises_for_wrong_size() -> None:
     patch = ConvPatchEmbed(img_size=4, patch_size=2, in_chans=3, embed_dim=8)
     x = torch.randn(1, 3, 5, 4)
-    with pytest.raises(AssertionError):
+    with pytest.raises(
+        ValueError, match="ConvPatchEmbed: Input image size mismatch"
+    ):
         patch(x)
 
 
@@ -123,5 +125,7 @@ def test_patchify_embed_roundtrip() -> None:
 def test_positional_embedding_length_mismatch(batched: bool) -> None:
     pos = PosEmbed2D(num_patches=3, embed_dim=2)
     x = torch.zeros(1, 4, 2) if batched else torch.zeros(4, 2)
-    with pytest.raises(RuntimeError):
+    with pytest.raises(
+        ValueError, match="PosEmbed2D: Sequence length mismatch"
+    ):
         pos(x)

@@ -10,7 +10,7 @@ def test_hopfield_energy_matches_manual() -> None:
     net = HopfieldNetwork(2, hidden_dim=2)
     with torch.no_grad():
         net.kernel.copy_(torch.tensor([[1.0, 0.0], [0.0, 1.0]]))
-    g = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
+    g = torch.tensor([[1.0, 2.0], [3.0, 4.0]]).unsqueeze(0)
     energy = net(g)
     h = torch.matmul(g, net.kernel)
     expected = -0.5 * (torch.relu(h) ** 2).sum()
@@ -22,7 +22,7 @@ def test_hopfield_softmax_energy_matches_manual() -> None:
     net = HopfieldNetwork(2, hidden_dim=2, activation="softmax", beta=beta)
     with torch.no_grad():
         net.kernel.copy_(torch.tensor([[1.0, 0.0], [0.0, 1.0]]))
-    g = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
+    g = torch.tensor([[1.0, 2.0], [3.0, 4.0]]).unsqueeze(0)
     energy = net(g)
     h = torch.matmul(g, net.kernel)
     expected = -(1.0 / beta) * torch.logsumexp(beta * h, dim=-1).sum()
@@ -36,7 +36,7 @@ def test_hopfield_default_hidden_dim() -> None:
 
 def test_hopfield_energy_is_scalar() -> None:
     net = HopfieldNetwork(2, hidden_dim=2)
-    g = torch.randn(2, 2)
+    g = torch.randn(1, 2, 2)
     energy = net(g)
     assert energy.shape == torch.Size([])
 
@@ -67,7 +67,7 @@ def test_hopfield_forward_with_batch_dims() -> None:
 
 def test_hopfield_gradients_flow() -> None:
     net = HopfieldNetwork(2, hidden_dim=2)
-    g = torch.randn(3, 2, requires_grad=True)
+    g = torch.randn(1, 3, 2, requires_grad=True)
     energy = net(g)
     energy.backward()
     assert g.grad is not None
@@ -78,7 +78,7 @@ def test_hopfield_zero_weights_energy_zero() -> None:
     net = HopfieldNetwork(3, hidden_dim=2)
     with torch.no_grad():
         net.kernel.zero_()
-    g = torch.randn(5, 3)
+    g = torch.randn(1, 5, 3)
     energy = net(g)
     assert torch.allclose(energy, torch.tensor(0.0))
 
@@ -87,7 +87,7 @@ def test_hopfield_negative_activations() -> None:
     net = HopfieldNetwork(2, hidden_dim=2)
     with torch.no_grad():
         net.kernel.copy_(torch.tensor([[1.0, -1.0], [0.5, 0.5]]))
-    g = torch.tensor([[1.0, 2.0], [-1.0, 1.0]])
+    g = torch.tensor([[1.0, 2.0], [-1.0, 1.0]]).unsqueeze(0)
     energy = net(g)
     h = torch.matmul(g, net.kernel)
     expected = -0.5 * (torch.relu(h) ** 2).sum()
@@ -105,7 +105,7 @@ def test_hopfield_compute_grad_relu() -> None:
     net = HopfieldNetwork(2, hidden_dim=2)
     with torch.no_grad():
         net.kernel.copy_(torch.tensor([[1.0, 0.0], [0.0, 1.0]]))
-    g = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
+    g = torch.tensor([[1.0, 2.0], [3.0, 4.0]]).unsqueeze(0)
     grad = net.compute_grad(g)
     h = torch.matmul(g, net.kernel)
     expected = -torch.matmul(torch.relu(h), net.kernel.t())
@@ -117,7 +117,7 @@ def test_hopfield_compute_grad_softmax() -> None:
     net = HopfieldNetwork(2, hidden_dim=2, activation="softmax", beta=beta)
     with torch.no_grad():
         net.kernel.copy_(torch.tensor([[1.0, 0.0], [0.0, 1.0]]))
-    g = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
+    g = torch.tensor([[1.0, 2.0], [3.0, 4.0]]).unsqueeze(0)
     grad = net.compute_grad(g)
     h = torch.matmul(g, net.kernel)
     expected = -torch.matmul(torch.softmax(beta * h, dim=-1), net.kernel.t())
