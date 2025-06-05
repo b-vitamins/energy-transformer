@@ -104,3 +104,13 @@ def test_extra_repr_shows_options() -> None:
     rep = ln.extra_repr()
     assert "regularization=0.1" in rep
     assert "enforce_positive_gamma=False" in rep
+
+
+def test_layernorm_properties() -> None:
+    ln = EnergyLayerNorm((2, 3), regularization=0.1)
+    assert ln.D == 6
+    assert ln.normalized_dim == 2
+    assert ln.is_regularized
+    assert torch.allclose(ln.effective_gamma, F.softplus(ln.log_gamma))
+    assert ln.device == ln.delta.device
+    assert ln.dtype == ln.delta.dtype

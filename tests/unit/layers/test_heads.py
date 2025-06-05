@@ -122,3 +122,14 @@ def test_classifier_head_conv_sequence() -> None:
     x = torch.randn(2, 4, 5)
     out = head(x)
     assert out.shape == (2, 3, 5)
+
+
+def test_classifier_head_properties() -> None:
+    head = NormLinearClassifierHead(
+        in_features=4, num_classes=2, pool_type="avg", drop_rate=0.1
+    )
+    assert head.features_in == 4
+    assert head.features_out == 2
+    assert head.has_dropout
+    assert head.is_pooled
+    assert head.total_params == sum(p.numel() for p in head.parameters())

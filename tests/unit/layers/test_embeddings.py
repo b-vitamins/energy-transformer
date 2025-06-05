@@ -129,3 +129,28 @@ def test_positional_embedding_length_mismatch(batched: bool) -> None:
         ValueError, match="PosEmbed2D: Sequence length mismatch"
     ):
         pos(x)
+
+
+def test_embedding_properties() -> None:
+    conv = ConvPatchEmbed(
+        img_size=(4, 6), patch_size=(2, 3), in_chans=1, embed_dim=4
+    )
+    assert conv.patch_area == 6
+    assert conv.grid_shape == (2, 2)
+    assert conv.sequence_length == 4
+    assert conv.receptive_field == (2, 3)
+
+    patchify = PatchifyEmbed(img_size=4, patch_size=2, in_chans=1, embed_dim=8)
+    assert patchify.patch_area == 4
+    assert patchify.tokens_per_image == 4
+    total_pixels = 4 * 4 * 1
+    total_features = 4 * 8
+    assert patchify.compression_ratio == pytest.approx(
+        total_pixels / total_features
+    )
+
+    pos = PosEmbed2D(num_patches=4, embed_dim=2, cls_token=True)
+    assert pos.max_sequence_length == 5
+    assert pos.has_cls_token
+    assert pos.num_content_positions == 4
+    assert isinstance(pos.device, torch.device)
