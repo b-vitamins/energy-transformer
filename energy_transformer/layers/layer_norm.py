@@ -7,6 +7,11 @@ import torch
 import torch.nn.functional as F  # noqa: N812
 from torch import nn
 
+from .constants import (
+    DEFAULT_EPSILON,
+    DEFAULT_LAYER_NORM_REGULARIZATION,
+)
+
 
 class EnergyLayerNorm(nn.Module):
     r"""Energy-based Layer Normalization.
@@ -98,8 +103,8 @@ class EnergyLayerNorm(nn.Module):
     def __init__(
         self,
         normalized_shape: int | Sequence[int],
-        eps: float = 1e-5,
-        regularization: float = 0.0,
+        eps: float = DEFAULT_EPSILON,
+        regularization: float = DEFAULT_LAYER_NORM_REGULARIZATION,
         enforce_positive_gamma: bool = True,
         device: torch.device | None = None,
         dtype: torch.dtype | None = None,

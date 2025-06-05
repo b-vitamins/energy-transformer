@@ -7,6 +7,8 @@ from typing import cast
 
 from torch import Tensor, nn
 
+from .constants import DEFAULT_MLP_RATIO
+
 __all__ = ["MLP"]
 
 
@@ -54,7 +56,9 @@ class MLP(nn.Module):
     ) -> None:
         super().__init__()
         out_features = out_features or in_features
-        hidden_features = hidden_features or in_features
+        hidden_features = hidden_features or int(
+            in_features * DEFAULT_MLP_RATIO
+        )
 
         self.fc1 = nn.Linear(in_features, hidden_features, bias=bias)
         self.act = act_layer()
