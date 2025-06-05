@@ -54,6 +54,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import torch
 from torch import Tensor, nn
 
 from energy_transformer.layers.attention import MultiheadEnergyAttention
@@ -64,7 +65,6 @@ from energy_transformer.layers.embeddings import (
 from energy_transformer.layers.heads import ClassifierHead
 from energy_transformer.layers.hopfield import HopfieldNetwork
 from energy_transformer.layers.layer_norm import EnergyLayerNorm
-from energy_transformer.layers.tokens import CLSToken
 from energy_transformer.models.base import EnergyTransformer
 
 
@@ -143,8 +143,8 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
         )
         num_patches = self.patch_embed.num_patches
 
-        # CLS token
-        self.cls_token = CLSToken(embed_dim)
+        # CLS token parameter
+        self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
 
         # Positional embeddings (include CLS token)
         self.pos_embed = PosEmbed2D(
@@ -188,7 +188,7 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
         )
 
         # Initialize special tokens
-        nn.init.trunc_normal_(self.cls_token.cls_token, std=0.02)
+        nn.init.trunc_normal_(self.cls_token, std=0.02)
         nn.init.trunc_normal_(self.pos_embed.pos_embed, std=0.02)
 
     def _process_et_blocks(
@@ -286,7 +286,8 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
         x = self.patch_embed(x)  # (B, N, D)
 
         # 2. Prepend CLS token
-        x = self.cls_token(x)  # (B, N+1, D)
+        cls_tokens = self.cls_token.expand(x.size(0), -1, -1)
+        x = torch.cat([cls_tokens, x], dim=1)  # (B, N+1, D)
 
         # 3. Add positional embeddings
         x = self.pos_embed(x)  # (B, N+1, D)

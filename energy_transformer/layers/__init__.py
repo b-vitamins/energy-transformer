@@ -44,11 +44,9 @@ from .hopfield import HopfieldNetwork
 from .layer_norm import EnergyLayerNorm
 from .mlp import MLP
 from .simplicial import SimplicialHopfieldNetwork
-from .tokens import CLSToken
 
 __all__ = [
     "MLP",
-    "CLSToken",
     "ClassifierHead",
     "ConvPatchEmbed",
     "EnergyLayerNorm",
