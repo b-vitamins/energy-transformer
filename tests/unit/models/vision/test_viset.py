@@ -7,13 +7,18 @@ pytestmark = pytest.mark.unit
 
 
 class DummyEnergyTransformer(nn.Module):
-    def __init__(self, layer_norm, attention, hopfield, steps=0, alpha=0.0):
+    def __init__(
+        self, layer_norm, attention, hopfield, steps=0, optimizer=None
+    ):
         super().__init__()
         self.layer_norm = layer_norm
         self.attention = attention
         self.hopfield = hopfield
         self.steps = steps
-        self.alpha = alpha
+        self.optimizer = optimizer
+        self.alpha = (
+            getattr(optimizer, "alpha", 0.0) if optimizer is not None else 0.0
+        )
 
 
 class DummyLayerNorm(nn.Module):
