@@ -146,9 +146,11 @@ class ClassifierHead(nn.Module):  # type: ignore[misc]
 
         # Apply classifier
         if self.use_conv:
-            x = x.unsqueeze(-1)  # (B, C, 1)
-            x = self.fc(x)  # (B, num_classes, 1)
-            x = x.squeeze(-1)  # (B, num_classes)
+            if x.ndim == 2:  # noqa: PLR2004
+                x = x.unsqueeze(-1)
+            x = self.fc(x)
+            if x.shape[-1] == 1:
+                x = x.squeeze(-1)
         else:
             x = self.fc(x)  # (B, num_classes)
 
@@ -184,6 +186,7 @@ class LinearClassifierHead(nn.Module):  # type: ignore[misc]
         bias: bool = True,
     ) -> None:
         super().__init__()
+        self.pool_type = pool_type
         self.pool = _create_pool(pool_type)
         self.drop = nn.Dropout(drop_rate)
         self.fc = nn.Linear(in_features, num_classes, bias=bias)
@@ -207,14 +210,9 @@ class LinearClassifierHead(nn.Module):  # type: ignore[misc]
             Logits of shape (B, num_classes).
         """
         if x.ndim == 3:  # noqa: PLR2004
-            if (
-                hasattr(self.pool, "__name__")
-                and self.pool.__name__ == "Identity"
-            ):
-                # Token pooling
+            if self.pool_type == "token":
                 x = x[:, 0]
-            else:
-                # Spatial pooling
+            elif self.pool_type in ["avg", "max"]:
                 x = x.transpose(1, 2)
                 x = self.pool(x)
 
@@ -262,6 +260,7 @@ class NormMLPClassifierHead(nn.Module):  # type: ignore[misc]
         super().__init__()
         hidden_features = hidden_features or in_features
 
+        self.pool_type = pool_type
         self.pool = _create_pool(pool_type)
         self.norm = norm_layer(in_features) if norm_layer else nn.Identity()
         self.fc1 = nn.Linear(in_features, hidden_features, bias=bias)
@@ -298,14 +297,9 @@ class NormMLPClassifierHead(nn.Module):  # type: ignore[misc]
         """
         # Handle pooling for sequence inputs
         if x.ndim == 3:  # noqa: PLR2004
-            if (
-                hasattr(self.pool, "__name__")
-                and self.pool.__name__ == "Identity"
-            ):
-                # Token pooling
+            if self.pool_type == "token":
                 x = x[:, 0]
-            else:
-                # Spatial pooling
+            elif self.pool_type in ["avg", "max"]:
                 x = x.transpose(1, 2)
                 x = self.pool(x)
 
@@ -348,6 +342,7 @@ class NormLinearClassifierHead(nn.Module):  # type: ignore[misc]
         bias: bool = True,
     ) -> None:
         super().__init__()
+        self.pool_type = pool_type
         self.pool = _create_pool(pool_type)
         self.norm = norm_layer(in_features) if norm_layer else nn.Identity()
         self.drop = nn.Dropout(drop_rate)
@@ -373,14 +368,9 @@ class NormLinearClassifierHead(nn.Module):  # type: ignore[misc]
         """
         # Handle pooling for sequence inputs
         if x.ndim == 3:  # noqa: PLR2004
-            if (
-                hasattr(self.pool, "__name__")
-                and self.pool.__name__ == "Identity"
-            ):
-                # Token pooling
+            if self.pool_type == "token":
                 x = x[:, 0]
-            else:
-                # Spatial pooling
+            elif self.pool_type in ["avg", "max"]:
                 x = x.transpose(1, 2)
                 x = self.pool(x)
 
@@ -426,6 +416,7 @@ class ReLUMLPClassifierHead(nn.Module):  # type: ignore[misc]
         super().__init__()
         hidden_features = hidden_features or num_classes
 
+        self.pool_type = pool_type
         self.pool = _create_pool(pool_type)
         self.norm = norm_layer(in_features) if norm_layer else nn.Identity()
         self.fc1 = nn.Linear(in_features, hidden_features, bias=bias)
@@ -462,14 +453,9 @@ class ReLUMLPClassifierHead(nn.Module):  # type: ignore[misc]
         """
         # Handle pooling for sequence inputs
         if x.ndim == 3:  # noqa: PLR2004
-            if (
-                hasattr(self.pool, "__name__")
-                and self.pool.__name__ == "Identity"
-            ):
-                # Token pooling
+            if self.pool_type == "token":
                 x = x[:, 0]
-            else:
-                # Spatial pooling
+            elif self.pool_type in ["avg", "max"]:
                 x = x.transpose(1, 2)
                 x = self.pool(x)
 

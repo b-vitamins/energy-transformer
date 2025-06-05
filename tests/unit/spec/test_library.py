@@ -956,7 +956,7 @@ class TestComplexCompositions:
             ClassificationHeadSpec(
                 num_classes=1000,
                 drop_rate=0.1,
-                use_cls_token=True,
+                pool_type="token",
             ),
         )
 

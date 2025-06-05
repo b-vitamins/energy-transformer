@@ -5,6 +5,7 @@ from energy_transformer.layers.heads import (
     ClassifierHead,
     LinearClassifierHead,
     NormLinearClassifierHead,
+    NormMLPClassifierHead,
     ReLUMLPClassifierHead,
 )
 
@@ -41,6 +42,30 @@ def test_norm_linear_classifier_head() -> None:
 def test_relu_mlp_classifier_head() -> None:
     head = ReLUMLPClassifierHead(
         in_features=4, num_classes=2, hidden_features=8, drop_rate=0.0
+    )
+    x = torch.randn(2, 5, 4)
+    out = head(x)
+    assert out.shape == (2, 2)
+
+
+def test_classifier_head_conv() -> None:
+    head = ClassifierHead(
+        in_features=4,
+        num_classes=3,
+        pool_type="none",
+        use_conv=True,
+    )
+    x = torch.randn(2, 4)
+    out = head(x)
+    assert out.shape == (2, 3)
+
+
+def test_norm_mlp_classifier_head_avg_pool() -> None:
+    head = NormMLPClassifierHead(
+        in_features=4,
+        num_classes=2,
+        hidden_features=4,
+        pool_type="avg",
     )
     x = torch.randn(2, 5, 4)
     out = head(x)
