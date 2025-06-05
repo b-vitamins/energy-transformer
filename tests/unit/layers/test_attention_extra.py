@@ -1,6 +1,7 @@
+import pathlib
+
 import pytest
 import torch
-import pathlib
 
 from energy_transformer.layers.attention import MultiheadEnergyAttention
 
