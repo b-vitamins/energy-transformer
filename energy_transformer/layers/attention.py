@@ -193,8 +193,33 @@ class MultiheadEnergyAttention(nn.Module):
 
     @property
     def head_dim(self) -> int:
-        """Dimension of each attention head."""
+        """Dimension of each attention head (Y in paper notation)."""
         return self.embed_dim // self.num_heads
+
+    @property
+    def total_params(self) -> int:
+        """Total number of parameters in this module."""
+        return 2 * self.num_heads * self.head_dim * self.embed_dim
+
+    @property
+    def requires_grad_(self) -> bool:  # type: ignore[override]
+        """Check if any parameter requires gradients."""
+        return any(p.requires_grad for p in self.parameters())
+
+    @property
+    def device(self) -> torch.device:
+        """Device of the module parameters."""
+        return self.q_proj_weight.device
+
+    @property
+    def dtype(self) -> torch.dtype:
+        """Data type of the module parameters."""
+        return self.q_proj_weight.dtype
+
+    @property
+    def is_mixed_precision(self) -> bool:
+        """Whether mixed precision computation is recommended for current dtype."""
+        return self.q_proj_weight.dtype in {torch.float16, torch.bfloat16}
 
     def _reset_parameters(self) -> None:
         """Initialize parameters."""
