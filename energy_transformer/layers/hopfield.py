@@ -239,13 +239,54 @@ class HopfieldNetwork(nn.Module):
 
     @property
     def memory_dim(self) -> int:
-        """Number of memory patterns stored."""
+        """Number of memory patterns stored (K in paper notation)."""
         return self.hidden_dim
+
+    @property
+    def input_dim(self) -> int:
+        """Input dimension (D in paper notation)."""
+        return self.embed_dim
 
     @property
     def activation_type(self) -> str:
         """Type of activation function used."""
         return self.activation
+
+    @property
+    def is_classical(self) -> bool:
+        """Whether this is a classical (ReLU) Hopfield network."""
+        return self.activation == "relu"
+
+    @property
+    def is_modern(self) -> bool:
+        """Whether this is a modern (softmax) Hopfield network."""
+        return self.activation == "softmax"
+
+    @property
+    def temperature(self) -> float | None:
+        """Temperature parameter for softmax (None for ReLU)."""
+        if self.activation == "softmax":
+            return (
+                self.beta.item()
+                if isinstance(self.beta, nn.Parameter)
+                else self.beta
+            )
+        return None
+
+    @property
+    def total_params(self) -> int:
+        """Total number of parameters."""
+        param_count = self.embed_dim * self.hidden_dim
+        if self.use_bias:
+            param_count += self.hidden_dim
+        if self.activation == "softmax" and isinstance(self.beta, nn.Parameter):
+            param_count += 1
+        return param_count
+
+    @property
+    def device(self) -> torch.device:
+        """Device of the module parameters."""
+        return self.kernel.device
 
     def extra_repr(self) -> str:
         """Return string representation for printing."""

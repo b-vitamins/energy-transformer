@@ -141,3 +141,18 @@ def test_hopfield_extra_repr() -> None:
     assert "activation='softmax'" in rep
     assert "beta=0.100" in rep
     assert "bias=True" in rep
+
+
+def test_hopfield_properties() -> None:
+    net = HopfieldNetwork(
+        4, hidden_dim=6, activation="softmax", beta=0.2, bias=True
+    )
+    assert net.memory_dim == 6
+    assert net.input_dim == 4
+    assert net.activation_type == "softmax"
+    assert not net.is_classical
+    assert net.is_modern
+    assert net.temperature == pytest.approx(0.2)
+    expected_params = 4 * 6 + 6 + 1
+    assert net.total_params == expected_params
+    assert isinstance(net.device, torch.device)

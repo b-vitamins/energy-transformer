@@ -38,3 +38,14 @@ def test_extra_repr_non_default() -> None:
     assert "num_heads=2" in rep
     assert "beta=0.5000" in rep
     assert "batch_first=False" in rep
+
+
+def test_attention_properties() -> None:
+    attn = MultiheadEnergyAttention(embed_dim=8, num_heads=2)
+    assert attn.head_dim == 4
+    expected_params = 2 * attn.num_heads * attn.head_dim * attn.embed_dim
+    assert attn.total_params == expected_params
+    assert attn.requires_grad_
+    assert isinstance(attn.device, torch.device)
+    assert isinstance(attn.dtype, torch.dtype)
+    assert not attn.is_mixed_precision

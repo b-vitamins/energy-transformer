@@ -101,6 +101,31 @@ class BaseClassifierHead(nn.Module):
             f"pool_type='{self.pool_type}'"
         )
 
+    @property
+    def features_in(self) -> int:
+        """Input feature dimension."""
+        return self.in_features
+
+    @property
+    def features_out(self) -> int:
+        """Output feature dimension (number of classes)."""
+        return self.num_classes
+
+    @property
+    def has_dropout(self) -> bool:
+        """Whether dropout is applied."""
+        return self.drop_rate > 0
+
+    @property
+    def is_pooled(self) -> bool:
+        """Whether input pooling is applied."""
+        return self.pool_type != PoolType.NONE
+
+    @property
+    def total_params(self) -> int:
+        """Total number of parameters."""
+        return sum(p.numel() for p in self.parameters())
+
 
 def _create_pool(pool_type: str = PoolType.AVG) -> nn.Module:
     """Create pooling layer for sequence inputs."""
@@ -346,6 +371,31 @@ class NormMLPClassifierHead(BaseClassifierHead):
         x = self.drop(x)  # (B, hidden)
         return cast(Tensor, self.fc2(x))  # (B, num_classes)
 
+    @property
+    def features_in(self) -> int:
+        """Input feature dimension."""
+        return self.in_features
+
+    @property
+    def features_out(self) -> int:
+        """Output feature dimension (number of classes)."""
+        return self.num_classes
+
+    @property
+    def has_dropout(self) -> bool:
+        """Whether dropout is applied."""
+        return self.drop_rate > 0
+
+    @property
+    def is_pooled(self) -> bool:
+        """Whether input pooling is applied."""
+        return self.pool_type != PoolType.NONE
+
+    @property
+    def total_params(self) -> int:
+        """Total number of parameters."""
+        return sum(p.numel() for p in self.parameters())
+
 
 class NormLinearClassifierHead(BaseClassifierHead):
     """Normalized linear classifier head.
@@ -438,7 +488,10 @@ class ReLUMLPClassifierHead(nn.Module):
         super().__init__()
         hidden_features = hidden_features or num_classes
 
+        self.in_features = in_features
+        self.num_classes = num_classes
         self.pool_type = pool_type
+        self.drop_rate = drop_rate
         self.pool = _create_pool(pool_type)
         self.norm = norm_layer(in_features) if norm_layer else nn.Identity()
         self.fc1 = nn.Linear(in_features, hidden_features, bias=bias)

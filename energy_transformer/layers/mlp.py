@@ -88,3 +88,33 @@ class MLP(nn.Module):
         x = cast(Tensor, self.act(x))
         x = cast(Tensor, self.drop(x))
         return cast(Tensor, self.fc2(x))
+
+    @property
+    def expansion_ratio(self) -> float:
+        """Ratio of hidden dimension to input dimension."""
+        return self.fc1.out_features / self.fc1.in_features
+
+    @property
+    def features_in(self) -> int:
+        """Input feature dimension."""
+        return self.fc1.in_features
+
+    @property
+    def features_hidden(self) -> int:
+        """Hidden feature dimension."""
+        return self.fc1.out_features
+
+    @property
+    def features_out(self) -> int:
+        """Output feature dimension."""
+        return self.fc2.out_features
+
+    @property
+    def has_bias(self) -> bool:
+        """Whether linear layers have bias."""
+        return self.fc1.bias is not None
+
+    @property
+    def activation_name(self) -> str:
+        """Name of the activation function."""
+        return self.act.__class__.__name__

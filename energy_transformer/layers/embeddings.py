@@ -141,6 +141,29 @@ class ConvPatchEmbed(nn.Module):
             x = x.flatten(2).transpose(1, 2)  # [B, N, D]
         return cast(Tensor, self.norm(x))
 
+    @property
+    def patch_area(self) -> int:
+        """Total area of each patch in pixels."""
+        return self.patch_size[0] * self.patch_size[1]
+
+    @property
+    def grid_shape(self) -> tuple[int, int]:
+        """Shape of the patch grid (height, width in patches)."""
+        return (
+            self.img_size[0] // self.patch_size[0],
+            self.img_size[1] // self.patch_size[1],
+        )
+
+    @property
+    def sequence_length(self) -> int:
+        """Output sequence length (number of patches)."""
+        return self.num_patches
+
+    @property
+    def receptive_field(self) -> tuple[int, int]:
+        """Receptive field of each output token in pixels."""
+        return self.patch_size
+
 
 class PatchifyEmbed(nn.Module):
     """Two-stage patch embedding with separate patchification and projection.
@@ -292,6 +315,23 @@ class PatchifyEmbed(nn.Module):
         x = self.proj(x)  # shape: [B, N, D]
         return cast(Tensor, self.norm(x))
 
+    @property
+    def patch_area(self) -> int:
+        """Total area of each patch in pixels."""
+        return self.patch_dim // self.in_chans
+
+    @property
+    def tokens_per_image(self) -> int:
+        """Number of tokens produced per image."""
+        return self.num_patches
+
+    @property
+    def compression_ratio(self) -> float:
+        """Compression ratio from pixels to tokens."""
+        total_pixels = self.img_size[0] * self.img_size[1] * self.in_chans
+        total_features = self.num_patches * self.embed_dim
+        return total_pixels / total_features
+
 
 class PosEmbed2D(nn.Module):
     """Learnable 2D positional embeddings.
@@ -393,3 +433,23 @@ class PosEmbed2D(nn.Module):
             raise ValueError(f"Expected 2D or 3D input, got {x.ndim}D.")
 
         return cast(Tensor, self.pos_drop(x))
+
+    @property
+    def max_sequence_length(self) -> int:
+        """Maximum sequence length supported."""
+        return self.pos_embed.size(0)
+
+    @property
+    def has_cls_token(self) -> bool:
+        """Whether positional embedding includes CLS token position."""
+        return self.cls_token
+
+    @property
+    def num_content_positions(self) -> int:
+        """Number of content token positions (excluding CLS if present)."""
+        return self.num_patches
+
+    @property
+    def device(self) -> torch.device:
+        """Device of the positional embeddings."""
+        return self.pos_embed.device

@@ -119,9 +119,9 @@ class EnergyLayerNorm(nn.Module):
         self.regularization = regularization
         self.enforce_positive_gamma = enforce_positive_gamma
 
-        self.D = 1
+        self._D_cached = 1
         for dim in self.normalized_shape:
-            self.D *= dim
+            self._D_cached *= dim
 
         if self.enforce_positive_gamma:
             init_val = torch.log(torch.expm1(torch.tensor(1.0))).item()
@@ -134,6 +134,41 @@ class EnergyLayerNorm(nn.Module):
         self.delta = nn.Parameter(
             torch.zeros(normalized_shape, **factory_kwargs)
         )
+
+        # Cache product of normalized dimensions for efficiency
+        # in the property ``D``.
+
+    @property
+    def D(self) -> int:  # noqa: N802
+        """Total dimension size (product of normalized_shape)."""
+        return self._D_cached
+
+    @property
+    def normalized_dim(self) -> int:
+        """Number of dimensions being normalized."""
+        return len(self.normalized_shape)
+
+    @property
+    def is_regularized(self) -> bool:
+        """Whether regularization is applied."""
+        return self.regularization != 0.0
+
+    @property
+    def effective_gamma(self) -> torch.Tensor:
+        """Get effective gamma value (handling log parameterization)."""
+        if self.enforce_positive_gamma:
+            return F.softplus(self.log_gamma)
+        return self.gamma
+
+    @property
+    def device(self) -> torch.device:
+        """Device of the module parameters."""
+        return self.delta.device
+
+    @property
+    def dtype(self) -> torch.dtype:
+        """Data type of the module parameters."""
+        return self.delta.dtype
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Apply energy-based layer normalization.
@@ -178,9 +213,7 @@ class EnergyLayerNorm(nn.Module):
 
         x_mean = x.mean(dim=dims, keepdim=True)  # shape: [..., 1, ..., 1]
         x_centered = x - x_mean  # shape: [..., D]
-        var = x_centered.pow(2).mean(
-            dim=dims, keepdim=True
-        )  # shape: [..., 1, ..., 1]
+        var = x_centered.pow(2).sum(dim=dims, keepdim=True) / self.D
 
         g = (
             gamma * x_centered / torch.sqrt(var + self.eps) + self.delta
@@ -219,7 +252,7 @@ class EnergyLayerNorm(nn.Module):
             gamma = self.gamma
 
         x_mean = x.mean(dim=dims, keepdim=True)  # shape: [..., 1, ..., 1]
-        var = (x - x_mean).pow(2).mean(dim=dims, keepdim=False)  # shape: [...]
+        var = (x - x_mean).pow(2).sum(dim=dims, keepdim=False) / self.D
 
         energy_norm = (
             self.D * gamma * torch.sqrt(var + self.eps)
