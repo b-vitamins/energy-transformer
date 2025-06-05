@@ -78,6 +78,12 @@ class MLP(nn.Module):
         Tensor
             Output tensor of shape (..., out_features).
         """
+        if x.size(-1) != self.fc1.in_features:
+            raise ValueError(
+                f"MLP: Feature dimension mismatch. "
+                f"Expected: {self.fc1.in_features}, got: {x.size(-1)}."
+            )
+
         x = cast(Tensor, self.fc1(x))
         x = cast(Tensor, self.act(x))
         x = cast(Tensor, self.drop(x))

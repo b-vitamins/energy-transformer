@@ -149,6 +149,26 @@ class EnergyLayerNorm(nn.Module):
         torch.Tensor
             Normalized tensor of same shape as input.
         """
+        if x.dim() < len(self.normalized_shape):
+            raise ValueError(
+                f"EnergyLayerNorm: Input must have at least {len(self.normalized_shape)} dimensions "
+                f"for normalized_shape={self.normalized_shape}. Got {x.dim()}D input."
+            )
+
+        for i, (actual, expected) in enumerate(
+            zip(
+                x.shape[-len(self.normalized_shape) :],
+                self.normalized_shape,
+                strict=False,
+            )
+        ):
+            if actual != expected:
+                raise ValueError(
+                    f"EnergyLayerNorm: Input shape mismatch at dimension {-len(self.normalized_shape) + i}. "
+                    f"Expected trailing dimensions {self.normalized_shape}, "
+                    f"got {tuple(x.shape[-len(self.normalized_shape) :])}"
+                )
+
         dims = [-(i + 1) for i in range(len(self.normalized_shape))]
 
         if self.enforce_positive_gamma:

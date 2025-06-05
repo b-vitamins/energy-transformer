@@ -128,14 +128,13 @@ class ConvPatchEmbed(nn.Module):
             otherwise (B, D, H', W') where H'=H/patch_size.
         """
         b, c, h, w = x.shape
-        assert h == self.img_size[0], (
-            f"Input image height ({h}) doesn't match model's expected height ({self.img_size[0]}). "
-            f"Expected {self.img_size[0]}x{self.img_size[1]} images."
-        )
-        assert w == self.img_size[1], (
-            f"Input image width ({w}) doesn't match model's expected width ({self.img_size[1]}). "
-            f"Expected {self.img_size[0]}x{self.img_size[1]} images."
-        )
+        if h != self.img_size[0] or w != self.img_size[1]:
+            raise ValueError(
+                f"ConvPatchEmbed: Input image size mismatch. "
+                f"Expected: {self.img_size[0]}x{self.img_size[1]}, "
+                f"got: {h}x{w}. "
+                f"Hint: Resize your images or create a new model with img_size=({h}, {w})."
+            )
 
         x = self.proj(x)  # shape: [B, D, H/p, W/p]
         if self.flatten:
@@ -369,17 +368,25 @@ class PosEmbed2D(nn.Module):
             If sequence length doesn't match positional embedding length.
         """
         if x.ndim == 3:  # (B, L, D)  # noqa: PLR2004
-            if x.size(1) != self.pos_embed.size(0):
-                raise RuntimeError(
-                    f"Sequence length {x.size(1)} doesn't match "
-                    f"positional embedding length {self.pos_embed.size(0)}."
+            seq_dim = 1
+            if x.size(seq_dim) != self.pos_embed.size(0):
+                raise ValueError(
+                    f"PosEmbed2D: Sequence length mismatch. "
+                    f"Expected: {self.pos_embed.size(0)} "
+                    f"({'with' if self.cls_token else 'without'} CLS token), "
+                    f"got: {x.size(seq_dim)}. "
+                    f"Hint: Check if CLS token is properly added before positional encoding."
                 )
             x = x + self.pos_embed.unsqueeze(0).to(x.dtype)
         elif x.ndim == 2:  # (L, D)  # noqa: PLR2004
-            if x.size(0) != self.pos_embed.size(0):
-                raise RuntimeError(
-                    f"Sequence length {x.size(0)} doesn't match "
-                    f"positional embedding length {self.pos_embed.size(0)}."
+            seq_dim = 0
+            if x.size(seq_dim) != self.pos_embed.size(0):
+                raise ValueError(
+                    f"PosEmbed2D: Sequence length mismatch. "
+                    f"Expected: {self.pos_embed.size(0)} "
+                    f"({'with' if self.cls_token else 'without'} CLS token), "
+                    f"got: {x.size(seq_dim)}. "
+                    f"Hint: Check if CLS token is properly added before positional encoding."
                 )
             x = x + self.pos_embed.to(x.dtype)
         else:

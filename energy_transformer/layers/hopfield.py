@@ -9,6 +9,7 @@ from .constants import (
     DEFAULT_HOPFIELD_MULTIPLIER,
     DEFAULT_INIT_STD,
 )
+from .validation import validate_positive, validate_tensor_dim
 
 
 class HopfieldNetwork(nn.Module):
@@ -139,7 +140,8 @@ class HopfieldNetwork(nn.Module):
 
         if activation not in ["relu", "softmax"]:
             raise ValueError(
-                f"activation must be 'relu' or 'softmax', got {activation}"
+                f"HopfieldNetwork: activation must be 'relu' or 'softmax'. "
+                f"Got: '{activation}'."
             )
 
         self.kernel = nn.Parameter(
@@ -154,6 +156,7 @@ class HopfieldNetwork(nn.Module):
             self.register_parameter("bias", None)
 
         if activation == "softmax":
+            validate_positive(beta, "HopfieldNetwork", "beta")
             self.beta = nn.Parameter(
                 torch.tensor(beta, device=device, dtype=dtype)
             )
@@ -182,6 +185,8 @@ class HopfieldNetwork(nn.Module):
         torch.Tensor
             Scalar energy value.
         """
+        validate_tensor_dim(g, 3, "HopfieldNetwork", "g")
+
         h = torch.matmul(g, self.kernel)  # shape: [..., N, K]
 
         if self.use_bias:

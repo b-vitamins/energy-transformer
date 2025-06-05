@@ -135,6 +135,12 @@ class ClassifierHead(nn.Module):
         Tensor
             Logits of shape (B, num_classes).
         """
+        if self.pool_type != PoolType.NONE and x.dim() not in [2, 3]:
+            raise ValueError(
+                f"{self.__class__.__name__}: Input must be 2D or 3D when pool_type='{self.pool_type}'. "
+                f"Got {x.dim()}D input with shape {list(x.shape)}."
+            )
+
         if self.pool_type == PoolType.TOKEN:
             # Extract CLS token
             x = x[:, 0]  # (B, C)
@@ -211,6 +217,12 @@ class LinearClassifierHead(nn.Module):
         Tensor
             Logits of shape (B, num_classes).
         """
+        if self.pool_type != PoolType.NONE and x.dim() not in [2, 3]:
+            raise ValueError(
+                f"{self.__class__.__name__}: Input must be 2D or 3D when pool_type='{self.pool_type}'. "
+                f"Got {x.dim()}D input with shape {list(x.shape)}."
+            )
+
         if x.ndim == 3:  # noqa: PLR2004
             if self.pool_type == PoolType.TOKEN:
                 x = x[:, 0]
@@ -297,6 +309,12 @@ class NormMLPClassifierHead(nn.Module):
         Tensor
             Logits of shape (B, num_classes).
         """
+        if self.pool_type != PoolType.NONE and x.dim() not in [2, 3]:
+            raise ValueError(
+                f"{self.__class__.__name__}: Input must be 2D or 3D when pool_type='{self.pool_type}'. "
+                f"Got {x.dim()}D input with shape {list(x.shape)}."
+            )
+
         # Handle pooling for sequence inputs
         if x.ndim == 3:  # noqa: PLR2004
             if self.pool_type == PoolType.TOKEN:

@@ -13,6 +13,11 @@ from .constants import (
     DEFAULT_COMPUTE_DTYPE,
     MIXED_PRECISION_DTYPES,
 )
+from .validation import (
+    validate_divisibility,
+    validate_positive,
+    validate_tensor_dim,
+)
 
 
 class MultiheadEnergyAttention(nn.Module):
@@ -140,8 +145,13 @@ class MultiheadEnergyAttention(nn.Module):
         self.num_heads = num_heads
         self.batch_first = batch_first
 
-        if embed_dim % num_heads != 0:
-            raise ValueError("embed_dim must be divisible by num_heads")
+        validate_divisibility(
+            embed_dim,
+            num_heads,
+            "MultiheadEnergyAttention",
+            "embed_dim",
+            "num_heads",
+        )
 
         # Projection weights
         self.q_proj_weight = nn.Parameter(
@@ -160,6 +170,9 @@ class MultiheadEnergyAttention(nn.Module):
                     (num_heads,), default_beta, device=device, dtype=dtype
                 )
             case float() | int():
+                validate_positive(
+                    float(beta), "MultiheadEnergyAttention", "beta"
+                )
                 beta_tensor = torch.full(
                     (num_heads,), float(beta), device=device, dtype=dtype
                 )
@@ -215,6 +228,8 @@ class MultiheadEnergyAttention(nn.Module):
         Tensor
             Scalar energy value.
         """
+        validate_tensor_dim(x, 3, "MultiheadEnergyAttention")
+
         # Handle input shape
         match self.batch_first:
             case True:
