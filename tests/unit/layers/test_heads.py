@@ -1,6 +1,8 @@
+import pytest
 import torch
 from torch import nn
 
+import energy_transformer.layers.heads
 from energy_transformer.layers.heads import (
     ClassifierHead,
     LinearClassifierHead,
@@ -70,3 +72,53 @@ def test_norm_mlp_classifier_head_avg_pool() -> None:
     x = torch.randn(2, 5, 4)
     out = head(x)
     assert out.shape == (2, 2)
+
+
+def test_classifier_head_invalid_conv_pool() -> None:
+    """Conv classifier requires pool_type='none'."""
+    with pytest.raises(ValueError, match="use_conv=True requires"):  # PT011
+        ClassifierHead(
+            in_features=4, num_classes=3, pool_type="avg", use_conv=True
+        )
+
+
+def test_create_pool_invalid() -> None:
+    """Unknown pool_type should raise ValueError."""
+    with pytest.raises(ValueError, match="Unknown pool_type"):  # PT011
+        energy_transformer.layers.heads._create_pool("foobar")
+
+
+def test_norm_linear_classifier_head_avg_pool() -> None:
+    head = NormLinearClassifierHead(
+        in_features=4, num_classes=2, pool_type="avg"
+    )
+    x = torch.randn(2, 5, 4)
+    out = head(x)
+    assert out.shape == (2, 2)
+
+
+def test_norm_linear_classifier_head_none_pool() -> None:
+    """None pool expects pre-pooled input."""
+    head = NormLinearClassifierHead(
+        in_features=4, num_classes=2, pool_type="none"
+    )
+    x = torch.randn(2, 4)
+    out = head(x)
+    assert out.shape == (2, 2)
+
+
+def test_relu_mlp_classifier_head_avg_pool() -> None:
+    head = ReLUMLPClassifierHead(in_features=4, num_classes=2, pool_type="avg")
+    x = torch.randn(2, 5, 4)
+    out = head(x)
+    assert out.shape == (2, 2)
+
+
+def test_classifier_head_conv_sequence() -> None:
+    """Conv classifier should handle sequence inputs."""
+    head = ClassifierHead(
+        in_features=4, num_classes=3, pool_type="none", use_conv=True
+    )
+    x = torch.randn(2, 4, 5)
+    out = head(x)
+    assert out.shape == (2, 3, 5)
