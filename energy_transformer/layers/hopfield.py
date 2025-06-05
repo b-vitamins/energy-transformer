@@ -9,6 +9,7 @@ from .constants import (
     DEFAULT_HOPFIELD_MULTIPLIER,
     DEFAULT_INIT_STD,
 )
+from .types import ActivationType, Device, Dtype, EmbedDim, HiddenDim
 from .validation import validate_positive, validate_tensor_dim
 
 
@@ -116,17 +117,20 @@ class HopfieldNetwork(nn.Module):
     .. [2] Ramsauer et al. (2020). Hopfield Networks is All You Need.
     """
 
+    activation: ActivationType
+    beta: nn.Parameter | None
+
     def __init__(
         self,
-        embed_dim: int,
-        hidden_dim: int | None = None,
+        embed_dim: EmbedDim,
+        hidden_dim: HiddenDim | None = None,
         hidden_ratio: float = DEFAULT_HOPFIELD_MULTIPLIER,
-        activation: str = "relu",
+        activation: ActivationType = "relu",
         beta: float = DEFAULT_HOPFIELD_BETA,
         bias: bool = False,
         init_std: float = DEFAULT_INIT_STD,
-        device: torch.device | None = None,
-        dtype: torch.dtype | None = None,
+        device: Device = None,
+        dtype: Dtype = None,
     ) -> None:
         super().__init__()
 
@@ -196,6 +200,7 @@ class HopfieldNetwork(nn.Module):
             a = F.relu(h)  # shape: [..., N, K]
             energy = -0.5 * (a**2).sum()
         else:
+            assert self.beta is not None
             h_scaled = self.beta * h  # shape: [..., N, K]
             lse = torch.logsumexp(h_scaled, dim=-1)  # shape: [..., N]
             energy = -(1.0 / self.beta) * lse.sum()
@@ -232,6 +237,7 @@ class HopfieldNetwork(nn.Module):
         if self.activation == "relu":
             a = F.relu(h)  # shape: [..., N, K]
         else:
+            assert self.beta is not None
             h_scaled = self.beta * h  # shape: [..., N, K]
             a = F.softmax(h_scaled, dim=-1)  # shape: [..., N, K]
 
@@ -266,6 +272,7 @@ class HopfieldNetwork(nn.Module):
     def temperature(self) -> float | None:
         """Temperature parameter for softmax (None for ReLU)."""
         if self.activation == "softmax":
+            assert self.beta is not None
             return (
                 self.beta.item()
                 if isinstance(self.beta, nn.Parameter)
@@ -293,6 +300,7 @@ class HopfieldNetwork(nn.Module):
         s = f"embed_dim={self.embed_dim}, hidden_dim={self.hidden_dim}"
         s += f", activation='{self.activation}'"
         if self.activation == "softmax":
+            assert self.beta is not None
             s += f", beta={self.beta.item():.3f}"
         if self.use_bias:
             s += ", bias=True"

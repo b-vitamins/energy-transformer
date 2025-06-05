@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import cast
 
 from torch import Tensor, nn
 
-from .constants import HEAD_INIT_STD, SMALL_INIT_STD, PoolType
+from .constants import HEAD_INIT_STD, SMALL_INIT_STD
+from .types import ModuleFactory, PoolType
 
 __all__ = [
     "ClassifierHead",
@@ -50,11 +50,13 @@ class _GlobalMaxPool(nn.Module):
 class BaseClassifierHead(nn.Module):
     """Base class for classifier heads with common functionality."""
 
+    pool_type: PoolType
+
     def __init__(
         self,
         in_features: int,
         num_classes: int,
-        pool_type: str = PoolType.TOKEN,
+        pool_type: PoolType = "token",
         drop_rate: float = 0.0,
     ) -> None:
         super().__init__()
@@ -67,14 +69,14 @@ class BaseClassifierHead(nn.Module):
         self.drop = nn.Dropout(drop_rate) if drop_rate > 0 else nn.Identity()
 
     @staticmethod
-    def _create_pool(pool_type: str) -> nn.Module:
-        if pool_type == PoolType.AVG:
+    def _create_pool(pool_type: PoolType) -> nn.Module:
+        if pool_type == "avg":
             return _GlobalAvgPool()
-        if pool_type == PoolType.MAX:
+        if pool_type == "max":
             return _GlobalMaxPool()
-        if pool_type == PoolType.TOKEN:
+        if pool_type == "token":
             return _TokenPool()
-        if pool_type == PoolType.NONE:
+        if pool_type == "none":
             return nn.Identity()
         raise ValueError(
             f"BaseClassifierHead: Unknown pool_type '{pool_type}'. "
@@ -95,6 +97,7 @@ class BaseClassifierHead(nn.Module):
         return cast(Tensor, self.pool(x))
 
     def extra_repr(self) -> str:
+        """Return string representation for module printing."""
         return (
             f"in_features={self.in_features}, "
             f"num_classes={self.num_classes}, "
@@ -119,7 +122,7 @@ class BaseClassifierHead(nn.Module):
     @property
     def is_pooled(self) -> bool:
         """Whether input pooling is applied."""
-        return self.pool_type != PoolType.NONE
+        return self.pool_type != "none"
 
     @property
     def total_params(self) -> int:
@@ -127,7 +130,7 @@ class BaseClassifierHead(nn.Module):
         return sum(p.numel() for p in self.parameters())
 
 
-def _create_pool(pool_type: str = PoolType.AVG) -> nn.Module:
+def _create_pool(pool_type: PoolType = "avg") -> nn.Module:
     """Create pooling layer for sequence inputs."""
     return BaseClassifierHead._create_pool(pool_type)
 
@@ -168,7 +171,7 @@ class ClassifierHead(nn.Module):
         self,
         in_features: int,
         num_classes: int,
-        pool_type: str = PoolType.TOKEN,
+        pool_type: PoolType = "token",
         drop_rate: float = 0.0,
         use_conv: bool = False,
         bias: bool = True,
@@ -189,7 +192,7 @@ class ClassifierHead(nn.Module):
         # Classifier
         self.fc: nn.Linear | nn.Conv1d
         if use_conv:
-            if pool_type != PoolType.NONE:
+            if pool_type != "none":
                 raise ValueError("use_conv=True requires pool_type='none'")
             self.fc = nn.Conv1d(in_features, num_classes, 1, bias=bias)
         else:
@@ -224,16 +227,16 @@ class ClassifierHead(nn.Module):
         Tensor
             Logits of shape (B, num_classes).
         """
-        if self.pool_type != PoolType.NONE and x.dim() not in [2, 3]:
+        if self.pool_type != "none" and x.dim() not in [2, 3]:
             raise ValueError(
                 f"{self.__class__.__name__}: Input must be 2D or 3D when pool_type='{self.pool_type}'. "
                 f"Got {x.dim()}D input with shape {list(x.shape)}."
             )
 
-        if self.pool_type == PoolType.TOKEN:
+        if self.pool_type == "token":
             # Extract CLS token
             x = x[:, 0]  # (B, C)
-        elif self.pool_type in [PoolType.AVG, PoolType.MAX]:
+        elif self.pool_type in ["avg", "max"]:
             # Pool sequence dimension
             x = self.pool(x)  # (B, C)
 
@@ -277,7 +280,7 @@ class LinearClassifierHead(BaseClassifierHead):
         self,
         in_features: int,
         num_classes: int,
-        pool_type: str = PoolType.TOKEN,
+        pool_type: PoolType = "token",
         drop_rate: float = 0.0,
         bias: bool = True,
     ) -> None:
@@ -334,10 +337,10 @@ class NormMLPClassifierHead(BaseClassifierHead):
         in_features: int,
         num_classes: int,
         hidden_features: int | None = None,
-        pool_type: str = PoolType.TOKEN,
+        pool_type: PoolType = "token",
         drop_rate: float = 0.0,
-        act_layer: Callable[..., nn.Module] | None = nn.GELU,
-        norm_layer: Callable[..., nn.Module] | None = nn.LayerNorm,
+        act_layer: ModuleFactory | None = nn.GELU,
+        norm_layer: ModuleFactory | None = nn.LayerNorm,
         bias: bool = True,
     ) -> None:
         super().__init__(in_features, num_classes, pool_type, drop_rate)
@@ -389,7 +392,7 @@ class NormMLPClassifierHead(BaseClassifierHead):
     @property
     def is_pooled(self) -> bool:
         """Whether input pooling is applied."""
-        return self.pool_type != PoolType.NONE
+        return self.pool_type != "none"
 
     @property
     def total_params(self) -> int:
@@ -422,9 +425,9 @@ class NormLinearClassifierHead(BaseClassifierHead):
         self,
         in_features: int,
         num_classes: int,
-        pool_type: str = PoolType.TOKEN,
+        pool_type: PoolType = "token",
         drop_rate: float = 0.0,
-        norm_layer: Callable[..., nn.Module] | None = nn.LayerNorm,
+        norm_layer: ModuleFactory | None = nn.LayerNorm,
         bias: bool = True,
     ) -> None:
         super().__init__(in_features, num_classes, pool_type, drop_rate)
@@ -480,9 +483,9 @@ class ReLUMLPClassifierHead(nn.Module):
         in_features: int,
         num_classes: int,
         hidden_features: int | None = None,
-        pool_type: str = PoolType.TOKEN,
+        pool_type: PoolType = "token",
         drop_rate: float = 0.0,
-        norm_layer: Callable[..., nn.Module] | None = nn.LayerNorm,
+        norm_layer: ModuleFactory | None = nn.LayerNorm,
         bias: bool = True,
     ) -> None:
         super().__init__()
@@ -528,9 +531,9 @@ class ReLUMLPClassifierHead(nn.Module):
         """
         # Handle pooling for sequence inputs
         if x.ndim == 3:  # noqa: PLR2004
-            if self.pool_type == PoolType.TOKEN:
+            if self.pool_type == "token":
                 x = x[:, 0]
-            elif self.pool_type in [PoolType.AVG, PoolType.MAX]:
+            elif self.pool_type in ["avg", "max"]:
                 x = self.pool(x)
 
         # MLP with norm

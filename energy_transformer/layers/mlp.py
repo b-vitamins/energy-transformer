@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import cast
 
 from torch import Tensor, nn
 
 from .constants import DEFAULT_MLP_RATIO
+from .types import ModuleFactory
 
 __all__ = ["MLP"]
 
@@ -50,7 +50,7 @@ class MLP(nn.Module):
         in_features: int,
         hidden_features: int | None = None,
         out_features: int | None = None,
-        act_layer: Callable[..., nn.Module] = nn.GELU,
+        act_layer: ModuleFactory = nn.GELU,
         bias: bool = True,
         drop: float = 0.0,
     ) -> None:
