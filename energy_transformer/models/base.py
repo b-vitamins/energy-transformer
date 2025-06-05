@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from contextlib import AbstractContextManager
+from typing import Literal, NamedTuple
 
 import torch
 from torch import Tensor, nn
@@ -9,7 +10,19 @@ from torch import Tensor, nn
 from energy_transformer.utils.observers import StepInfo
 from energy_transformer.utils.optimizers import SGD, EnergyOptimizer
 
-__all__ = ["EnergyTransformer"]
+Track = Literal["none", "energy", "trajectory", "both"]
+DescentMode = Literal["sgd", "bb"]
+
+
+class ETOutput(NamedTuple):
+    """Output container for EnergyTransformer forward pass."""
+
+    tokens: Tensor
+    final_energy: Tensor | None = None
+    trajectory: Tensor | None = None
+
+
+__all__ = ["DescentMode", "ETOutput", "EnergyTransformer", "Track"]
 
 # Registry for model classes to enable lookups from realiser
 REALISER_REGISTRY: dict[str, type[nn.Module]] = {}
@@ -48,6 +61,7 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
         hopfield: nn.Module,
         steps: int = 12,
         optimizer: EnergyOptimizer | None = None,
+        alpha: float | None = None,
     ) -> None:
         """Initialize the Energy Transformer with its energy components."""
         super().__init__()
@@ -55,8 +69,14 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
         self.attention = attention
         self.hopfield = hopfield
         self.steps = steps
-        self.optimizer = optimizer or SGD(alpha=0.1)
-        self.alpha = getattr(self.optimizer, "alpha", 0.1)
+        if optimizer is not None:
+            self.optimizer = optimizer
+            self.alpha = getattr(
+                optimizer, "alpha", alpha if alpha is not None else 0.1
+            )
+        else:
+            self.alpha = 0.1 if alpha is None else alpha
+            self.optimizer = SGD(alpha=self.alpha)
 
         # Hook management
         self._step_hooks: list[Callable[[nn.Module, StepInfo], None]] = []
@@ -167,6 +187,17 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
 
         return x
 
+    def _should_clone(
+        self,
+        training: bool,
+        detach: bool,
+        force_clone: bool | None,
+    ) -> bool:
+        """Determine whether to clone input tokens."""
+        if force_clone is not None:
+            return force_clone
+        return training or detach
+
     def register_step_hook(
         self, hook: Callable[[nn.Module, StepInfo], None]
     ) -> "RemovableHandle":
@@ -218,37 +249,68 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
         self._post_descent_hooks.append(hook)
         return RemovableHandle(self._post_descent_hooks, hook)
 
-    def forward(self, x: Tensor) -> Tensor:
-        """Optimize token configuration via descent on energy landscape.
+    def forward(
+        self,
+        x: Tensor,
+        detach: bool = False,
+        track: Track = "none",
+        _mode: DescentMode = "bb",
+        force_clone: bool | None = None,
+        _armijo_gamma: float = 0.5,
+        _armijo_max_iter: int = 4,
+    ) -> Tensor | ETOutput:
+        """Optimize token configuration via descent on energy landscape."""
+        if torch.is_inference_mode_enabled() and not detach:
+            raise RuntimeError(
+                "EnergyTransformer requires gradient computation, "
+                "which is not possible within torch.inference_mode()."
+            )
 
-        Parameters
-        ----------
-        x : Tensor
-            Input tensor of shape [..., N, D]
-
-        Returns
-        -------
-        Tensor
-            Optimized tokens
-
-        Notes
-        -----
-        For monitoring optimization, use hooks:
-
-        >>> from energy_transformer.utils.observers import EnergyTracker
-        >>> tracker = EnergyTracker()
-        >>> model.register_step_hook(lambda m, info: tracker.update(info))
-        >>> output = model(x)
-        >>> stats = tracker.get_batch_statistics()
-        """
-        # Clone to preserve input
-        x = x.clone()
-
-        # Clear token capture flag
+        # Reset token capture flag
         self._capture_tokens = False
 
-        # Perform descent
-        return self._descent(x, self.steps)
+        if self._should_clone(self.training, detach, force_clone):
+            x = x.clone()
+
+        if detach:
+            x = x.detach()
+
+        x.requires_grad_(True)
+
+        track_traj = track in ("trajectory", "both")
+        return_energy = track in ("energy", "both")
+
+        trajectory: list[Tensor] = []
+        handle = None
+        if track_traj:
+            handle = self.register_step_hook(
+                lambda _m, info: trajectory.append(info.total_energy)
+            )
+
+        out = self._descent(x, self.steps)
+
+        if handle is not None:
+            handle.remove()
+
+        final_energy = None
+        if return_energy:
+            with torch.no_grad():
+                final_energy = self._compute_energy(out)
+
+        if detach:
+            out = out.detach()
+            if final_energy is not None:
+                final_energy = final_energy.detach()
+
+        if track == "none":
+            return out
+
+        traj_tensor = (
+            torch.stack(trajectory) if track_traj and trajectory else None
+        )
+        return ETOutput(
+            tokens=out, final_energy=final_energy, trajectory=traj_tensor
+        )
 
 
 class RemovableHandle:

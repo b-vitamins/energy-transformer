@@ -66,7 +66,6 @@ from energy_transformer.layers.heads import ClassifierHead
 from energy_transformer.layers.hopfield import HopfieldNetwork
 from energy_transformer.layers.layer_norm import EnergyLayerNorm
 from energy_transformer.models.base import EnergyTransformer
-from energy_transformer.utils.optimizers import SGD
 
 
 class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
@@ -171,7 +170,7 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
                         hidden_dim=hopfield_hidden_dim,
                     ),
                     steps=et_steps,
-                    optimizer=SGD(alpha=et_alpha),
+                    alpha=et_alpha,
                 )
                 for _ in range(depth)
             ],
