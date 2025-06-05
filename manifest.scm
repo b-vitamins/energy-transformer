@@ -28,4 +28,6 @@
    "python-lsp-server"
    "python-pylsp-mypy"
    "python-pylsp-ruff"
-   "python-pillow"))
+   "python-pillow"
+   "python-tensorboard"
+   "python-wandb"))
