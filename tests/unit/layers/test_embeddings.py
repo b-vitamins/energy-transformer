@@ -3,6 +3,7 @@ import torch
 
 from energy_transformer.layers.embeddings import (
     ConvPatchEmbed,
+    PatchifyEmbed,
     PosEmbed2D,
     _to_pair,
 )
@@ -97,8 +98,8 @@ def test_positional_embedding_parameter_shapes() -> None:
         embed_dim=2,
         cls_token=True,
     )
-    assert pos_no_cls.pos_embed.shape == (1, 3, 2)
-    assert pos_with_cls.pos_embed.shape == (1, 4, 2)
+    assert pos_no_cls.pos_embed.shape == (3, 2)
+    assert pos_with_cls.pos_embed.shape == (4, 2)
 
 
 def test_positional_embedding_preserves_dtype() -> None:
@@ -106,3 +107,20 @@ def test_positional_embedding_preserves_dtype() -> None:
     x = torch.zeros(1, 2, 3, dtype=torch.float16)
     out = pos(x)
     assert out.dtype == torch.float16
+
+
+def test_patchify_embed_roundtrip() -> None:
+    embed = PatchifyEmbed(img_size=4, patch_size=2, in_chans=1, embed_dim=4)
+    x = torch.randn(1, 1, 4, 4)
+    patches = embed.patchify(x)
+    assert patches.shape == (1, 4, 1, 2, 2)
+    recon = embed.unpatchify(patches)
+    assert torch.allclose(recon, x)
+
+
+@pytest.mark.parametrize("batched", [True, False])
+def test_positional_embedding_length_mismatch(batched: bool) -> None:
+    pos = PosEmbed2D(num_patches=3, embed_dim=2)
+    x = torch.zeros(1, 4, 2) if batched else torch.zeros(4, 2)
+    with pytest.raises(RuntimeError):
+        pos(x)

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import torch
 from typing import cast
 
+import torch
 from einops import rearrange
 from torch import Tensor, nn
 
