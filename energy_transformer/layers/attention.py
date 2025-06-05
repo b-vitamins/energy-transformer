@@ -1,7 +1,7 @@
 """Energy-based multi-head attention module implementation."""
 
 import math
-from typing import ClassVar, Literal, overload
+from typing import Any, ClassVar, Literal, overload
 
 import torch
 import torch.nn.functional as F  # noqa: N812
@@ -10,6 +10,7 @@ from torch import Tensor, nn
 from .constants import (
     ATTENTION_EPSILON,
     ATTENTION_INIT_STD,
+    MEMORY_EFFICIENT_SEQ_THRESHOLD,
 )
 from .types import Device, Dtype, EmbedDim, NumHeads
 from .validation import (
@@ -116,6 +117,14 @@ class MultiheadEnergyAttention(nn.Module):
     References
     ----------
     .. [1] Hoover et al. (2023). Energy Transformer. See equations (3) and (4).
+
+    Notes
+    -----
+    Performance Considerations:
+    - For sequences longer than 512, consider ``use_memory_efficient=True``.
+    - Mixed precision (float16/bfloat16) is automatically handled.
+    - Avoid creating attention masks on every forward pass - cache them.
+    - The module is optimized for ``batch_first=True`` (default).
     """
 
     __constants__: ClassVar[list[str]] = [
@@ -407,6 +416,7 @@ class MultiheadEnergyAttention(nn.Module):
         *,
         attn_mask: None = None,
         is_causal: Literal[False] = False,
+        use_memory_efficient: bool = False,
     ) -> Tensor: ...
 
     @overload
@@ -416,6 +426,7 @@ class MultiheadEnergyAttention(nn.Module):
         *,
         attn_mask: Tensor,
         is_causal: Literal[False] = False,
+        use_memory_efficient: bool = False,
     ) -> Tensor: ...
 
     @overload
@@ -425,6 +436,7 @@ class MultiheadEnergyAttention(nn.Module):
         *,
         attn_mask: None = None,
         is_causal: Literal[True],
+        use_memory_efficient: bool = False,
     ) -> Tensor: ...
 
     def forward(
@@ -432,18 +444,23 @@ class MultiheadEnergyAttention(nn.Module):
         x: Tensor,
         attn_mask: Tensor | None = None,
         is_causal: bool = False,
+        use_memory_efficient: bool = False,
     ) -> Tensor:
         """Forward pass computing energy."""
-        if __debug__ and not isinstance(x, Tensor):
-            raise TypeError(
+        if __debug__:
+            assert isinstance(x, Tensor), (
                 "MultiheadEnergyAttention: Expected Tensor input, "
                 f"got {type(x).__name__}"
             )
+            assert x.dim() == 3, f"Expected 3D input, got {x.dim()}D"  # noqa: PLR2004
 
         x, batch_size, seq_len = self._validate_and_prepare_input(x)
 
         if seq_len == 1:
             return torch.zeros((), device=x.device, dtype=x.dtype)
+
+        if use_memory_efficient and seq_len > MEMORY_EFFICIENT_SEQ_THRESHOLD:
+            return self._forward_chunked(x, attn_mask, is_causal)
 
         compute_dtype = self._get_compute_dtype(x)
 
@@ -453,6 +470,8 @@ class MultiheadEnergyAttention(nn.Module):
         scores = self._apply_attention_masks(
             scores, attn_mask, is_causal, seq_len, batch_size
         )
+        if __debug__:
+            assert not torch.isnan(scores).any(), "NaN in attention scores"
 
         return self._compute_energy_from_scores(scores, compute_dtype, x.dtype)
 
@@ -519,23 +538,120 @@ class MultiheadEnergyAttention(nn.Module):
 
         return grad
 
-    def extra_repr(self) -> str:
-        """Return string representation for printing."""
-        s = f"embed_dim={self.embed_dim}, num_heads={self.num_heads}"
+    def _forward_chunked(  # noqa: PLR0912,C901
+        self,
+        x: Tensor,
+        attn_mask: Tensor | None,
+        is_causal: bool,
+        chunk_size: int = 128,
+    ) -> Tensor:
+        """Memory-efficient forward using chunked attention computation."""
+        x, batch_size, seq_len = self._validate_and_prepare_input(x)
+        compute_dtype = self._get_compute_dtype(x)
 
-        # Check if beta is non-default
+        q, k = self._project_qk(x, compute_dtype)
+
+        diag = torch.eye(seq_len, device=x.device, dtype=torch.bool)
+        if is_causal:
+            if attn_mask is not None:
+                raise ValueError(
+                    "MultiheadEnergyAttention: Cannot use both is_causal=True and attn_mask."
+                )
+            causal_full = torch.triu(
+                torch.full(
+                    (seq_len, seq_len),
+                    float("-inf"),
+                    device=x.device,
+                    dtype=compute_dtype,
+                ),
+                diagonal=1,
+            )
+        else:
+            causal_full = None
+
+        if attn_mask is not None:
+            if attn_mask.dim() == 2:  # noqa: PLR2004
+                attn_full = attn_mask.to(compute_dtype)
+            elif attn_mask.dim() == 3:  # noqa: PLR2004
+                if attn_mask.size(0) not in {1, batch_size * self.num_heads}:
+                    raise ValueError(
+                        "MultiheadEnergyAttention: Attention mask batch dimension mismatch."
+                    )
+                attn_full = attn_mask.to(compute_dtype).view(
+                    -1, seq_len, seq_len
+                )
+            else:
+                raise ValueError(
+                    "MultiheadEnergyAttention: Attention mask must be 2D or 3D."
+                )
+
+        energy = torch.zeros((), device=x.device, dtype=compute_dtype)
+        for start in range(0, seq_len, chunk_size):
+            end = min(start + chunk_size, seq_len)
+            q_chunk = q[:, start:end]
+            scores = self._compute_attention_scores(q_chunk, k, compute_dtype)
+
+            self_mask = diag[start:end].unsqueeze(0).unsqueeze(0)
+            scores = scores.masked_fill(self_mask, float("-inf"))
+
+            if is_causal:
+                assert causal_full is not None
+                scores = scores + causal_full[start:end].unsqueeze(0).unsqueeze(
+                    0
+                )
+
+            if attn_mask is not None:
+                if attn_mask.dim() == 2:  # noqa: PLR2004
+                    scores = scores + attn_full[start:end].unsqueeze(
+                        0
+                    ).unsqueeze(0)
+                else:
+                    scores_flat = scores.view(-1, end - start, seq_len)
+                    scores_flat = scores_flat + attn_full[:, start:end]
+                    scores = scores_flat.view(
+                        batch_size, self.num_heads, end - start, seq_len
+                    )
+
+            lse = torch.logsumexp(scores, dim=-1)
+            energy = (
+                energy
+                - (lse / self.beta.view(1, -1, 1).to(compute_dtype)).sum()
+            )
+
+        return energy.to(x.dtype)
+
+    def extra_repr(self) -> str:
+        """Return string representation for module printing."""
+        parts = [f"embed_dim={self.embed_dim}", f"num_heads={self.num_heads}"]
+
         default_beta = 1.0 / math.sqrt(self.head_dim)
         is_default = torch.allclose(
             self.beta, torch.full_like(self.beta, default_beta)
         )
-
         if not is_default:
-            if self.beta.std() < ATTENTION_EPSILON:  # All same value
-                s += f", beta={self.beta[0].item():.4f}"
+            if self.beta.std() < ATTENTION_EPSILON:
+                parts.append(f"beta={self.beta[0].item():.4f}")
             else:
-                s += ", beta=per_head"
+                parts.append("beta=per_head")
 
         if not self.batch_first:
-            s += ", batch_first=False"
+            parts.append("batch_first=False")
 
-        return s
+        return ", ".join(parts)
+
+    # ------------------------------------------------------------------
+    # State dict hooks
+    # ------------------------------------------------------------------
+    def _save_to_state_dict(
+        self,
+        destination: dict[str, Any],
+        prefix: str,
+        keep_vars: bool,
+    ) -> None:
+        """Save module state with additional metadata."""
+        super()._save_to_state_dict(destination, prefix, keep_vars)  # type: ignore[misc,no-untyped-call]
+        destination[prefix + "_metadata.version"] = "1.0"
+        destination[prefix + "_metadata.config"] = {
+            "embed_dim": self.embed_dim,
+            "num_heads": self.num_heads,
+        }

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import cast, overload
 
 import torch
+import torch.nn.functional as F  # noqa: N812
 from einops import rearrange
 from torch import Tensor, nn
 
@@ -262,6 +263,12 @@ class PatchifyEmbed(nn.Module):
         self.proj = nn.Linear(self.patch_dim, embed_dim, bias=bias)
         self.norm = norm_layer(embed_dim) if norm_layer else nn.Identity()
 
+        # Pre-compute unfold parameters for efficiency
+        self._unfold_params = {
+            "kernel_size": self.patch_size,
+            "stride": self.patch_size,
+        }
+
     def patchify(self, x: Tensor) -> Tensor:
         """Extract patches from images.
 
@@ -276,24 +283,17 @@ class PatchifyEmbed(nn.Module):
             Patches of shape (B, N, C, pH, pW).
         """
         b, c, h, w = x.shape
-        assert h == self.img_size[0], (
-            f"Input image height ({h}) doesn't match model's expected height ({self.img_size[0]}). "
-            f"Expected {self.img_size[0]}x{self.img_size[1]} images."
-        )
-        assert w == self.img_size[1], (
-            f"Input image width ({w}) doesn't match model's expected width ({self.img_size[1]}). "
-            f"Expected {self.img_size[0]}x{self.img_size[1]} images."
-        )
+        if (h, w) != self.img_size:
+            raise ValueError(
+                f"PatchifyEmbed: Input image size mismatch. "
+                f"Expected: {self.img_size}, got: {(h, w)}"
+            )
 
-        ph, pw = self.patch_size
-        return rearrange(
-            x,
-            "b c (gh ph) (gw pw) -> b (gh gw) c ph pw",
-            gh=self.grid_size[0],
-            gw=self.grid_size[1],
-            ph=ph,
-            pw=pw,
-        )  # shape: [B, N, C, pH, pW]
+        x_unfold = F.unfold(x, **self._unfold_params)
+        x_unfold = x_unfold.transpose(1, 2)
+        return x_unfold.reshape(
+            b, self.num_patches, self.in_chans, *self.patch_size
+        )
 
     def unpatchify(self, patches: Tensor) -> Tensor:
         """Reconstruct images from patches.
