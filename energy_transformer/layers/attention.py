@@ -140,18 +140,10 @@ class MultiheadEnergyAttention(nn.Module):
 
         # Projection weights
         self.q_proj_weight = nn.Parameter(
-            torch.empty(
-                (num_heads, self.head_dim, embed_dim),
-                device=device,
-                dtype=dtype,
-            )
+            torch.empty((num_heads, self.head_dim, embed_dim), **factory_kwargs)  # type: ignore[arg-type]
         )
         self.k_proj_weight = nn.Parameter(
-            torch.empty(
-                (num_heads, self.head_dim, embed_dim),
-                device=device,
-                dtype=dtype,
-            )
+            torch.empty((num_heads, self.head_dim, embed_dim), **factory_kwargs)  # type: ignore[arg-type]
         )
 
         # Temperature parameters
@@ -258,10 +250,10 @@ class MultiheadEnergyAttention(nn.Module):
 
         # Exclude self-attention as per paper equation (3): sum over B \u2260 C
         if seq_len > 1:
-            diagonal_mask = torch.eye(
-                seq_len, device=scores.device, dtype=scores.dtype
-            ) * float("-inf")  # shape: [N, N]
-            scores = scores + diagonal_mask.unsqueeze(0).unsqueeze(0)
+            diag = torch.eye(seq_len, device=scores.device, dtype=torch.bool)
+            scores = scores.masked_fill(
+                diag.unsqueeze(0).unsqueeze(0), float("-inf")
+            )
 
         # Apply masks
         if is_causal:
@@ -376,10 +368,10 @@ class MultiheadEnergyAttention(nn.Module):
 
         # Exclude self-attention as per paper equation (3): sum over B \u2260 C
         if seq_len > 1:
-            diagonal_mask = torch.eye(
-                seq_len, device=scores.device, dtype=scores.dtype
-            ) * float("-inf")  # shape: [N, N]
-            scores = scores + diagonal_mask.unsqueeze(0).unsqueeze(0)
+            diag = torch.eye(seq_len, device=scores.device, dtype=torch.bool)
+            scores = scores.masked_fill(
+                diag.unsqueeze(0).unsqueeze(0), float("-inf")
+            )
 
         attn = F.softmax(scores, dim=-1)  # shape: [B, H, N, N]
 

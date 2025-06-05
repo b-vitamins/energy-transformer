@@ -34,6 +34,7 @@ def test_extra_repr_non_default() -> None:
         embed_dim=4, num_heads=2, beta=0.5, batch_first=False
     )
     rep = attn.extra_repr()
-    assert "4, 2" in rep
+    assert "embed_dim=4" in rep
+    assert "num_heads=2" in rep
     assert "beta=0.5000" in rep
     assert "batch_first=False" in rep

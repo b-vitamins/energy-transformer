@@ -137,20 +137,20 @@ class HopfieldNetwork(nn.Module):
             )
 
         self.kernel = nn.Parameter(
-            torch.empty(
-                (embed_dim, self.hidden_dim), device=device, dtype=dtype
-            )
+            torch.empty((embed_dim, self.hidden_dim), **factory_kwargs)  # type: ignore[arg-type]
         )  # shape: [D, K]
 
         if self.use_bias:
             self.bias = nn.Parameter(
-                torch.zeros(self.hidden_dim, device=device, dtype=dtype)
+                torch.zeros(self.hidden_dim, **factory_kwargs)  # type: ignore[arg-type]
             )  # shape: [K]
         else:
             self.register_parameter("bias", None)
 
         if activation == "softmax":
-            self.beta = nn.Parameter(torch.tensor(beta, device=device, dtype=dtype))
+            self.beta = nn.Parameter(
+                torch.tensor(beta, device=device, dtype=dtype)
+            )
         else:
             self.register_buffer("beta", None)
 
