@@ -4,6 +4,12 @@ import torch
 import torch.nn.functional as F  # noqa: N812
 from torch import nn
 
+from .constants import (
+    DEFAULT_HOPFIELD_BETA,
+    DEFAULT_HOPFIELD_MULTIPLIER,
+    DEFAULT_INIT_STD,
+)
+
 
 class HopfieldNetwork(nn.Module):
     r"""Energy-based Hopfield Network module.
@@ -113,11 +119,11 @@ class HopfieldNetwork(nn.Module):
         self,
         embed_dim: int,
         hidden_dim: int | None = None,
-        hidden_ratio: float = 4.0,
+        hidden_ratio: float = DEFAULT_HOPFIELD_MULTIPLIER,
         activation: str = "relu",
-        beta: float = 0.01,
+        beta: float = DEFAULT_HOPFIELD_BETA,
         bias: bool = False,
-        init_std: float = 0.02,
+        init_std: float = DEFAULT_INIT_STD,
         device: torch.device | None = None,
         dtype: torch.dtype | None = None,
     ) -> None:
@@ -277,9 +283,9 @@ class CHNReLU(HopfieldNetwork):
     def __init__(
         self,
         embed_dim: int,
-        hidden_ratio: float = 4.0,
+        hidden_ratio: float = DEFAULT_HOPFIELD_MULTIPLIER,
         bias: bool = False,
-        init_std: float = 0.02,
+        init_std: float = DEFAULT_INIT_STD,
         device: torch.device | None = None,
         dtype: torch.dtype | None = None,
     ) -> None:
@@ -326,10 +332,10 @@ class CHNSoftmax(HopfieldNetwork):
     def __init__(
         self,
         embed_dim: int,
-        hidden_ratio: float = 4.0,
-        beta: float = 0.01,
+        hidden_ratio: float = DEFAULT_HOPFIELD_MULTIPLIER,
+        beta: float = DEFAULT_HOPFIELD_BETA,
         bias: bool = False,
-        init_std: float = 0.02,
+        init_std: float = DEFAULT_INIT_STD,
         device: torch.device | None = None,
         dtype: torch.dtype | None = None,
     ) -> None:

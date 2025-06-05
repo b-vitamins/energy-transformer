@@ -8,6 +8,8 @@ import torch
 from einops import rearrange
 from torch import Tensor, nn
 
+from .constants import DEFAULT_IMAGE_CHANNELS, DEFAULT_INIT_STD
+
 __all__ = [
     "ConvPatchEmbed",
     "PatchifyEmbed",
@@ -86,7 +88,7 @@ class ConvPatchEmbed(nn.Module):
         img_size: int | tuple[int, int],
         patch_size: int | tuple[int, int],
         embed_dim: int,
-        in_chans: int = 3,
+        in_chans: int = DEFAULT_IMAGE_CHANNELS,
         norm_layer: nn.Module | None = None,
         flatten: bool = True,
         bias: bool = True,
@@ -196,7 +198,7 @@ class PatchifyEmbed(nn.Module):
         img_size: int | tuple[int, int],
         patch_size: int | tuple[int, int],
         embed_dim: int,
-        in_chans: int = 3,
+        in_chans: int = DEFAULT_IMAGE_CHANNELS,
         norm_layer: nn.Module | None = None,
         bias: bool = True,
     ) -> None:
@@ -344,7 +346,7 @@ class PosEmbed2D(nn.Module):
 
     def _init_weights(self) -> None:
         """Initialize weights."""
-        nn.init.normal_(self.pos_embed, std=0.02)
+        nn.init.normal_(self.pos_embed, std=DEFAULT_INIT_STD)
 
     def forward(self, x: Tensor) -> Tensor:
         """Forward pass.

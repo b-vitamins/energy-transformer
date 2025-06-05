@@ -7,7 +7,12 @@ import torch
 import torch.nn.functional as F  # noqa: N812
 from torch import Tensor, nn
 
-_EPS = 1e-6
+from .constants import (
+    ATTENTION_EPSILON,
+    ATTENTION_INIT_STD,
+    DEFAULT_COMPUTE_DTYPE,
+    MIXED_PRECISION_DTYPES,
+)
 
 
 class MultiheadEnergyAttention(nn.Module):
@@ -122,7 +127,7 @@ class MultiheadEnergyAttention(nn.Module):
         embed_dim: int,
         num_heads: int,
         beta: float | Tensor | None = None,
-        init_std: float = 0.002,
+        init_std: float = ATTENTION_INIT_STD,
         batch_first: bool = True,
         device: torch.device | None = None,
         dtype: torch.dtype | None = None,
@@ -226,8 +231,8 @@ class MultiheadEnergyAttention(nn.Module):
 
         # Mixed precision safety
         compute_dtype = (
-            torch.float32
-            if x.dtype in {torch.float16, torch.bfloat16}
+            DEFAULT_COMPUTE_DTYPE
+            if x.dtype in MIXED_PRECISION_DTYPES
             else x.dtype
         )
 
@@ -344,8 +349,8 @@ class MultiheadEnergyAttention(nn.Module):
 
         # Mixed precision safety
         compute_dtype = (
-            torch.float32
-            if x.dtype in {torch.float16, torch.bfloat16}
+            DEFAULT_COMPUTE_DTYPE
+            if x.dtype in MIXED_PRECISION_DTYPES
             else x.dtype
         )
 
@@ -405,7 +410,7 @@ class MultiheadEnergyAttention(nn.Module):
         )
 
         if not is_default:
-            if self.beta.std() < _EPS:  # All same value
+            if self.beta.std() < ATTENTION_EPSILON:  # All same value
                 s += f", beta={self.beta[0].item():.4f}"
             else:
                 s += ", beta=per_head"

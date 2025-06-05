@@ -7,6 +7,8 @@ from typing import cast
 
 from torch import Tensor, nn
 
+from .constants import HEAD_INIT_STD, SMALL_INIT_STD, PoolType
+
 __all__ = [
     "ClassifierHead",
     "LinearClassifierHead",
@@ -16,7 +18,7 @@ __all__ = [
 ]
 
 
-def _create_pool(pool_type: str = "avg") -> nn.Module:
+def _create_pool(pool_type: str = PoolType.AVG) -> nn.Module:
     """Create pooling layer for sequence inputs.
 
     Parameters
@@ -29,14 +31,14 @@ def _create_pool(pool_type: str = "avg") -> nn.Module:
     nn.Module
         Pooling module.
     """
-    if pool_type == "avg":
+    if pool_type == PoolType.AVG:
         return nn.Sequential(nn.AdaptiveAvgPool1d(1), nn.Flatten(1))
-    if pool_type == "max":
+    if pool_type == PoolType.MAX:
         return nn.Sequential(nn.AdaptiveMaxPool1d(1), nn.Flatten(1))
-    if pool_type == "token":
+    if pool_type == PoolType.TOKEN:
         # Use first token (CLS token)
         return nn.Identity()
-    if pool_type == "none":
+    if pool_type == PoolType.NONE:
         return nn.Identity()
     raise ValueError(f"Unknown pool_type: {pool_type}")
 
@@ -77,7 +79,7 @@ class ClassifierHead(nn.Module):
         self,
         in_features: int,
         num_classes: int,
-        pool_type: str = "token",
+        pool_type: str = PoolType.TOKEN,
         drop_rate: float = 0.0,
         use_conv: bool = False,
         bias: bool = True,
@@ -98,7 +100,7 @@ class ClassifierHead(nn.Module):
         # Classifier
         self.fc: nn.Linear | nn.Conv1d
         if use_conv:
-            if pool_type != "none":
+            if pool_type != PoolType.NONE:
                 raise ValueError("use_conv=True requires pool_type='none'")
             self.fc = nn.Conv1d(in_features, num_classes, 1, bias=bias)
         else:
@@ -113,7 +115,7 @@ class ClassifierHead(nn.Module):
             if self.fc.bias is not None:
                 nn.init.zeros_(self.fc.bias)
         elif isinstance(self.fc, nn.Conv1d):
-            nn.init.normal_(self.fc.weight, std=0.01)
+            nn.init.normal_(self.fc.weight, std=SMALL_INIT_STD)
             if self.fc.bias is not None:
                 nn.init.zeros_(self.fc.bias)
 
@@ -133,10 +135,10 @@ class ClassifierHead(nn.Module):
         Tensor
             Logits of shape (B, num_classes).
         """
-        if self.pool_type == "token":
+        if self.pool_type == PoolType.TOKEN:
             # Extract CLS token
             x = x[:, 0]  # (B, C)
-        elif self.pool_type in ["avg", "max"]:
+        elif self.pool_type in [PoolType.AVG, PoolType.MAX]:
             # Pool sequence dimension
             x = x.transpose(1, 2)  # (B, C, N)
             x = self.pool(x)  # (B, C)
@@ -181,7 +183,7 @@ class LinearClassifierHead(nn.Module):
         self,
         in_features: int,
         num_classes: int,
-        pool_type: str = "token",
+        pool_type: str = PoolType.TOKEN,
         drop_rate: float = 0.0,
         bias: bool = True,
     ) -> None:
@@ -210,9 +212,9 @@ class LinearClassifierHead(nn.Module):
             Logits of shape (B, num_classes).
         """
         if x.ndim == 3:  # noqa: PLR2004
-            if self.pool_type == "token":
+            if self.pool_type == PoolType.TOKEN:
                 x = x[:, 0]
-            elif self.pool_type in ["avg", "max"]:
+            elif self.pool_type in [PoolType.AVG, PoolType.MAX]:
                 x = x.transpose(1, 2)
                 x = self.pool(x)
 
@@ -251,7 +253,7 @@ class NormMLPClassifierHead(nn.Module):
         in_features: int,
         num_classes: int,
         hidden_features: int | None = None,
-        pool_type: str = "token",
+        pool_type: str = PoolType.TOKEN,
         drop_rate: float = 0.0,
         act_layer: Callable[..., nn.Module] | None = nn.GELU,
         norm_layer: Callable[..., nn.Module] | None = nn.LayerNorm,
@@ -273,7 +275,7 @@ class NormMLPClassifierHead(nn.Module):
     def _init_weights(self) -> None:
         """Initialize weights."""
         # Hidden layer with normal init
-        nn.init.trunc_normal_(self.fc1.weight, std=0.02)
+        nn.init.trunc_normal_(self.fc1.weight, std=HEAD_INIT_STD)
         if self.fc1.bias is not None:
             nn.init.zeros_(self.fc1.bias)
 
@@ -297,9 +299,9 @@ class NormMLPClassifierHead(nn.Module):
         """
         # Handle pooling for sequence inputs
         if x.ndim == 3:  # noqa: PLR2004
-            if self.pool_type == "token":
+            if self.pool_type == PoolType.TOKEN:
                 x = x[:, 0]
-            elif self.pool_type in ["avg", "max"]:
+            elif self.pool_type in [PoolType.AVG, PoolType.MAX]:
                 x = x.transpose(1, 2)
                 x = self.pool(x)
 
@@ -336,7 +338,7 @@ class NormLinearClassifierHead(nn.Module):
         self,
         in_features: int,
         num_classes: int,
-        pool_type: str = "token",
+        pool_type: str = PoolType.TOKEN,
         drop_rate: float = 0.0,
         norm_layer: Callable[..., nn.Module] | None = nn.LayerNorm,
         bias: bool = True,
@@ -368,9 +370,9 @@ class NormLinearClassifierHead(nn.Module):
         """
         # Handle pooling for sequence inputs
         if x.ndim == 3:  # noqa: PLR2004
-            if self.pool_type == "token":
+            if self.pool_type == PoolType.TOKEN:
                 x = x[:, 0]
-            elif self.pool_type in ["avg", "max"]:
+            elif self.pool_type in [PoolType.AVG, PoolType.MAX]:
                 x = x.transpose(1, 2)
                 x = self.pool(x)
 
@@ -408,7 +410,7 @@ class ReLUMLPClassifierHead(nn.Module):
         in_features: int,
         num_classes: int,
         hidden_features: int | None = None,
-        pool_type: str = "token",
+        pool_type: str = PoolType.TOKEN,
         drop_rate: float = 0.0,
         norm_layer: Callable[..., nn.Module] | None = nn.LayerNorm,
         bias: bool = True,
@@ -429,7 +431,7 @@ class ReLUMLPClassifierHead(nn.Module):
     def _init_weights(self) -> None:
         """Initialize weights."""
         # Hidden layer with normal init
-        nn.init.trunc_normal_(self.fc1.weight, std=0.02)
+        nn.init.trunc_normal_(self.fc1.weight, std=HEAD_INIT_STD)
         if self.fc1.bias is not None:
             nn.init.zeros_(self.fc1.bias)
 
@@ -453,9 +455,9 @@ class ReLUMLPClassifierHead(nn.Module):
         """
         # Handle pooling for sequence inputs
         if x.ndim == 3:  # noqa: PLR2004
-            if self.pool_type == "token":
+            if self.pool_type == PoolType.TOKEN:
                 x = x[:, 0]
-            elif self.pool_type in ["avg", "max"]:
+            elif self.pool_type in [PoolType.AVG, PoolType.MAX]:
                 x = x.transpose(1, 2)
                 x = self.pool(x)
 
