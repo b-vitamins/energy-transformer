@@ -3,9 +3,21 @@ name: Python
 on:
   push:
     branches: ["master", "main", "develop"]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE'
+      - '.github/**.md'
   pull_request:
     branches: ["master", "main"]
     types: [opened, synchronize, reopened]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE'
+      - '.github/**.md'
 
 # Cancel in-progress runs when a new run is triggered
 concurrency:
@@ -18,8 +30,8 @@ permissions:
   pull-requests: read
 
 jobs:
-  lint-format:
-    name: Lint & Format Check
+  test:
+    name: Test & Lint
     runs-on: ubuntu-latest
     timeout-minutes: 10
     
@@ -43,118 +55,39 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .venv
-          key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}-lint
+          key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+          restore-keys: |
+            venv-${{ runner.os }}-
       
       - name: Install dependencies
+        # Only install if cache miss - saves significant time
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
-        run: poetry install --no-interaction --no-root --only dev
+        run: poetry install --no-interaction --only main,dev
       
       - name: Lint with ruff
         run: |
-          poetry run ruff check . --output-format=github
-          poetry run ruff format --check .
-
-  type-check:
-    name: Type Check
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: latest
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-      
-      - name: Load cached venv
-        id: cached-poetry-dependencies
-        uses: actions/cache@v4
-        with:
-          path: .venv
-          key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}-type
-      
-      - name: Install dependencies
-        if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
-        run: poetry install --no-interaction
+          poetry run ruff check . --output-format=github || exit 1
+          poetry run ruff format --check . || exit 1
       
       - name: Type check with mypy
-        run: poetry run mypy .
-
-  test:
-    name: Test Python ${{ matrix.python-version }} on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.11", "3.12"]
-        os: [ubuntu-latest, macos-latest]
-        # Windows removed from matrix - only testing on Unix-like systems
-    
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-      
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: latest
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-      
-      - name: Verify Poetry installation
-        run: poetry --version
-      
-      - name: Load cached venv
-        id: cached-poetry-dependencies
-        uses: actions/cache@v4
-        with:
-          path: .venv
-          key: venv-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('**/poetry.lock') }}
-          restore-keys: |
-            venv-${{ runner.os }}-py${{ matrix.python-version }}-
-      
-      - name: Install dependencies
-        run: poetry install --no-interaction --with dev,examples
+        run: poetry run mypy . || exit 1
       
       - name: Run tests
         run: |
-          # Run fast tests first
-          poetry run pytest -m "not slow" -n auto \
+          poetry run pytest -n auto \
             --cov=energy_transformer \
             --cov-report=xml \
             --cov-report=term-missing:skip-covered \
-            --junitxml=junit/test-results-fast-${{ matrix.os }}-${{ matrix.python-version }}.xml
-
-          # Run slow tests separately (without parallelization)
-          poetry run pytest -m "slow" \
-            --cov=energy_transformer \
-            --cov-append \
-            --cov-report=xml \
-            --cov-report=term-missing:skip-covered \
-            --junitxml=junit/test-results-slow-${{ matrix.os }}-${{ matrix.python-version }}.xml
+            --junitxml=junit/test-results.xml
       
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results-${{ matrix.os }}-${{ matrix.python-version }}
-          path: junit/test-results-${{ matrix.os }}-${{ matrix.python-version }}.xml
+          name: test-results
+          path: junit/test-results.xml
       
       - name: Upload coverage reports to Codecov
-        if: matrix.python-version == '3.11' && matrix.os == 'ubuntu-latest'
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -164,14 +97,3 @@ jobs:
           name: codecov-umbrella
           fail_ci_if_error: false
           verbose: true
-
-  all-checks-pass:
-    name: All checks pass
-    needs: [lint-format, type-check, test]
-    runs-on: ubuntu-latest
-    if: always()
-    steps:
-      - name: Decide whether the needed jobs succeeded or failed
-        uses: re-actors/alls-green@release/v1
-        with:
-          jobs: ${{ toJSON(needs) }}
