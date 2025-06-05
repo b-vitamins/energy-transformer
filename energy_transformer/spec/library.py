@@ -24,7 +24,6 @@ __all__ = [
     # Utility specs
     "DropoutSpec",
     "ETBlockSpec",
-    "FeatureHeadSpec",
     "HNSpec",
     "IdentitySpec",
     "LayerNormSpec",
@@ -373,44 +372,33 @@ class ETBlockSpec(Spec):
 @requires("embed_dim")
 @provides("num_classes")
 class ClassificationHeadSpec(Spec):
-    """Classification head specification.
+    """Classifier head specification.
 
     Parameters
     ----------
     num_classes : int
-        Number of output classes
-    representation_size : int | None
-        Size of intermediate representation layer
+        Number of output classes.
+    pool_type : str
+        Pooling type: ``"avg"``, ``"max"``, ``"token"``, or ``"none"``.
     drop_rate : float
-        Dropout rate before classification
-    use_cls_token : bool
-        Whether to use CLS token or average pooling
+        Dropout rate before classification.
+    use_conv : bool
+        Use convolutional classifier. Only valid with ``pool_type='none'``.
+    bias : bool
+        Use bias in classifier layer.
     """
 
     num_classes: int = param(validator=validate_positive)
-    representation_size: int | None = param(default=None)
+    pool_type: str = param(default="token")
     drop_rate: float = param(default=0.0, validator=validate_probability)
-    use_cls_token: bool = param(default=True)
+    use_conv: bool = param(default=False)
+    bias: bool = param(default=True)
 
     def apply_context(self, context: Context) -> Context:
         """Apply classification head to context."""
         context = super().apply_context(context)
         context.set_dim("num_classes", self.num_classes)
         return context
-
-
-@dataclass(frozen=True)
-@requires("embed_dim")
-class FeatureHeadSpec(Spec):
-    """Feature extraction head specification.
-
-    Parameters
-    ----------
-    use_cls_token : bool
-        Whether to extract CLS token or use average pooling
-    """
-
-    use_cls_token: bool = param(default=True)
 
 
 # Composite specifications

@@ -63,7 +63,7 @@ class TestVisionTransformerModels:
                 times=12,
             ),
             LayerNormSpec(),
-            ClassificationHeadSpec(num_classes=1000, use_cls_token=True),
+            ClassificationHeadSpec(num_classes=1000, pool_type="token"),
         )
         model = realise(spec)
         x = torch.randn(1, 3, 224, 224)
@@ -159,7 +159,7 @@ class TestVisionEnergyTransformerModels:
             ),
             LayerNormSpec(),
             ClassificationHeadSpec(
-                num_classes=config["num_classes"], use_cls_token=True
+                num_classes=config["num_classes"], pool_type="token"
             ),
         )
         spec_model = realise(spec)

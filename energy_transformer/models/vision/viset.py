@@ -129,7 +129,7 @@ class VisionSimplicialEnergyTransformer(VisionEnergyTransformer):
         et_steps: int,
         et_alpha: float,
         drop_rate: float = 0.0,
-        representation_size: int | None = None,
+        _representation_size: int | None = None,
         # Simplicial-specific parameters
         use_topology: bool = True,
         simplex_budget: float = 0.15,
@@ -193,7 +193,7 @@ class VisionSimplicialEnergyTransformer(VisionEnergyTransformer):
             et_steps=et_steps,
             et_alpha=et_alpha,
             drop_rate=drop_rate,
-            representation_size=representation_size,
+            _representation_size=_representation_size,
         )
 
         # Replace regular Hopfield ET blocks with Simplicial ones

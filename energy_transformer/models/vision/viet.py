@@ -61,7 +61,7 @@ from energy_transformer.layers.embeddings import (
     ConvPatchEmbed,
     PosEmbed2D,
 )
-from energy_transformer.layers.heads import ClassificationHead
+from energy_transformer.layers.heads import ClassifierHead
 from energy_transformer.layers.hopfield import HopfieldNetwork
 from energy_transformer.layers.layer_norm import EnergyLayerNorm
 from energy_transformer.layers.tokens import CLSToken
@@ -122,7 +122,7 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
         et_steps: int,
         et_alpha: float,
         drop_rate: float = 0.0,
-        representation_size: int | None = None,
+        _representation_size: int | None = None,
     ) -> None:
         """Initialize VisionImageTransformer."""
         super().__init__()
@@ -180,12 +180,11 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
         self.norm = EnergyLayerNorm(embed_dim)
 
         # Classification head
-        self.head = ClassificationHead(
-            embed_dim=embed_dim,
+        self.head = ClassifierHead(
+            in_features=embed_dim,
             num_classes=num_classes,
-            representation_size=representation_size,
+            pool_type="token",
             drop_rate=drop_rate,
-            use_cls_token=True,
         )
 
         # Initialize special tokens

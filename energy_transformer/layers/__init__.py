@@ -33,7 +33,13 @@ Example
 
 from .attention import MultiheadEnergyAttention
 from .embeddings import ConvPatchEmbed, PatchifyEmbed, PosEmbed2D
-from .heads import ClassificationHead, FeatureHead
+from .heads import (
+    ClassifierHead,
+    LinearClassifierHead,
+    NormLinearClassifierHead,
+    NormMLPClassifierHead,
+    ReLUMLPClassifierHead,
+)
 from .hopfield import HopfieldNetwork
 from .layer_norm import EnergyLayerNorm
 from .mlp import MLP
@@ -43,13 +49,16 @@ from .tokens import CLSToken
 __all__ = [
     "MLP",
     "CLSToken",
-    "ClassificationHead",
+    "ClassifierHead",
     "ConvPatchEmbed",
     "EnergyLayerNorm",
-    "FeatureHead",
     "HopfieldNetwork",
+    "LinearClassifierHead",
     "MultiheadEnergyAttention",
+    "NormLinearClassifierHead",
+    "NormMLPClassifierHead",
     "PatchifyEmbed",
     "PosEmbed2D",
+    "ReLUMLPClassifierHead",
     "SimplicialHopfieldNetwork",
 ]
