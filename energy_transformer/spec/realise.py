@@ -76,12 +76,12 @@ module_mappings = {
     "LayerNormSpec": ("energy_transformer.layers", "EnergyLayerNorm"),
     "PatchEmbedSpec": (
         "energy_transformer.layers.embeddings",
-        "PatchEmbedding",
+        "ConvPatchEmbed",
     ),
     "CLSTokenSpec": ("energy_transformer.layers.tokens", "CLSToken"),
     "PosEmbedSpec": (
         "energy_transformer.layers.embeddings",
-        "PositionalEmbedding2D",
+        "PosEmbed2D",
     ),
     "MHEASpec": (
         "energy_transformer.layers.attention",
@@ -1852,7 +1852,7 @@ def realise_pos_embed(
     context: Context,
 ) -> nn.Module:
     """Realise positional embedding with context dimensions."""
-    from energy_transformer.layers.embeddings import PositionalEmbedding2D
+    from energy_transformer.layers.embeddings import PosEmbed2D
 
     num_patches = context.get_dim("num_patches")
     if spec.include_cls:
@@ -1860,11 +1860,10 @@ def realise_pos_embed(
     embed_dim = context.get_dim("embed_dim")
     assert embed_dim is not None
     assert num_patches is not None
-    return PositionalEmbedding2D(
+    return PosEmbed2D(
         num_patches,
         embed_dim,
-        include_cls=spec.include_cls,
-        init_std=spec.init_std,
+        cls_token=spec.include_cls,
     )
 
 

@@ -58,8 +58,8 @@ from torch import Tensor, nn
 
 from energy_transformer.layers.attention import MultiheadEnergyAttention
 from energy_transformer.layers.embeddings import (
-    PatchEmbedding,
-    PositionalEmbedding2D,
+    ConvPatchEmbed,
+    PosEmbed2D,
 )
 from energy_transformer.layers.heads import ClassificationHead
 from energy_transformer.layers.hopfield import HopfieldNetwork
@@ -135,7 +135,7 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
         self.num_classes = num_classes
 
         # Patch embedding
-        self.patch_embed = PatchEmbedding(
+        self.patch_embed = ConvPatchEmbed(
             img_size=img_size,
             patch_size=patch_size,
             in_chans=in_chans,
@@ -147,10 +147,10 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
         self.cls_token = CLSToken(embed_dim)
 
         # Positional embeddings (include CLS token)
-        self.pos_embed = PositionalEmbedding2D(
+        self.pos_embed = PosEmbed2D(
             num_patches=num_patches,
             embed_dim=embed_dim,
-            include_cls=True,
+            cls_token=True,
         )
 
         # Positional dropout

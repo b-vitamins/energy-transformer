@@ -9,12 +9,12 @@ from torch import nn
 from energy_transformer.layers import (
     ClassificationHead,
     CLSToken,
+    ConvPatchEmbed,
     EnergyLayerNorm,
     FeatureHead,
     HopfieldNetwork,
     MultiheadEnergyAttention,
-    PatchEmbedding,
-    PositionalEmbedding2D,
+    PosEmbed2D,
 )
 from energy_transformer.layers.simplicial import SimplicialHopfieldNetwork
 from energy_transformer.models import EnergyTransformer
@@ -120,7 +120,7 @@ class TestLayerSpecs:
 
         for tc in test_cases:
             bias = tc.get("bias", True)
-            direct = PatchEmbedding(
+            direct = ConvPatchEmbed(
                 img_size=tc["img_size"],
                 patch_size=tc["patch_size"],
                 in_chans=tc["in_chans"],
@@ -136,7 +136,7 @@ class TestLayerSpecs:
             )
             from_spec = realise(spec)
 
-            assert isinstance(from_spec, PatchEmbedding)
+            assert isinstance(from_spec, ConvPatchEmbed)
             assert from_spec.num_patches == direct.num_patches
             assert (from_spec.proj.bias is not None) == bias
 
@@ -193,11 +193,11 @@ class TestLayerSpecs:
                 1 if tc["include_cls"] else 0
             )
 
-            direct = PositionalEmbedding2D(
+            direct = PosEmbed2D(
                 num_patches=num_patches_for_module,
                 embed_dim=tc["embed_dim"],
-                include_cls=tc["include_cls"],
-                init_std=tc["init_std"],
+                cls_token=tc["include_cls"],
+                dropout=0.0,
             )
             spec = PosEmbedSpec(
                 include_cls=tc["include_cls"], init_std=tc["init_std"]
@@ -210,7 +210,7 @@ class TestLayerSpecs:
             )
             from_spec = realise(spec, ctx)
 
-            assert isinstance(from_spec, PositionalEmbedding2D)
+            assert isinstance(from_spec, PosEmbed2D)
             assert from_spec.pos_embed.shape == direct.pos_embed.shape
 
     def test_dropout_spec(self):

@@ -6,11 +6,11 @@ import torch
 from energy_transformer.layers import (
     ClassificationHead,
     CLSToken,
+    ConvPatchEmbed,
     EnergyLayerNorm,
     HopfieldNetwork,
     MultiheadEnergyAttention,
-    PatchEmbedding,
-    PositionalEmbedding2D,
+    PosEmbed2D,
 )
 from energy_transformer.models import EnergyTransformer
 from energy_transformer.models.vision import (
@@ -39,8 +39,8 @@ class TestComponentEquivalence:
     """Test individual components match between spec and direct construction."""
 
     def test_patch_embedding_equivalence(self):
-        """PatchEmbedSpec should produce identical PatchEmbedding."""
-        direct = PatchEmbedding(
+        """PatchEmbedSpec should produce identical ConvPatchEmbed."""
+        direct = ConvPatchEmbed(
             img_size=224,
             patch_size=16,
             in_chans=3,
@@ -77,14 +77,14 @@ class TestComponentEquivalence:
         assert direct.cls_token.shape == from_spec.cls_token.shape
 
     def test_positional_embedding_equivalence(self):
-        """PosEmbedSpec should produce identical PositionalEmbedding2D."""
+        """PosEmbedSpec should produce identical PosEmbed2D."""
         num_patches = 196
         embed_dim = 768
-        direct = PositionalEmbedding2D(
+        direct = PosEmbed2D(
             num_patches=num_patches,
             embed_dim=embed_dim,
-            include_cls=True,
-            init_std=0.02,
+            cls_token=True,
+            dropout=0.0,
         )
         spec = PosEmbedSpec(include_cls=True, init_std=0.02)
         ctx = Context(
@@ -93,7 +93,6 @@ class TestComponentEquivalence:
         from_spec = realise(spec, ctx)
         assert isinstance(from_spec, type(direct))
         assert direct.pos_embed.shape == from_spec.pos_embed.shape
-        assert direct.init_std == from_spec.init_std
 
     def test_mhea_equivalence(self):
         """MHEASpec should produce identical MultiheadEnergyAttention."""

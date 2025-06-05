@@ -32,7 +32,7 @@ Example
 """
 
 from .attention import MultiheadEnergyAttention
-from .embeddings import PatchEmbedding, PositionalEmbedding2D
+from .embeddings import ConvPatchEmbed, PatchifyEmbed, PosEmbed2D
 from .heads import ClassificationHead, FeatureHead
 from .hopfield import HopfieldNetwork
 from .layer_norm import EnergyLayerNorm
@@ -44,11 +44,12 @@ __all__ = [
     "MLP",
     "CLSToken",
     "ClassificationHead",
+    "ConvPatchEmbed",
     "EnergyLayerNorm",
     "FeatureHead",
     "HopfieldNetwork",
     "MultiheadEnergyAttention",
-    "PatchEmbedding",
-    "PositionalEmbedding2D",
+    "PatchifyEmbed",
+    "PosEmbed2D",
     "SimplicialHopfieldNetwork",
 ]

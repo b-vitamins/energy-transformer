@@ -6,10 +6,10 @@ import pytest
 import torch
 
 from energy_transformer.layers import (
+    ConvPatchEmbed,
     EnergyLayerNorm,
     HopfieldNetwork,
     MultiheadEnergyAttention,
-    PatchEmbedding,
     SimplicialHopfieldNetwork,
 )
 from energy_transformer.models.base import EnergyTransformer
@@ -238,7 +238,7 @@ class TestLayerPerformance:
 
         # Create patch embedding for benchmark
         patch_embed_bench = (
-            PatchEmbedding(
+            ConvPatchEmbed(
                 img_size=test_config["img_size"],
                 patch_size=test_config["patch_size"],
                 in_chans=3,
@@ -274,7 +274,7 @@ class TestLayerPerformance:
         for img_size in image_sizes:
             for patch_size in patch_sizes:
                 patch_embed = (
-                    PatchEmbedding(
+                    ConvPatchEmbed(
                         img_size=img_size,
                         patch_size=patch_size,
                         in_chans=3,
