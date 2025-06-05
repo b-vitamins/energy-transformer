@@ -43,19 +43,37 @@ class EnergyLayerNorm(nn.Module):
 
     Notes
     -----
-    The layer normalization operation is defined as:
+    Mathematical Foundation:
+    The Energy LayerNorm operation emerges as the gradient of a Lagrangian function,
+    providing a principled activation function for energy-based models.
+
+    Given input x \in \mathbb{R}^D, the operation computes:
 
     .. math::
-        g_i = \\gamma \frac{x_i - \bar{x}}{\\sqrt{\frac{1}{D}\\sum_j(x_j - \bar{x})^2 + \varepsilon}} + \\delta_i + \\lambda x_i
+        g_i = \gamma \frac{x_i - \bar{x}}{\sqrt{\frac{1}{D}\sum_j(x_j - \bar{x})^2 + \varepsilon}} + \delta_i
 
-    where :math:`\bar{x} = \frac{1}{D}\\sum_{k=1}^D x_k` is the mean.
+    where:
+    - \gamma \in \mathbb{R} is a learnable scalar scaling parameter
+    - \delta \in \mathbb{R}^D is a learnable bias vector
+    - \varepsilon is a small constant for numerical stability
+    - :math:`\bar{x} = \frac{1}{D}\sum_{k=1}^D x_k` is the mean
 
-    This operation is the gradient of the Lagrangian (energy) function:
+    This operation is the gradient of the Lagrangian:
 
     .. math::
-        L = D \\cdot \\gamma \\cdot \\sqrt{\frac{1}{D}\\sum_j(x_j - \bar{x})^2 + \varepsilon} + \\sum_j \\delta_j x_j
+        L(x) = D \cdot \gamma \cdot \sqrt{\frac{1}{D}\sum_j(x_j - \bar{x})^2 + \varepsilon} + \sum_j \delta_j x_j
 
-    such that :math:`g_i = \frac{\\partial L}{\\partial x_i}` (without regularization).
+    such that :math:`g_i = \frac{\partial L}{\partial x_i}`. This property ensures that the
+    Energy Transformer's dynamics minimize a well-defined energy function.
+
+    Energy Decrease Guarantee:
+    The Hessian :math:`M_{ij} = \frac{\partial^2 L}{\partial x_i \partial x_j}` is positive
+    semi-definite, which guarantees that the energy decreases during the forward dynamics
+    of the Energy Transformer. This is crucial for the convergence proof in equation (7)
+    of the paper.
+
+    The regularization term \u03bbx can be added to help preserve input information during
+    the iterative refinement process, though it's not part of the original formulation.
 
     Examples
     --------
@@ -69,6 +87,12 @@ class EnergyLayerNorm(nn.Module):
 
     >>> # Compute the energy Lagrangian
     >>> energy = layer.compute_energy(x)  # (32, 100)
+
+    References
+    ----------
+    .. [1] Hoover, B., Liang, Y., Pham, B., Panda, R., Strobelt, H., Chau, D. H.,
+       Zaki, M. J., & Krotov, D. (2023). Energy Transformer.
+       arXiv preprint arXiv:2302.07253. See equations (1) and (2).
     """
 
     def __init__(
@@ -127,13 +151,15 @@ class EnergyLayerNorm(nn.Module):
         else:
             gamma = self.gamma
 
-        x_mean = x.mean(dim=dims, keepdim=True)  # [..., 1, ..., 1]
-        x_centered = x - x_mean  # [..., normalized_shape]
-        var = x_centered.pow(2).mean(dim=dims, keepdim=True)  # [..., 1, ..., 1]
+        x_mean = x.mean(dim=dims, keepdim=True)  # shape: [..., 1, ..., 1]
+        x_centered = x - x_mean  # shape: [..., D]
+        var = x_centered.pow(2).mean(
+            dim=dims, keepdim=True
+        )  # shape: [..., 1, ..., 1]
 
         g = (
             gamma * x_centered / torch.sqrt(var + self.eps) + self.delta
-        )  # [..., normalized_shape]
+        )  # shape: [..., D]
 
         if self.regularization != 0:
             g = g + self.regularization * x
@@ -167,11 +193,13 @@ class EnergyLayerNorm(nn.Module):
         else:
             gamma = self.gamma
 
-        x_mean = x.mean(dim=dims, keepdim=True)  # [..., 1, ..., 1]
-        var = (x - x_mean).pow(2).mean(dim=dims, keepdim=False)  # [...]
+        x_mean = x.mean(dim=dims, keepdim=True)  # shape: [..., 1, ..., 1]
+        var = (x - x_mean).pow(2).mean(dim=dims, keepdim=False)  # shape: [...]
 
-        energy_norm = self.D * gamma * torch.sqrt(var + self.eps)  # [...]
-        energy_bias = (self.delta * x).sum(dim=dims)  # [...]
+        energy_norm = (
+            self.D * gamma * torch.sqrt(var + self.eps)
+        )  # shape: [...]
+        energy_bias = (self.delta * x).sum(dim=dims)  # shape: [...]
 
         return energy_norm + energy_bias
 

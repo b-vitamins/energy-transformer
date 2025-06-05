@@ -41,7 +41,7 @@ def _create_pool(pool_type: str = "avg") -> nn.Module:
     raise ValueError(f"Unknown pool_type: {pool_type}")
 
 
-class ClassifierHead(nn.Module):  # type: ignore[misc]
+class ClassifierHead(nn.Module):
     """General purpose classifier head with pooling and dropout.
 
     Handles both spatial (CNN) and sequence (ViT) inputs with configurable
@@ -157,7 +157,7 @@ class ClassifierHead(nn.Module):  # type: ignore[misc]
         return x
 
 
-class LinearClassifierHead(nn.Module):  # type: ignore[misc]
+class LinearClassifierHead(nn.Module):
     """Simple linear classifier head.
 
     Minimal classifier head that just applies pooling, dropout, and
@@ -220,7 +220,7 @@ class LinearClassifierHead(nn.Module):  # type: ignore[misc]
         return cast(Tensor, self.fc(x))
 
 
-class NormMLPClassifierHead(nn.Module):  # type: ignore[misc]
+class NormMLPClassifierHead(nn.Module):
     """Norm + MLP classifier head.
 
     Classifier head with layer normalization and a two-layer MLP
@@ -311,7 +311,7 @@ class NormMLPClassifierHead(nn.Module):  # type: ignore[misc]
         return cast(Tensor, self.fc2(x))  # (B, num_classes)
 
 
-class NormLinearClassifierHead(nn.Module):  # type: ignore[misc]
+class NormLinearClassifierHead(nn.Module):
     """Normalized linear classifier head.
 
     Simple classifier with layer normalization followed by linear projection.
@@ -379,7 +379,7 @@ class NormLinearClassifierHead(nn.Module):  # type: ignore[misc]
         return cast(Tensor, self.fc(x))
 
 
-class ReLUMLPClassifierHead(nn.Module):  # type: ignore[misc]
+class ReLUMLPClassifierHead(nn.Module):
     """ReLU-based MLP classifier head.
 
     Two-layer MLP with ReLU activation, layer normalization,

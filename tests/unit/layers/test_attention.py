@@ -34,6 +34,11 @@ def _manual_energy(
     scores = torch.einsum(
         "bshd,bthd,h->bhst", q, k, beta_tensor.to(compute_dtype)
     )
+    if g.shape[1] > 1:
+        diag = torch.eye(g.shape[1], device=g.device, dtype=torch.bool)
+        scores = scores.masked_fill(
+            diag.unsqueeze(0).unsqueeze(0), float("-inf")
+        )
     if is_causal:
         seq_len = scores.shape[-1]
         causal = torch.triu(

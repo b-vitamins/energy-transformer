@@ -21,7 +21,7 @@ def force_enable_grad() -> AbstractContextManager[None]:
 
 
 class EnergyTransformer(nn.Module):  # type: ignore[misc]
-    """Base Energy Transformer with gradient descent optimization.
+    r"""Base Energy Transformer with gradient descent optimization.
 
     Defines a composite energy function that combines attention-based and
     memory-based energy components. The model optimizes token configurations
@@ -39,6 +39,43 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
         Number of optimization steps, by default 12
     optimizer : EnergyOptimizer, optional
         Energy landscape optimizer. If None, uses SGD(alpha=0.1)
+
+    Notes
+    -----
+    Mathematical Foundation:
+    The Energy Transformer implements a continuous-time dynamical system that minimizes
+    a composite energy function through gradient descent:
+
+    .. math::
+        \tau \frac{dx_{iA}}{dt} = -\frac{\\partial E}{\\partial g_{iA}}, \\quad \text{where} \\quad E = E^{ATT} + E^{HN}
+
+    Key aspects of this formulation:
+
+    1. **Gradient Computation**: The gradient is computed with respect to g (normalized
+       tokens) but applied to update x (raw tokens). This is mathematically valid because
+       LayerNorm is defined as g = \\partial L/\\partial x for a Lagrangian L.
+
+    2. **Energy Decrease Proof**: The energy decreases over time:
+
+       .. math::
+           \frac{dE}{dt} = -\frac{1}{\tau} \\sum_{i,j,A} \frac{\\partial E}{\\partial g_{iA}} M_{ij}^A \frac{\\partial E}{\\partial g_{jA}} \\leq 0
+
+       where :math:`M_{ij}^A = \frac{\\partial g_{iA}}{\\partial x_{jA}} = \frac{\\partial^2 L}{\\partial x_i \\partial x_j}`
+       is the Hessian of the LayerNorm Lagrangian, which is positive semi-definite.
+
+    3. **Discrete Time Implementation**: For numerical computation, the continuous dynamics
+       are discretized using Euler's method with step size \alpha:
+
+       .. math::
+           x^{(t+1)} = x^{(t)} - \alpha \\cdot \frac{\\partial E}{\\partial g^{(t)}}
+
+    4. **Gradient Context**: The gradient computation requires autograd even during
+       inference, which is why we use torch.enable_grad() context.
+
+    Convergence Properties:
+    The energy is bounded below (E^ATT is bounded below by entropy, E^HN by the
+    activation function properties), and decreases monotonically, guaranteeing
+    convergence to a fixed point.
     """
 
     def __init__(
@@ -114,10 +151,10 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
         Tensor
             Optimized tokens
         """
-        # Mathematical Note: This implementation follows the original Energy Transformer
-        # algorithm which computes gradients with respect to g = LayerNorm(x) but updates
-        # x directly. While this is mathematically inconsistent (mixing gradient spaces),
-        # it maintains compatibility with the published algorithm and results.
+        # Note: Following equation (6) from the paper, we compute gradients with respect
+        # to g = LayerNorm(x) but update x directly. This is valid because LayerNorm
+        # is defined as the gradient of a Lagrangian: g = \u2202L/\u2202x. The energy decrease
+        # is guaranteed by the positive semi-definiteness of the Hessian M = \u2202\u00b2L/\u2202x\u00b2.
         # Reset optimizer state
         self.optimizer.reset()
 
@@ -129,7 +166,7 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
             # Compute components separately for observability
             with torch.enable_grad():  # type: ignore[no-untyped-call]
                 # Normalize to get g
-                g = self.layer_norm(x.detach())
+                g = self.layer_norm(x.detach())  # shape: [B, N, D]
                 g_grad = g.detach().requires_grad_(True)
 
                 # Compute energy components separately
@@ -139,9 +176,12 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
 
                 # Compute gradient w.r.t. g
                 (grad,) = torch.autograd.grad(total_energy, g_grad)
+                # shape: [B, N, D]  # noqa: ERA001
 
             # Get update from optimizer
-            update, step_size = self.optimizer.step(grad, x, total_energy, t)
+            update, step_size = self.optimizer.step(
+                grad, x, total_energy, t
+            )  # shape: [B, N, D]
 
             # Create step info for hooks
             step_info = StepInfo(
@@ -159,7 +199,7 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
                 step_hook(self, step_info)
 
             # Apply update
-            x = x - update
+            x = x - update  # shape: [B, N, D]
 
         # Call post-descent hooks
         for post_hook in self._post_descent_hooks:
