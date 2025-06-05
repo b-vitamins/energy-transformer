@@ -10,13 +10,10 @@ from torch import Tensor, nn
 from .constants import (
     ATTENTION_EPSILON,
     ATTENTION_INIT_STD,
-    DEFAULT_COMPUTE_DTYPE,
-    MIXED_PRECISION_DTYPES,
 )
 from .validation import (
     validate_divisibility,
     validate_positive,
-    validate_tensor_dim,
 )
 
 
@@ -204,81 +201,111 @@ class MultiheadEnergyAttention(nn.Module):
         nn.init.normal_(self.q_proj_weight, std=self.init_std)
         nn.init.normal_(self.k_proj_weight, std=self.init_std)
 
-    def forward(
-        self,
-        x: Tensor,
-        attn_mask: Tensor | None = None,
-        is_causal: bool = False,
-    ) -> Tensor:
-        """Forward pass computing energy.
+    def _get_compute_dtype(self, x: Tensor) -> torch.dtype:
+        """Get appropriate dtype for computation to avoid numerical issues."""
+        if x.dtype in {torch.float16, torch.bfloat16}:
+            return torch.float32
+        return x.dtype
 
-        Parameters
-        ----------
-        x : Tensor
-            Input tensor of shape (batch, seq, embed_dim) if batch_first,
-            else (seq, batch, embed_dim).
-        attn_mask : Tensor, optional
-            Attention mask of shape (seq, seq) or (batch * num_heads, seq, seq).
-            Use float('-inf') for positions to mask.
-        is_causal : bool, default=False
-            If set, applies causal mask (prevents attending to future positions).
+    def _validate_and_prepare_input(self, x: Tensor) -> tuple[Tensor, int, int]:
+        """Validate input and extract dimensions.
 
         Returns
         -------
-        Tensor
-            Scalar energy value.
+        tuple[Tensor, int, int]
+            Prepared tensor, batch_size, sequence_length
         """
-        validate_tensor_dim(x, 3, "MultiheadEnergyAttention")
+        if self.batch_first:
+            if x.dim() != 3:  # noqa: PLR2004
+                raise ValueError(
+                    "MultiheadEnergyAttention: Expected 3D input (batch, seq, embed) "
+                    "when batch_first=True. Got "
+                    f"{x.dim()}D tensor."
+                )
+            batch_size, seq_len, embed_dim = x.shape
+            if embed_dim not in {self.embed_dim, 1}:
+                raise ValueError(
+                    "MultiheadEnergyAttention: Embedding dimension mismatch. "
+                    f"Expected {self.embed_dim} or 1, got {embed_dim}."
+                )
+        else:
+            if x.dim() != 3:  # noqa: PLR2004
+                raise ValueError(
+                    "MultiheadEnergyAttention: Expected 3D input (seq, batch, embed) "
+                    "when batch_first=False. Got "
+                    f"{x.dim()}D tensor."
+                )
+            seq_len, batch_size, embed_dim = x.shape
+            if embed_dim not in {self.embed_dim, 1}:
+                raise ValueError(
+                    "MultiheadEnergyAttention: Embedding dimension mismatch. "
+                    f"Expected {self.embed_dim} or 1, got {embed_dim}."
+                )
+            x = x.transpose(0, 1)
 
-        # Handle input shape
-        match self.batch_first:
-            case True:
-                batch_size, seq_len, _ = x.shape
-            case False:
-                seq_len, batch_size, _ = x.shape
-                x = x.transpose(
-                    0, 1
-                )  # (seq, batch, embed_dim) -> (batch, seq, embed_dim)
+        return x, batch_size, seq_len
 
-        # Special case: single token
-        if seq_len == 1:
-            return torch.zeros((), device=x.device, dtype=x.dtype)
+    def _project_qk(
+        self, x: Tensor, compute_dtype: torch.dtype
+    ) -> tuple[Tensor, Tensor]:
+        """Project input to queries and keys."""
+        x_compute = x.to(compute_dtype)
 
-        # Mixed precision safety
-        compute_dtype = (
-            DEFAULT_COMPUTE_DTYPE
-            if x.dtype in MIXED_PRECISION_DTYPES
-            else x.dtype
-        )
-
-        # Projections
         q = torch.einsum(
             "bse,hde->bshd",
-            x.to(compute_dtype),
+            x_compute,
             self.q_proj_weight.to(compute_dtype),
-        )  # [B, N, D] -> [B, N, H, Y]
+        )
+
         k = torch.einsum(
             "bse,hde->bshd",
-            x.to(compute_dtype),
+            x_compute,
             self.k_proj_weight.to(compute_dtype),
-        )  # [B, N, D] -> [B, N, H, Y]
+        )
 
-        # Compute attention scores with temperature
-        scores = torch.einsum(
-            "bshd,bthd,h->bhst", q, k, self.beta.to(compute_dtype)
-        )  # [B, N, H, Y] -> [B, H, N, N]
+        return q, k
 
-        # Exclude self-attention as per paper equation (3): sum over B \u2260 C
+    def _compute_attention_scores(
+        self,
+        q: Tensor,
+        k: Tensor,
+        compute_dtype: torch.dtype,
+    ) -> Tensor:
+        """Compute scaled attention scores."""
+        return torch.einsum(
+            "bshd,bthd,h->bhst",
+            q,
+            k,
+            self.beta.to(compute_dtype),
+        )
+
+    def _apply_self_attention_mask(
+        self, scores: Tensor, seq_len: int
+    ) -> Tensor:
+        """Apply self-attention exclusion mask (diagonal)."""
         if seq_len > 1:
-            diag = torch.eye(seq_len, dtype=torch.bool, device=scores.device)
+            diag = torch.eye(seq_len, device=scores.device, dtype=torch.bool)
             scores = scores.masked_fill(
-                diag.unsqueeze(0).unsqueeze(0), float("-inf")
+                diag.unsqueeze(0).unsqueeze(0),
+                float("-inf"),
             )
+        return scores
 
-        # Apply masks
+    def _apply_attention_masks(
+        self,
+        scores: Tensor,
+        attn_mask: Tensor | None,
+        is_causal: bool,
+        seq_len: int,
+        batch_size: int,
+    ) -> Tensor:
+        """Apply optional attention masks (causal, custom)."""
         if is_causal:
             if attn_mask is not None:
-                raise ValueError("Cannot use both is_causal and attn_mask")
+                raise ValueError(
+                    "MultiheadEnergyAttention: Cannot use both is_causal=True and attn_mask. "
+                    "Choose one masking strategy."
+                )
             causal_mask = torch.triu(
                 torch.full(
                     (seq_len, seq_len),
@@ -288,29 +315,87 @@ class MultiheadEnergyAttention(nn.Module):
                 ),
                 diagonal=1,
             )
-            scores = scores + causal_mask
+            scores = scores + causal_mask.unsqueeze(0).unsqueeze(0)
 
         if attn_mask is not None:
-            match attn_mask.dim():
-                case 2:  # (seq, seq)
-                    scores = scores + attn_mask.to(scores.dtype)
-                case 3:  # (batch * heads, seq, seq)
-                    scores = scores.view(-1, seq_len, seq_len) + attn_mask.to(
-                        scores.dtype
-                    )
-                    scores = scores.view(
-                        batch_size, self.num_heads, seq_len, seq_len
-                    )
-                case _:
+            if attn_mask.dim() == 2:  # noqa: PLR2004
+                scores = scores + attn_mask.to(scores.dtype).unsqueeze(
+                    0
+                ).unsqueeze(0)
+            elif attn_mask.dim() == 3:  # noqa: PLR2004
+                if attn_mask.size(0) not in {1, batch_size * self.num_heads}:
                     raise ValueError(
-                        f"attn_mask must be 2D or 3D, got {attn_mask.dim()}D"
+                        "MultiheadEnergyAttention: Attention mask batch dimension mismatch. "
+                        f"Expected 1 or {batch_size * self.num_heads}, got {attn_mask.size(0)}."
                     )
+                scores_flat = scores.view(-1, seq_len, seq_len)
+                scores_flat = scores_flat + attn_mask.to(scores.dtype)
+                scores = scores_flat.view(
+                    batch_size, self.num_heads, seq_len, seq_len
+                )
+            else:
+                raise ValueError(
+                    "MultiheadEnergyAttention: Attention mask must be 2D or 3D. "
+                    f"Got {attn_mask.dim()}D tensor."
+                )
 
-        # Compute energy
-        lse = torch.logsumexp(scores, dim=-1)  # (batch, heads, seq)
+        return scores
+
+    def _compute_energy_from_scores(
+        self,
+        scores: Tensor,
+        compute_dtype: torch.dtype,
+        original_dtype: torch.dtype,
+    ) -> Tensor:
+        """Compute energy from attention scores."""
+        lse = torch.logsumexp(scores, dim=-1)
         energy = -(lse / self.beta.view(1, -1, 1).to(compute_dtype)).sum()
+        return energy.to(original_dtype)
 
-        return energy.to(x.dtype)
+    def _compute_gradient_terms(
+        self,
+        q: Tensor,
+        k: Tensor,
+        attn: Tensor,
+        compute_dtype: torch.dtype,
+    ) -> tuple[Tensor, Tensor]:
+        """Compute the two gradient terms."""
+        f1 = torch.einsum(
+            "hde,bthd->bthe",
+            self.q_proj_weight.to(compute_dtype),
+            k,
+        )
+        f2 = torch.einsum(
+            "hde,bshd->bshe",
+            self.k_proj_weight.to(compute_dtype),
+            q,
+        )
+        grad1 = -torch.einsum("bthe,bhst->bse", f1, attn)
+        grad2 = -torch.einsum("bshe,bhst->bte", f2, attn)
+        return grad1, grad2
+
+    def forward(
+        self,
+        x: Tensor,
+        attn_mask: Tensor | None = None,
+        is_causal: bool = False,
+    ) -> Tensor:
+        """Forward pass computing energy."""
+        x, batch_size, seq_len = self._validate_and_prepare_input(x)
+
+        if seq_len == 1:
+            return torch.zeros((), device=x.device, dtype=x.dtype)
+
+        compute_dtype = self._get_compute_dtype(x)
+
+        q, k = self._project_qk(x, compute_dtype)
+        scores = self._compute_attention_scores(q, k, compute_dtype)
+        scores = self._apply_self_attention_mask(scores, seq_len)
+        scores = self._apply_attention_masks(
+            scores, attn_mask, is_causal, seq_len, batch_size
+        )
+
+        return self._compute_energy_from_scores(scores, compute_dtype, x.dtype)
 
     def compute_energy(self, x: Tensor) -> Tensor:
         """Compute mean energy per sample.
@@ -355,60 +440,21 @@ class MultiheadEnergyAttention(nn.Module):
 
         Both terms use softmax normalization over the key dimension.
         """
-        # Store original shape info
         needs_transpose = not self.batch_first
-        if needs_transpose:
-            x = x.transpose(0, 1)
 
-        batch_size, seq_len, _ = x.shape
+        x, batch_size, seq_len = self._validate_and_prepare_input(x)
 
-        # Mixed precision safety
-        compute_dtype = (
-            DEFAULT_COMPUTE_DTYPE
-            if x.dtype in MIXED_PRECISION_DTYPES
-            else x.dtype
-        )
+        compute_dtype = self._get_compute_dtype(x)
 
-        # Projections
-        q = torch.einsum(
-            "bse,hde->bshd",
-            x.to(compute_dtype),
-            self.q_proj_weight.to(compute_dtype),
-        )  # [B, N, D] -> [B, N, H, Y]
-        k = torch.einsum(
-            "bse,hde->bshd",
-            x.to(compute_dtype),
-            self.k_proj_weight.to(compute_dtype),
-        )  # [B, N, D] -> [B, N, H, Y]
+        q, k = self._project_qk(x, compute_dtype)
 
-        # Attention weights
-        scores = torch.einsum(
-            "bshd,bthd,h->bhst", q, k, self.beta.to(compute_dtype)
-        )  # [B, N, H, Y] -> [B, H, N, N]
+        scores = self._compute_attention_scores(q, k, compute_dtype)
+        scores = self._apply_self_attention_mask(scores, seq_len)
+        attn = F.softmax(scores, dim=-1)
 
-        # Exclude self-attention as per paper equation (3): sum over B \u2260 C
-        if seq_len > 1:
-            diag = torch.eye(seq_len, dtype=torch.bool, device=scores.device)
-            scores = scores.masked_fill(
-                diag.unsqueeze(0).unsqueeze(0), float("-inf")
-            )
+        grad1, grad2 = self._compute_gradient_terms(q, k, attn, compute_dtype)
+        grad = (grad1 + grad2).to(x.dtype)
 
-        attn = F.softmax(scores, dim=-1)  # [B, H, N, N] -> [B, H, N, N]
-
-        # Gradient computation
-        f1 = torch.einsum(
-            "hde,bthd->bthe", self.q_proj_weight.to(compute_dtype), k
-        )  # shape: [B, N, H, D]
-        f2 = torch.einsum(
-            "hde,bshd->bshe", self.k_proj_weight.to(compute_dtype), q
-        )  # shape: [B, N, H, D]
-
-        grad1 = -torch.einsum("bthe,bhst->bse", f1, attn)  # shape: [B, N, D]
-        grad2 = -torch.einsum("bshe,bhst->bte", f2, attn)  # shape: [B, N, D]
-
-        grad = (grad1 + grad2).to(x.dtype)  # shape: [B, N, D]
-
-        # Restore original shape
         if needs_transpose:
             grad = grad.transpose(0, 1)
 
