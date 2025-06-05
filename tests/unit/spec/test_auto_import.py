@@ -55,7 +55,7 @@ class TestAutoImporter:
         spec = HNSpec(multiplier=4.0)
         kwargs = importer._get_base_kwargs(spec)
         importer._apply_spec_specific_logic(spec, "HNSpec", kwargs)
-        assert kwargs["in_dim"] == 768
+        assert kwargs["embed_dim"] == 768
         assert kwargs["hidden_dim"] == 3072
         assert "multiplier" not in kwargs
 

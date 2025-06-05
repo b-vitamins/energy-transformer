@@ -132,7 +132,9 @@ class HopfieldNetwork(nn.Module):
             self.register_parameter("bias", None)
 
         if activation == "softmax":
-            self.beta = nn.Parameter(torch.tensor(beta, device=device, dtype=dtype))
+            self.beta = nn.Parameter(
+                torch.tensor(beta, device=device, dtype=dtype)
+            )
         else:
             self.register_buffer("beta", None)
 
@@ -141,9 +143,8 @@ class HopfieldNetwork(nn.Module):
     def _reset_parameters(self) -> None:
         nn.init.normal_(self.kernel, std=self.init_std)
 
-        if self.beta is not None:
-            with torch.no_grad():
-                self.beta.fill_(0.01)
+        # Keep the provided beta value when using softmax activation
+        # to allow custom temperature settings during initialization.
 
     def forward(self, g: torch.Tensor) -> torch.Tensor:
         """Compute Hopfield Network energy.
