@@ -62,8 +62,9 @@ def test_forward_returns_optimized_tokens_and_energy() -> None:
     # Use SGD mode for predictable gradient descent
     out = model(x.clone(), track="energy", mode="sgd")
     assert isinstance(out, ETOutput)
-    # Gradient of energy w.r.t x is 2.5 for each element with alpha=1.0
-    expected_tokens = x - 2.5
+    # Gradient of energy is computed w.r.t g = LayerNorm(x) (2*x here)
+    # dE/dg is 1.25 for each element, so update uses 1.25 per step
+    expected_tokens = x - 1.25
     assert torch.allclose(out.tokens, expected_tokens)
     assert out.final_energy is not None
 
@@ -94,9 +95,9 @@ def test_forward_returns_energy_and_trajectory() -> None:
     # Use SGD mode for predictable step sizes
     out = model(x.clone(), track="both", mode="sgd")
     assert isinstance(out, ETOutput)
-    # After 2 steps with gradient 2.5 / element
-    # alpha=1.0: 1 - 2.5 - 2.5 = -4
-    assert torch.allclose(out.tokens, torch.full_like(x, -4.0))
+    # After 2 steps with gradient 1.25 per element
+    # alpha=1.0: 1 - 1.25 - 1.25 = -1.5
+    assert torch.allclose(out.tokens, torch.full_like(x, -1.5))
     assert out.final_energy is not None
     assert out.trajectory is not None
     assert out.trajectory.shape[0] == 2  # 2 steps

@@ -88,6 +88,11 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
     ) -> Tensor:
         """Compute the composite energy of the input token configuration.
 
+        Note: This computes E^ATT(g) + E^HN(g) where g = LayerNorm(x).
+        The LayerNorm energy E^LN(x) is not included here for compatibility
+        with the standard forward pass. Use layer_norm_energy(x) + energy(x)
+        for the complete energy including LayerNorm contribution.
+
         Parameters
         ----------
         x : Tensor
@@ -96,7 +101,7 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
         Returns
         -------
         Tensor
-            Scalar energy value E^TOTAL
+            Scalar energy value E^ATT(g) + E^HN(g)
         """
         # g = EnergyLayerNorm(x): x ∈ ℝᴺˣᴰ → g ∈ ℝᴺˣᴷ
         g = self.layer_norm(x)
@@ -112,6 +117,28 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
         total_energy: Tensor = e_att + e_hn
         return total_energy
 
+    def layer_norm_energy(self, x: Tensor) -> Tensor:
+        """Compute the energy contribution from LayerNorm.
+
+        Note: This is included for compatibility with the reference implementation,
+        though it's not used in the standard forward pass.
+
+        Parameters
+        ----------
+        x : Tensor
+            Input tensor of shape [..., N, D]
+
+        Returns
+        -------
+        Tensor
+            Scalar LayerNorm energy value
+        """
+        if hasattr(self.layer_norm, 'compute_energy'):
+            return self.layer_norm.compute_energy(x)
+        else:
+            # For standard LayerNorm without energy, return 0
+            return torch.tensor(0.0, device=x.device, dtype=x.dtype)
+
     def _compute_gradient(
         self,
         x: Tensor,
@@ -122,38 +149,59 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
     ) -> tuple[Tensor, Tensor]:
         """Compute energy and gradient at current position.
 
+        This implementation computes gradients with respect to g (normalized
+        representation) rather than x, following the Energy Transformer paper.
+
         Returns
         -------
         tuple[Tensor, Tensor]
-            Energy value and gradient
+            Energy value and gradient with respect to g
         """
         if not detach_mode:
             with force_enable_grad():
-                x_grad = x.clone().requires_grad_(True)
-                energy = self.energy(x_grad)
+                # First normalize x to get g
+                g = self.layer_norm(x)
+
+                # Detach g and make it require gradients
+                g_for_grad = g.detach().requires_grad_(True)
+
+                # Compute energy components on g
+                e_att = self.attention(g_for_grad)
+                e_hn = self.hopfield(g_for_grad)
+                energy = e_att + e_hn
 
                 if track_trajectory:
                     trajectory.append(energy.detach().clone())
 
+                # Compute gradient with respect to g, not x
                 (grad,) = torch.autograd.grad(
                     energy,
-                    x_grad,
+                    g_for_grad,
                     create_graph=create_graph,
                 )
         else:
             # In detach mode, compute energy without gradients
             with torch.no_grad():
-                energy = self.energy(x)
+                g = self.layer_norm(x)
+                e_att = self.attention(g)
+                e_hn = self.hopfield(g)
+                energy = e_att + e_hn
+
                 if track_trajectory:
                     trajectory.append(energy.detach().clone())
 
             # Compute gradient for update
             with force_enable_grad():
-                x_grad = x.clone().requires_grad_(True)
-                energy_for_grad = self.energy(x_grad)
+                g = self.layer_norm(x)
+                g_for_grad = g.detach().requires_grad_(True)
+
+                e_att = self.attention(g_for_grad)
+                e_hn = self.hopfield(g_for_grad)
+                energy_for_grad = e_att + e_hn
+
                 (grad,) = torch.autograd.grad(
                     energy_for_grad,
-                    x_grad,
+                    g_for_grad,
                     create_graph=False,
                 )
 
@@ -166,7 +214,11 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
         prev_x: Tensor | None,
         prev_grad: Tensor | None,
     ) -> Tensor | float:
-        """Compute Barzilai-Borwein step size."""
+        """Compute Barzilai-Borwein step size.
+
+        Note: The step size is computed based on changes in g-space gradients,
+        but applied to updates in x-space, following the original algorithm.
+        """
         if prev_x is not None and prev_grad is not None:
             s = (x - prev_x).flatten()
             y = (grad - prev_grad).flatten()
@@ -247,6 +299,10 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
         tuple[Tensor, list[Tensor]]
             Optimized tokens and energy trajectory (empty if not tracking)
         """
+        # Mathematical Note: This implementation follows the original Energy Transformer
+        # algorithm which computes gradients with respect to g = LayerNorm(x) but updates
+        # x directly. While this is mathematically inconsistent (mixing gradient spaces),
+        # it maintains compatibility with the published algorithm and results.
         trajectory: list[Tensor] = []
         create_graph = not detach_mode
 
