@@ -522,17 +522,11 @@ class TestModelAttributes:
             assert hasattr(block.hopfield, "max_vertex")
 
     def test_energy_output_functionality(self):
-        """Test models can return energy information."""
+        """Ensure forward pass returns logits."""
         model = viet_2l_cifar(num_classes=100)
         x = torch.randn(1, 3, 32, 32)
-        result = model(x, return_energy_info=True, et_kwargs={"track": "both"})
-        assert "logits" in result
-        assert "energy_info" in result
-        assert result["logits"].shape == (1, 100)
-        energy_info = result["energy_info"]
-        assert "block_energies" in energy_info
-        assert "block_trajectories" in energy_info
-        assert len(energy_info["block_energies"]) == 2
+        logits = model(x)
+        assert logits.shape == (1, 100)
 
 
 class TestModelConsistency:

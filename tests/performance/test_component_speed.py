@@ -13,6 +13,7 @@ from energy_transformer.layers import (
     SimplicialHopfieldNetwork,
 )
 from energy_transformer.models.base import EnergyTransformer
+from energy_transformer.utils.optimizers import SGD
 
 from .conftest import assert_performance
 
@@ -358,7 +359,7 @@ class TestEnergyTransformerBlock:
                     hidden_dim=hidden_dim,
                 ),
                 steps=et_steps,
-                alpha=0.125,
+                optimizer=SGD(alpha=0.125),
             )
             .to(device)
             .eval()
@@ -414,7 +415,7 @@ class TestEnergyTransformerBlock:
                     hidden_dim=hidden_dim,
                 ),
                 steps=4,
-                alpha=0.125,
+                optimizer=SGD(alpha=0.125),
             )
             .to(device)
             .eval()

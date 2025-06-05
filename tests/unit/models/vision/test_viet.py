@@ -1,9 +1,18 @@
+from dataclasses import dataclass
+
 import pytest
 import torch
 from torch import nn
 
-from energy_transformer.models.base import ETOutput
 from energy_transformer.models.vision import viet
+
+
+@dataclass
+class ETOutput:
+    tokens: torch.Tensor
+    final_energy: torch.Tensor | None
+    trajectory: torch.Tensor | None
+
 
 pytestmark = pytest.mark.unit
 

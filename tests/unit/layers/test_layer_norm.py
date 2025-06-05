@@ -97,3 +97,10 @@ def test_energy_lagrangian_mixed_precision(dtype: torch.dtype) -> None:
 
     atol = 1e-2 if dtype == torch.bfloat16 else 5e-3
     assert torch.allclose(energy_mp, energy_fp32, atol=atol)
+
+
+def test_extra_repr_shows_options() -> None:
+    ln = EnergyLayerNorm(3, regularization=0.1, enforce_positive_gamma=False)
+    rep = ln.extra_repr()
+    assert "regularization=0.1" in rep
+    assert "enforce_positive_gamma=False" in rep

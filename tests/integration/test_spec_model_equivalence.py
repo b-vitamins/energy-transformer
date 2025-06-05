@@ -30,6 +30,7 @@ from energy_transformer.spec.library import (
     SHNSpec,
 )
 from energy_transformer.spec.primitives import ValidationError
+from energy_transformer.utils.optimizers import SGD
 
 pytestmark = pytest.mark.integration
 
@@ -168,7 +169,7 @@ class TestETBlockEquivalence:
             ),
             hopfield=HopfieldNetwork(embed_dim, hidden_dim=3072),
             steps=4,
-            alpha=0.125,
+            optimizer=SGD(alpha=0.125),
         )
         spec = ETBlockSpec(
             steps=4,
@@ -308,11 +309,11 @@ class TestModelBehavior:
         )
         ctx = Context(dimensions={"embed_dim": 128})
         et_block = realise(spec, ctx)
-        x = torch.randn(2, 10, 128, requires_grad=True)
-        result = et_block(x, track="both")
-        if hasattr(result, "trajectory") and result.trajectory is not None:
-            trajectory = result.trajectory
-            assert trajectory.shape[0] == 4
+        x = torch.randn(2, 10, 128)
+        initial_energy = et_block._compute_energy(x.clone())
+        out = et_block(x)
+        final_energy = et_block._compute_energy(out.clone())
+        assert final_energy < initial_energy
 
     def test_attention_affects_output(self):
         """Verify attention mechanism works."""

@@ -35,6 +35,7 @@ from energy_transformer.spec.library import (
     VisionEmbeddingSpec,
 )
 from energy_transformer.spec.primitives import ValidationError
+from energy_transformer.utils.optimizers import SGD
 
 pytestmark = pytest.mark.integration
 
@@ -612,7 +613,7 @@ class TestCompositeSpecs:
                     ),
                 ),
                 steps=tc["steps"],
-                alpha=tc["alpha"],
+                optimizer=SGD(alpha=tc["alpha"]),
             )
             hopfield_spec = (
                 HNSpec(hidden_dim=tc.get("hidden_dim"))
