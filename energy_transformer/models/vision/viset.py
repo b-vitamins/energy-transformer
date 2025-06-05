@@ -68,6 +68,7 @@ from energy_transformer.layers.layer_norm import EnergyLayerNorm
 from energy_transformer.layers.simplicial import SimplicialHopfieldNetwork
 from energy_transformer.models.base import EnergyTransformer
 from energy_transformer.models.vision.viet import VisionEnergyTransformer
+from energy_transformer.utils.optimizers import SGD
 
 
 class VisionSimplicialEnergyTransformer(VisionEnergyTransformer):
@@ -232,7 +233,7 @@ class VisionSimplicialEnergyTransformer(VisionEnergyTransformer):
                         hidden_dim=hopfield_hidden_dim,
                     ),
                     steps=et_steps,
-                    alpha=et_alpha,
+                    optimizer=SGD(alpha=et_alpha),
                 )
                 for _ in range(depth)
             ],
