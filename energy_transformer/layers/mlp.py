@@ -10,7 +10,7 @@ from torch import Tensor, nn
 __all__ = ["MLP"]
 
 
-class MLP(nn.Module):  # type: ignore[misc]
+class MLP(nn.Module):
     """MLP as used in Vision Transformer, MLP-Mixer and related networks.
 
     Standard two-layer MLP with configurable hidden dimension, activation,

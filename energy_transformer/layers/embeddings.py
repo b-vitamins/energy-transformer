@@ -33,7 +33,7 @@ def _to_pair(x: int | tuple[int, int]) -> tuple[int, int]:
     return (x, x)
 
 
-class ConvPatchEmbed(nn.Module):  # type: ignore[misc]
+class ConvPatchEmbed(nn.Module):
     """Convolutional patch embedding layer.
 
     Extracts non-overlapping patches and projects them to embedding dimension
@@ -133,13 +133,13 @@ class ConvPatchEmbed(nn.Module):  # type: ignore[misc]
             f"Input size width {w} doesn't match model {self.img_size[1]}"
         )
 
-        x = self.proj(x)  # (B, D, H/p, W/p)
+        x = self.proj(x)  # shape: [B, D, H/p, W/p]
         if self.flatten:
-            x = x.flatten(2).transpose(1, 2)  # (B, N, D)
+            x = x.flatten(2).transpose(1, 2)  # [B, N, D]
         return cast(Tensor, self.norm(x))
 
 
-class PatchifyEmbed(nn.Module):  # type: ignore[misc]
+class PatchifyEmbed(nn.Module):
     """Two-stage patch embedding with separate patchification and projection.
 
     First reshapes image into patches preserving spatial structure, then
@@ -247,7 +247,7 @@ class PatchifyEmbed(nn.Module):  # type: ignore[misc]
             gw=self.grid_size[1],
             ph=ph,
             pw=pw,
-        )
+        )  # shape: [B, N, C, pH, pW]
 
     def unpatchify(self, patches: Tensor) -> Tensor:
         """Reconstruct images from patches.
@@ -267,7 +267,7 @@ class PatchifyEmbed(nn.Module):  # type: ignore[misc]
             "b (gh gw) c ph pw -> b c (gh ph) (gw pw)",
             gh=self.grid_size[0],
             gw=self.grid_size[1],
-        )
+        )  # shape: [B, C, H, W]
 
     def forward(self, x: Tensor) -> Tensor:
         """Forward pass.
@@ -282,13 +282,13 @@ class PatchifyEmbed(nn.Module):  # type: ignore[misc]
         Tensor
             Output tensor of shape (B, N, D).
         """
-        x = self.patchify(x)  # (B, N, C, pH, pW)
-        x = rearrange(x, "b n c h w -> b n (c h w)")  # (B, N, patch_dim)
-        x = self.proj(x)  # (B, N, D)
+        x = self.patchify(x)  # shape: [B, N, C, pH, pW]
+        x = rearrange(x, "b n c h w -> b n (c h w)")  # [B, N, patch_dim]
+        x = self.proj(x)  # shape: [B, N, D]
         return cast(Tensor, self.norm(x))
 
 
-class PosEmbed2D(nn.Module):  # type: ignore[misc]
+class PosEmbed2D(nn.Module):
     """Learnable 2D positional embeddings.
 
     Supports both batched and unbatched inputs by storing positional

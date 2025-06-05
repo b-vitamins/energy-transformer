@@ -21,10 +21,10 @@ class MultiheadEnergyAttention(nn.Module):
     Parameters
     ----------
     embed_dim : int
-        Total dimension of the model.
+        Total dimension of the model (D in paper notation).
     num_heads : int
-        Number of parallel attention heads. Note that ``embed_dim`` will be split
-        across ``num_heads`` (i.e. each head will have dimension
+        Number of parallel attention heads (H in paper notation). Note that ``embed_dim``
+        will be split across ``num_heads`` (i.e. each head will have dimension
         ``embed_dim // num_heads``).
     beta : float | Tensor | None, default=None
         Temperature parameter(s). Can be:
@@ -41,6 +41,56 @@ class MultiheadEnergyAttention(nn.Module):
     dtype : torch.dtype, optional
         Data type for parameters.
 
+    Attributes
+    ----------
+    q_proj_weight : nn.Parameter
+        Query projection weights W^Q in R^{H x Y x D}.
+    k_proj_weight : nn.Parameter
+        Key projection weights W^K in R^{H x Y x D}.
+    beta : Tensor
+        Temperature parameters β for each head.
+
+    Notes
+    -----
+    Mathematical Foundation:
+    The energy-based attention mechanism is designed to evolve tokens such that keys
+    of open patches align with queries of masked patches. The energy function is:
+
+    .. math::
+        E^{ATT} = -\frac{1}{\beta} \sum_{h=1}^{H} \sum_{C=1}^{N} \log\left(\sum_{B \neq C} \exp(\beta A_{hBC})\right)
+
+    where the attention matrix A is computed as:
+
+    .. math::
+        A_{hBC} = \sum_{\alpha} K_{\alpha hB} Q_{\alpha hC} = K_{hB}^T Q_{hC}
+
+    with keys and queries:
+
+    .. math::
+        K_{\alpha hB} = \sum_{j} W_{\alpha hj}^K g_{jB}, \quad Q_{\alpha hC} = \sum_{j} W_{\alpha hj}^Q g_{jC}
+
+    Key Theoretical Properties:
+
+    1. **Self-Attention Exclusion**: The sum explicitly excludes B=C, meaning tokens
+       do not attend to themselves. This is crucial for the energy formulation.
+
+    2. **Two-Term Gradient**: The gradient with respect to g has two terms:
+
+       .. math::
+           -\frac{\partial E^{ATT}}{\partial g_{iA}} = \text{Term}_1 + \text{Term}_2
+
+       where:
+
+       - Term 1: :math:`\sum_{C \neq A} W_i^Q K_C \text{softmax}_C(\beta K_C^T Q_A)`
+         This is conventional attention with value matrix V = (W^Q)^T K
+
+       - Term 2: :math:`\sum_{C \neq A} W_i^K Q_C \text{softmax}_A(\beta K_A^T Q_C)`
+         This is the novel contribution ensuring energy minimization
+
+    3. **Relationship to Hopfield Networks**: While inspired by Modern Hopfield Networks,
+       this differs fundamentally because keys are dynamic variables that evolve with
+       queries, not fixed memories.
+
     Examples
     --------
     >>> # Default initialization
@@ -55,22 +105,14 @@ class MultiheadEnergyAttention(nn.Module):
     >>> # Get gradient without autograd
     >>> grad = attn.compute_grad(x)  # (32, 100, 768)
 
-    Notes
-    -----
-    The energy function is defined as:
-
-    .. math::
-        E = -\\sum_{h=1}^H \frac{1}{\beta_h} \\sum_{n=1}^N \
-        \\log\\left(\\sum_{m=1}^N \\exp(\beta_h \\cdot s_{h,n,m})\right)
-
-    where :math:`s_{h,n,m} = q_{h,n}^\top k_{h,m}` are the attention scores,
-    and :math:`\beta_h` is the temperature for head :math:`h`.
+    References
+    ----------
+    .. [1] Hoover et al. (2023). Energy Transformer. See equations (3) and (4).
     """
 
     __constants__: ClassVar[list[str]] = [
         "embed_dim",
         "num_heads",
-        "head_dim",
         "batch_first",
     ]
     beta: Tensor
@@ -87,29 +129,26 @@ class MultiheadEnergyAttention(nn.Module):
     ) -> None:
         super().__init__()
 
+        factory_kwargs = {"device": device, "dtype": dtype}
+
         self.embed_dim = embed_dim
         self.num_heads = num_heads
         self.batch_first = batch_first
-        self.head_dim = embed_dim // num_heads
 
-        if self.head_dim * num_heads != embed_dim:
+        if embed_dim % num_heads != 0:
             raise ValueError("embed_dim must be divisible by num_heads")
 
         # Projection weights
         self.q_proj_weight = nn.Parameter(
             torch.empty(
-                num_heads,
-                self.head_dim,
-                embed_dim,
+                (num_heads, self.head_dim, embed_dim),
                 device=device,
                 dtype=dtype,
             )
         )
         self.k_proj_weight = nn.Parameter(
             torch.empty(
-                num_heads,
-                self.head_dim,
-                embed_dim,
+                (num_heads, self.head_dim, embed_dim),
                 device=device,
                 dtype=dtype,
             )
@@ -144,6 +183,11 @@ class MultiheadEnergyAttention(nn.Module):
         # Initialize
         self.init_std = init_std
         self._reset_parameters()
+
+    @property
+    def head_dim(self) -> int:
+        """Dimension of each attention head."""
+        return self.embed_dim // self.num_heads
 
     def _reset_parameters(self) -> None:
         """Initialize parameters."""
@@ -200,17 +244,24 @@ class MultiheadEnergyAttention(nn.Module):
             "bse,hde->bshd",
             x.to(compute_dtype),
             self.q_proj_weight.to(compute_dtype),
-        )  # (batch, seq, heads, dim)
+        )  # shape: [B, N, H, Y]
         k = torch.einsum(
             "bse,hde->bshd",
             x.to(compute_dtype),
             self.k_proj_weight.to(compute_dtype),
-        )  # (batch, seq, heads, dim)
+        )  # shape: [B, N, H, Y]
 
         # Compute attention scores with temperature
         scores = torch.einsum(
             "bshd,bthd,h->bhst", q, k, self.beta.to(compute_dtype)
-        )  # (batch, heads, seq, seq)
+        )  # shape: [B, H, N, N]
+
+        # Exclude self-attention as per paper equation (3): sum over B \u2260 C
+        if seq_len > 1:
+            diagonal_mask = torch.eye(
+                seq_len, device=scores.device, dtype=scores.dtype
+            ) * float("-inf")  # shape: [N, N]
+            scores = scores + diagonal_mask.unsqueeze(0).unsqueeze(0)
 
         # Apply masks
         if is_causal:
@@ -267,7 +318,10 @@ class MultiheadEnergyAttention(nn.Module):
         return energy / batch_size
 
     def compute_grad(self, x: Tensor) -> Tensor:
-        """Compute gradient directly.
+        r"""Compute gradient directly without autograd.
+
+        This implements the two-term gradient structure described in the paper,
+        which includes both conventional attention and the novel energy-consistency term.
 
         Parameters
         ----------
@@ -278,6 +332,16 @@ class MultiheadEnergyAttention(nn.Module):
         -------
         Tensor
             Gradient tensor of same shape as input.
+
+        Notes
+        -----
+        The gradient has two terms as shown in section "Relationship to Modern
+        Hopfield Networks and Conventional Attention" of the paper:
+
+        .. math::
+            -\\frac{\\partial E^{ATT}}{\\partial g_{iA}} = \text{Term}_1 + \text{Term}_2
+
+        Both terms use softmax normalization over the key dimension.
         """
         # Store original shape info
         needs_transpose = not self.batch_first
@@ -298,35 +362,39 @@ class MultiheadEnergyAttention(nn.Module):
             "bse,hde->bshd",
             x.to(compute_dtype),
             self.q_proj_weight.to(compute_dtype),
-        )  # (batch, seq, heads, dim)
+        )  # shape: [B, N, H, Y]
         k = torch.einsum(
             "bse,hde->bshd",
             x.to(compute_dtype),
             self.k_proj_weight.to(compute_dtype),
-        )  # (batch, seq, heads, dim)
+        )  # shape: [B, N, H, Y]
 
         # Attention weights
         scores = torch.einsum(
             "bshd,bthd,h->bhst", q, k, self.beta.to(compute_dtype)
-        )  # (batch, heads, seq, seq)
-        attn = F.softmax(scores, dim=-1)  # (batch, heads, seq, seq)
+        )  # shape: [B, H, N, N]
+
+        # Exclude self-attention as per paper equation (3): sum over B \u2260 C
+        if seq_len > 1:
+            diagonal_mask = torch.eye(
+                seq_len, device=scores.device, dtype=scores.dtype
+            ) * float("-inf")  # shape: [N, N]
+            scores = scores + diagonal_mask.unsqueeze(0).unsqueeze(0)
+
+        attn = F.softmax(scores, dim=-1)  # shape: [B, H, N, N]
 
         # Gradient computation
         f1 = torch.einsum(
             "hde,bthd->bthe", self.q_proj_weight.to(compute_dtype), k
-        )  # (batch, seq, heads, embed_dim)
+        )  # shape: [B, N, H, D]
         f2 = torch.einsum(
             "hde,bshd->bshe", self.k_proj_weight.to(compute_dtype), q
-        )  # (batch, seq, heads, embed_dim)
+        )  # shape: [B, N, H, D]
 
-        grad1 = -torch.einsum(
-            "bthe,bhst->bse", f1, attn
-        )  # (batch, seq, embed_dim)
-        grad2 = -torch.einsum(
-            "bshe,bhst->bte", f2, attn
-        )  # (batch, seq, embed_dim)
+        grad1 = -torch.einsum("bthe,bhst->bse", f1, attn)  # shape: [B, N, D]
+        grad2 = -torch.einsum("bshe,bhst->bte", f2, attn)  # shape: [B, N, D]
 
-        grad = (grad1 + grad2).to(x.dtype)
+        grad = (grad1 + grad2).to(x.dtype)  # shape: [B, N, D]
 
         # Restore original shape
         if needs_transpose:
@@ -335,8 +403,8 @@ class MultiheadEnergyAttention(nn.Module):
         return grad
 
     def extra_repr(self) -> str:
-        """Extra representation string."""
-        s = f"{self.embed_dim}, {self.num_heads}"
+        """Return string representation for printing."""
+        s = f"embed_dim={self.embed_dim}, num_heads={self.num_heads}"
 
         # Check if beta is non-default
         default_beta = 1.0 / math.sqrt(self.head_dim)

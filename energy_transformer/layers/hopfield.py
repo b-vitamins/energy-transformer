@@ -25,6 +25,7 @@ class HopfieldNetwork(nn.Module):
         - 'softmax': Modern continuous Hopfield Network with softmax activation
     beta : float, default=0.01
         Temperature parameter for softmax activation. Only used when activation='softmax'.
+        Note: This becomes a learnable parameter for softmax activation.
     bias : bool, default=False
         Whether to include bias terms in the hidden layer.
     init_std : float, default=0.02
@@ -37,23 +38,24 @@ class HopfieldNetwork(nn.Module):
     Attributes
     ----------
     kernel : nn.Parameter
-        Memory patterns ξ ∈ R^{D x K} stored as transposed for efficiency.
-    beta : nn.Parameter or float
-        Temperature parameter (learnable for softmax, unused for relu).
+        Memory patterns ξ in R^{D x K} stored as transposed for efficiency.
+    beta : nn.Parameter or None
+        Temperature parameter (learnable for softmax, None for relu).
     bias : nn.Parameter or None
         Optional bias terms for hidden layer.
 
     Notes
     -----
-    The Hopfield Network energy function is defined as:
+    Mathematical Foundation:
+    The Hopfield Network ensures token representations align with realistic patterns
+    stored in memory. The energy function is:
 
     .. math::
         E^{HN} = -\sum_{B=1}^{N} \sum_{\mu=1}^{K} G\left(\sum_{j=1}^{D} \xi_{\mu j} g_{jB}\right)
 
     where:
-    - :math:`\xi \in \mathbb{R}^{K \times D}` are learnable memory patterns
-    - :math:`G(\cdot)` is an integral of the activation function :math:`r(\cdot)`,
-      such that :math:`G'(\cdot) = r(\cdot)`
+    - ξ in R^{K x D} are learnable memory patterns
+    - G(·) is an integral of the activation function r(·), such that G'(·) = r(·)
     - B indexes tokens (N total)
     - μ indexes memories (K total)
     - j indexes feature dimensions (D total)
@@ -65,15 +67,27 @@ class HopfieldNetwork(nn.Module):
     .. math::
         G(z) = \frac{1}{2}[\max(0, z)]^2, \quad r(z) = \max(0, z)
 
+    This grows slowly and allows broad basins of attraction around memories.
+
     **Softmax activation** (modern continuous Hopfield):
 
     .. math::
         G(z) = \frac{1}{\beta}\log\sum\exp(\beta z), \quad r(z) = \text{softmax}(\beta z)
 
+    This creates sharp peaks around memories with exponential capacity.
+
     The gradient contribution to token updates is:
 
     .. math::
         -\frac{\partial E^{HN}}{\partial g_{iA}} = \sum_{\mu=1}^{K} \xi_{\mu i} r\left(\sum_{j=1}^{D} \xi_{\mu j} g_{jA}\right)
+
+    This is applied to each token individually (no mixing between tokens).
+
+    Relationship to MLPs:
+    This module is analogous to the feed-forward MLP in conventional transformers but
+    with a crucial difference: the projection weights from token space to hidden space
+    must be the same (transposed) as the weights from hidden space back to token space.
+    This weight sharing is essential for the energy interpretation.
 
     Examples
     --------
@@ -82,12 +96,17 @@ class HopfieldNetwork(nn.Module):
     >>> tokens = torch.randn(32, 100, 768)
     >>> energy = hn_relu(tokens)  # scalar
 
-    >>> # Modern Hopfield with softmax
+    >>> # Modern Hopfield with softmax and learnable beta
     >>> hn_softmax = HopfieldNetwork(768, activation='softmax', beta=0.1)
     >>> energy = hn_softmax(tokens)  # scalar
 
     >>> # Get gradient for dynamics
     >>> grad = hn_relu.compute_grad(tokens)  # (32, 100, 768)
+
+    References
+    ----------
+    .. [1] Hoover et al. (2023). Energy Transformer. See equations (5) and (9).
+    .. [2] Ramsauer et al. (2020). Hopfield Networks is All You Need.
     """
 
     def __init__(
@@ -104,6 +123,8 @@ class HopfieldNetwork(nn.Module):
     ) -> None:
         super().__init__()
 
+        factory_kwargs = {"device": device, "dtype": dtype}
+
         self.embed_dim = embed_dim
         self.hidden_dim = hidden_dim or int(embed_dim * hidden_ratio)
         self.activation = activation
@@ -117,10 +138,7 @@ class HopfieldNetwork(nn.Module):
 
         self.kernel = nn.Parameter(
             torch.empty(
-                embed_dim,
-                self.hidden_dim,
-                device=device,
-                dtype=dtype,
+                (embed_dim, self.hidden_dim), device=device, dtype=dtype
             )
         )  # shape: [D, K]
 
@@ -132,9 +150,7 @@ class HopfieldNetwork(nn.Module):
             self.register_parameter("bias", None)
 
         if activation == "softmax":
-            self.beta = nn.Parameter(
-                torch.tensor(beta, device=device, dtype=dtype)
-            )
+            self.beta = nn.Parameter(torch.tensor(beta, device=device, dtype=dtype))
         else:
             self.register_buffer("beta", None)
 
@@ -211,8 +227,8 @@ class HopfieldNetwork(nn.Module):
         return -torch.matmul(a, self.kernel.t())  # shape: [..., N, D]
 
     def extra_repr(self) -> str:
-        """Return a human-readable representation of key settings."""
-        s = f"{self.embed_dim}, hidden_dim={self.hidden_dim}"
+        """Return string representation for printing."""
+        s = f"embed_dim={self.embed_dim}, hidden_dim={self.hidden_dim}"
         s += f", activation='{self.activation}'"
         if self.activation == "softmax":
             s += f", beta={self.beta.item():.3f}"
