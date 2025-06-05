@@ -138,6 +138,9 @@ class EnergyLayerNorm(nn.Module):
             torch.zeros(normalized_shape, **factory_kwargs)
         )
 
+        # Initialize parameters
+        self._reset_parameters()
+
         # Cache product of normalized dimensions for efficiency
         # in the property ``D``.
 
@@ -172,6 +175,15 @@ class EnergyLayerNorm(nn.Module):
     def dtype(self) -> torch.dtype:
         """Data type of the module parameters."""
         return self.delta.dtype
+
+    def _reset_parameters(self) -> None:
+        """Initialize parameters using best practices."""
+        if self.enforce_positive_gamma:
+            init_val = torch.log(torch.expm1(torch.tensor(1.0)))
+            self.log_gamma.data.fill_(init_val)
+        else:
+            self.gamma.data.fill_(1.0)
+        nn.init.zeros_(self.delta)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Apply energy-based layer normalization.
@@ -209,20 +221,18 @@ class EnergyLayerNorm(nn.Module):
 
         dims = [-(i + 1) for i in range(len(self.normalized_shape))]
 
-        if self.enforce_positive_gamma:
-            gamma = F.softplus(self.log_gamma)
+        x_mean = x.mean(dim=dims, keepdim=True)
+        x_centered = x - x_mean
+
+        if self.regularization == 0.0:
+            std = torch.sqrt(
+                torch.var(x, dim=dims, keepdim=True, unbiased=False) + self.eps
+            )
+            g = self.effective_gamma * (x - x_mean) / std + self.delta
         else:
-            gamma = self.gamma
-
-        x_mean = x.mean(dim=dims, keepdim=True)  # shape: [..., 1, ..., 1]
-        x_centered = x - x_mean  # shape: [..., D]
-        var = x_centered.pow(2).sum(dim=dims, keepdim=True) / self.D
-
-        g = (
-            gamma * x_centered / torch.sqrt(var + self.eps) + self.delta
-        )  # shape: [..., D]
-
-        if self.regularization != 0:
+            var = x_centered.pow(2).mean(dim=dims, keepdim=True)
+            std = torch.sqrt(var + self.eps)
+            g = self.effective_gamma * x_centered / std + self.delta
             g = g + self.regularization * x
 
         return g
@@ -254,8 +264,8 @@ class EnergyLayerNorm(nn.Module):
         else:
             gamma = self.gamma
 
-        x_mean = x.mean(dim=dims, keepdim=True)  # shape: [..., 1, ..., 1]
-        var = (x - x_mean).pow(2).sum(dim=dims, keepdim=False) / self.D
+        x_mean = x.mean(dim=dims, keepdim=True)
+        var = (x - x_mean).pow(2).mean(dim=dims, keepdim=False)
 
         energy_norm = (
             self.D * gamma * torch.sqrt(var + self.eps)
@@ -265,10 +275,10 @@ class EnergyLayerNorm(nn.Module):
         return energy_norm + energy_bias
 
     def extra_repr(self) -> str:
-        """Extra representation string for printing."""
-        s = f"{self.normalized_shape}, eps={self.eps}"
-        if self.regularization != 0:
-            s += f", regularization={self.regularization}"
+        """Return string representation for module printing."""
+        parts = [f"normalized_shape={self.normalized_shape}", f"eps={self.eps}"]
+        if self.regularization != 0.0:
+            parts.append(f"regularization={self.regularization}")
         if not self.enforce_positive_gamma:
-            s += ", enforce_positive_gamma=False"
-        return s
+            parts.append("enforce_positive_gamma=False")
+        return ", ".join(parts)

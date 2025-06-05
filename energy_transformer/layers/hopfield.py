@@ -191,18 +191,18 @@ class HopfieldNetwork(nn.Module):
         """
         validate_tensor_dim(g, 3, "HopfieldNetwork", "g")
 
-        h = torch.matmul(g, self.kernel)  # shape: [..., N, K]
+        h = torch.matmul(g, self.kernel)  # [B, N, K]
 
         if self.use_bias:
-            h = h + self.bias  # shape: [..., N, K]
+            h.add_(self.bias)
 
         if self.activation == "relu":
-            a = F.relu(h)  # shape: [..., N, K]
-            energy = -0.5 * (a**2).sum()
+            a = F.relu(h, inplace=True)
+            energy = -0.5 * a.pow(2).sum()
         else:
             assert self.beta is not None
-            h_scaled = self.beta * h  # shape: [..., N, K]
-            lse = torch.logsumexp(h_scaled, dim=-1)  # shape: [..., N]
+            h.mul_(self.beta)
+            lse = torch.logsumexp(h, dim=-1)
             energy = -(1.0 / self.beta) * lse.sum()
 
         return energy
@@ -229,17 +229,17 @@ class HopfieldNetwork(nn.Module):
 
         where :math:`r(\cdot)` is the activation function.
         """
-        h = torch.matmul(g, self.kernel)  # shape: [..., N, K]
+        h = torch.matmul(g, self.kernel)
 
         if self.use_bias:
-            h = h + self.bias  # shape: [..., N, K]
+            h.add_(self.bias)
 
         if self.activation == "relu":
-            a = F.relu(h)  # shape: [..., N, K]
+            a = F.relu(h)
         else:
             assert self.beta is not None
-            h_scaled = self.beta * h  # shape: [..., N, K]
-            a = F.softmax(h_scaled, dim=-1)  # shape: [..., N, K]
+            h.mul_(self.beta)
+            a = F.softmax(h, dim=-1)
 
         return -torch.matmul(a, self.kernel.t())  # shape: [..., N, D]
 
@@ -296,15 +296,18 @@ class HopfieldNetwork(nn.Module):
         return self.kernel.device
 
     def extra_repr(self) -> str:
-        """Return string representation for printing."""
-        s = f"embed_dim={self.embed_dim}, hidden_dim={self.hidden_dim}"
-        s += f", activation='{self.activation}'"
+        """Return string representation for module printing."""
+        parts = [
+            f"embed_dim={self.embed_dim}",
+            f"hidden_dim={self.hidden_dim}",
+            f"activation='{self.activation}'",
+        ]
         if self.activation == "softmax":
             assert self.beta is not None
-            s += f", beta={self.beta.item():.3f}"
+            parts.append(f"beta={self.beta.item():.3f}")
         if self.use_bias:
-            s += ", bias=True"
-        return s
+            parts.append("bias=True")
+        return ", ".join(parts)
 
 
 class CHNReLU(HopfieldNetwork):
