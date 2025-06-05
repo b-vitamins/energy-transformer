@@ -1970,11 +1970,19 @@ def realise_mlp(spec: library.MLPSpec, context: Context) -> nn.Module:
     hidden_features = spec.hidden_features or embed_dim * 4
     out_features = spec.out_features or embed_dim
 
+    activation_map: dict[str, Callable[..., nn.Module]] = {
+        "gelu": nn.GELU,
+        "relu": nn.ReLU,
+        "swish": nn.SiLU,
+        "silu": nn.SiLU,
+    }
+    act_layer = activation_map.get(spec.activation, nn.GELU)
+
     return MLP(
         in_features=embed_dim,
         hidden_features=hidden_features,
         out_features=out_features,
-        activation=spec.activation,
+        act_layer=act_layer,
         drop=spec.drop,
     )
 
