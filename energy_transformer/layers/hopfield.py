@@ -226,6 +226,16 @@ class HopfieldNetwork(nn.Module):
 
         return -torch.matmul(a, self.kernel.t())  # shape: [..., N, D]
 
+    @property
+    def memory_dim(self) -> int:
+        """Number of memory patterns stored."""
+        return self.hidden_dim
+
+    @property
+    def activation_type(self) -> str:
+        """Type of activation function used."""
+        return self.activation
+
     def extra_repr(self) -> str:
         """Return string representation for printing."""
         s = f"embed_dim={self.embed_dim}, hidden_dim={self.hidden_dim}"

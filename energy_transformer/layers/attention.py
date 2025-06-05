@@ -236,21 +236,21 @@ class MultiheadEnergyAttention(nn.Module):
             "bse,hde->bshd",
             x.to(compute_dtype),
             self.q_proj_weight.to(compute_dtype),
-        )  # shape: [B, N, H, Y]
+        )  # [B, N, D] -> [B, N, H, Y]
         k = torch.einsum(
             "bse,hde->bshd",
             x.to(compute_dtype),
             self.k_proj_weight.to(compute_dtype),
-        )  # shape: [B, N, H, Y]
+        )  # [B, N, D] -> [B, N, H, Y]
 
         # Compute attention scores with temperature
         scores = torch.einsum(
             "bshd,bthd,h->bhst", q, k, self.beta.to(compute_dtype)
-        )  # shape: [B, H, N, N]
+        )  # [B, N, H, Y] -> [B, H, N, N]
 
         # Exclude self-attention as per paper equation (3): sum over B \u2260 C
         if seq_len > 1:
-            diag = torch.eye(seq_len, device=scores.device, dtype=torch.bool)
+            diag = torch.eye(seq_len, dtype=torch.bool, device=scores.device)
             scores = scores.masked_fill(
                 diag.unsqueeze(0).unsqueeze(0), float("-inf")
             )
@@ -354,26 +354,26 @@ class MultiheadEnergyAttention(nn.Module):
             "bse,hde->bshd",
             x.to(compute_dtype),
             self.q_proj_weight.to(compute_dtype),
-        )  # shape: [B, N, H, Y]
+        )  # [B, N, D] -> [B, N, H, Y]
         k = torch.einsum(
             "bse,hde->bshd",
             x.to(compute_dtype),
             self.k_proj_weight.to(compute_dtype),
-        )  # shape: [B, N, H, Y]
+        )  # [B, N, D] -> [B, N, H, Y]
 
         # Attention weights
         scores = torch.einsum(
             "bshd,bthd,h->bhst", q, k, self.beta.to(compute_dtype)
-        )  # shape: [B, H, N, N]
+        )  # [B, N, H, Y] -> [B, H, N, N]
 
         # Exclude self-attention as per paper equation (3): sum over B \u2260 C
         if seq_len > 1:
-            diag = torch.eye(seq_len, device=scores.device, dtype=torch.bool)
+            diag = torch.eye(seq_len, dtype=torch.bool, device=scores.device)
             scores = scores.masked_fill(
                 diag.unsqueeze(0).unsqueeze(0), float("-inf")
             )
 
-        attn = F.softmax(scores, dim=-1)  # shape: [B, H, N, N]
+        attn = F.softmax(scores, dim=-1)  # [B, H, N, N] -> [B, H, N, N]
 
         # Gradient computation
         f1 = torch.einsum(

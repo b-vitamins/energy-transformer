@@ -14,6 +14,25 @@ Quick Start
 For visualization and optional features:
 >>> from energy_transformer.utils import visualize  # Loads matplotlib
 >>> from energy_transformer.models import viet_base  # Loads full models
+
+Troubleshooting
+--------------
+Common issues and solutions:
+
+1. **High memory usage**: Energy Transformer requires gradient computation
+   during inference. To reduce memory:
+   - Reduce et_steps
+   - Use smaller batch sizes
+   - Enable gradient checkpointing
+
+2. **Slow convergence**: If energy doesn't decrease:
+   - Try different et_alpha values (typically 0.01 to 10.0)
+   - Check if layer norm is numerically stable (increase eps)
+   - Verify input data is properly normalized
+
+3. **NaN values**: Usually caused by:
+   - Too large et_alpha
+   - Numerical instability in attention (add eps to denominators)
 """
 # ruff: noqa: TRY003
 
@@ -40,6 +59,7 @@ _LAZY_IMPORTS = {
     "EnergyTransformer": "energy_transformer.models",
     "visualize": "energy_transformer.spec",
     "configure_realisation": "energy_transformer.spec",
+    "testing": "energy_transformer.testing",
 }
 
 # For static type checking, import everything

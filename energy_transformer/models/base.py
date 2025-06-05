@@ -76,6 +76,22 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
     The energy is bounded below (E^ATT is bounded below by entropy, E^HN by the
     activation function properties), and decreases monotonically, guaranteeing
     convergence to a fixed point.
+
+    Examples
+    --------
+    >>> # Monitor convergence during training
+    >>> model = EnergyTransformer(...)
+    >>> hook_handle = model.register_step_hook(
+    ...     lambda m, info: print(f"Step {info.iteration}: E={info.total_energy:.4f}")
+    ... )
+    >>> output = model(x)
+    >>> hook_handle.remove()
+
+    >>> # Early stopping based on convergence
+    >>> from energy_transformer.utils.observers import make_convergence_hook
+    >>> model.register_step_hook(
+    ...     make_convergence_hook(lambda i: print(f"Converged at step {i}!"))
+    ... )
     """
 
     def __init__(
@@ -281,6 +297,17 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
         >>> output = model(x)
         >>> stats = tracker.get_batch_statistics()
         """
+        if x.dim() < 2:  # noqa: PLR2004
+            raise ValueError(
+                f"Input must have at least 2 dimensions [*, D], got {x.dim()}"
+            )
+        expected_dim = getattr(self.layer_norm, "normalized_shape", None)
+        if expected_dim is not None and x.size(-1) != expected_dim[-1]:
+            raise ValueError(
+                f"Input feature dimension ({x.size(-1)}) doesn't match "
+                f"layer norm dimension ({expected_dim[-1]})"
+            )
+
         # Clone to preserve input
         x = x.clone()
 
