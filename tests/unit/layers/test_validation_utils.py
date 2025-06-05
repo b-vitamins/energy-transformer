@@ -2,11 +2,11 @@ import pytest
 import torch
 
 from energy_transformer.layers.validation import (
+    format_shape_error,
     validate_divisibility,
     validate_positive,
     validate_shape_match,
     validate_tensor_dim,
-    format_shape_error,
 )
 
 pytestmark = pytest.mark.unit
