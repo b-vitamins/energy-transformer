@@ -1,10 +1,18 @@
 """Base Energy Transformer."""
 
+from collections.abc import Callable
 from contextlib import AbstractContextManager
-from typing import Literal, NamedTuple, cast
+from typing import (
+    Literal,
+    NamedTuple,
+    cast,
+)
 
 import torch
 from torch import Tensor, nn
+
+from energy_transformer.utils.observers import StepInfo
+from energy_transformer.utils.optimizers import SGD, EnergyOptimizer
 
 __all__ = ["DescentMode", "ETOutput", "EnergyTransformer", "Track"]
 
@@ -61,9 +69,9 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
     hopfield : nn.Module
         Hopfield network component for memory-based associations
     steps : int, optional
-        Number of gradient descent steps T, by default 12
-    alpha : float, optional
-        Step size for gradient descent optimization, by default 1.0
+        Number of optimization steps, by default 12
+    optimizer : EnergyOptimizer, optional
+        Energy landscape optimizer. If None, uses SGD(alpha=0.1)
     """
 
     def __init__(
@@ -72,7 +80,7 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
         attention: nn.Module,
         hopfield: nn.Module,
         steps: int = 12,
-        alpha: float = 1.0,
+        optimizer: EnergyOptimizer | None = None,
     ) -> None:
         """Initialize the Energy Transformer with its energy components."""
         super().__init__()
@@ -80,7 +88,14 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
         self.attention = attention
         self.hopfield = hopfield
         self.steps = steps
-        self.alpha = alpha
+        self.optimizer = optimizer or SGD(alpha=0.1)
+        self.alpha = getattr(self.optimizer, "alpha", 0.1)
+
+        # Hook management
+        self._step_hooks: list[Callable] = []
+        self._pre_descent_hooks: list[Callable] = []
+        self._post_descent_hooks: list[Callable] = []
+        self._capture_tokens = False
 
     def energy(
         self,
@@ -133,11 +148,10 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
         Tensor
             Scalar LayerNorm energy value
         """
-        if hasattr(self.layer_norm, 'compute_energy'):
+        if hasattr(self.layer_norm, "compute_energy"):
             return self.layer_norm.compute_energy(x)
-        else:
-            # For standard LayerNorm without energy, return 0
-            return torch.tensor(0.0, device=x.device, dtype=x.dtype)
+        # For standard LayerNorm without energy, return 0
+        return torch.tensor(0.0, device=x.device, dtype=x.dtype)
 
     def _compute_gradient(
         self,
@@ -263,119 +277,135 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
         # If all backtracking fails, use minimal step
         return lr * grad
 
-    def _energy_descent(
-        self,
-        x: Tensor,
-        steps: int,
-        mode: DescentMode = "bb",
-        detach_mode: bool = False,
-        track_trajectory: bool = False,
-        armijo_gamma: float = 0.5,
-        armijo_max_iter: int = 4,
-    ) -> tuple[Tensor, list[Tensor]]:
-        """Perform gradient descent optimization on the energy landscape.
+    def _descent(self, x: Tensor, steps: int) -> Tensor:
+        """Perform gradient descent on the energy landscape.
 
         Parameters
         ----------
         x : Tensor
-            Initial token configuration. Must have requires_grad=True.
+            Initial token configuration
         steps : int
             Number of gradient descent steps
-        mode : DescentMode, optional
-            Descent method to use:
-            - "sgd": Fixed step size (classic)
-            - "bb": Barzilai-Borwein with Armijo backtracking (default)
-        detach_mode : bool, optional
-            If True, performs detached updates (no gradient flow)
-        track_trajectory : bool, optional
-            If True, records energy values at each step
-        armijo_gamma : float, optional
-            Armijo backtracking factor, by default 0.5
-        armijo_max_iter : int, optional
-            Maximum Armijo iterations, by default 4
 
         Returns
         -------
-        tuple[Tensor, list[Tensor]]
-            Optimized tokens and energy trajectory (empty if not tracking)
+        Tensor
+            Optimized tokens
         """
-        # Mathematical Note: This implementation follows the original Energy Transformer
-        # algorithm which computes gradients with respect to g = LayerNorm(x) but updates
-        # x directly. While this is mathematically inconsistent (mixing gradient spaces),
-        # it maintains compatibility with the published algorithm and results.
-        trajectory: list[Tensor] = []
-        create_graph = not detach_mode
+        # Reset optimizer state
+        self.optimizer.reset()
 
-        # Check for inference_mode early - we cannot override this
-        if torch.is_inference_mode_enabled() and not detach_mode:
-            raise RuntimeError(
-                "EnergyTransformer requires gradient computation, "
-                "which is not possible within torch.inference_mode(). "
-                "Use detach=True or call the model outside inference_mode().",
-            )
-
-        # Initialize BB buffers
-        prev_x: Tensor | None = None
-        prev_grad: Tensor | None = None
+        # Call pre-descent hooks
+        for hook in self._pre_descent_hooks:
+            hook(self, x)
 
         for t in range(steps):
-            # Skip optimization in inference mode with detach
-            if detach_mode and torch.is_inference_mode_enabled():
-                if track_trajectory:
-                    with torch.no_grad():
-                        energy = self.energy(x)
-                        trajectory.append(energy.detach().clone())
-                continue
+            # Compute components separately for observability
+            with torch.enable_grad():
+                # Normalize to get g
+                g = self.layer_norm(x.detach())
+                g_grad = g.detach().requires_grad_(True)
 
-            # Compute energy and gradient
-            energy, grad = self._compute_gradient(
-                x,
-                detach_mode,
-                create_graph,
-                track_trajectory,
-                trajectory,
+                # Compute energy components separately
+                e_att = self.attention(g_grad)
+                e_hop = self.hopfield(g_grad)
+                total_energy = e_att + e_hop
+
+                # Compute gradient w.r.t. g
+                (grad,) = torch.autograd.grad(total_energy, g_grad)
+
+            # Get update from optimizer
+            update, step_size = self.optimizer.step(grad, x, total_energy, t)
+
+            # Create step info for hooks
+            step_info = StepInfo(
+                iteration=t,
+                total_energy=total_energy.detach(),
+                attention_energy=e_att.detach(),
+                hopfield_energy=e_hop.detach(),
+                grad_norm=grad.norm(p=2, dim=-1).detach(),
+                step_size=step_size.detach() if step_size is not None else None,
+                tokens=x.detach() if self._capture_tokens else None,
             )
 
-            # Skip update if we couldn't compute gradients
-            if detach_mode and torch.is_inference_mode_enabled():
-                continue
-
-            # Compute step based on optimization mode
-            if mode == "bb":
-                lr: Tensor | float = self._compute_bb_step_size(
-                    x,
-                    grad,
-                    prev_x,
-                    prev_grad,
-                )
-                step = self._armijo_line_search(
-                    x,
-                    grad,
-                    energy,
-                    lr,
-                    detach_mode,
-                    armijo_gamma,
-                    armijo_max_iter,
-                )
-            else:  # "sgd"
-                step = self.alpha * grad
+            # Call step hooks
+            for hook in self._step_hooks:
+                hook(self, step_info)
 
             # Apply update
-            if detach_mode:
-                with torch.no_grad():
-                    x = x - step
-                # Re-enable gradients for next iteration (except last step)
-                if t < steps - 1:
-                    x.requires_grad_(True)
-            else:
-                x = x - step
+            x = x - update
 
-            # Store for BB
-            if mode == "bb":
-                prev_x = x.detach() if detach_mode else x.clone().detach()
-                prev_grad = grad.detach()
+        # Call post-descent hooks
+        for hook in self._post_descent_hooks:
+            hook(self, x)
 
-        return x, trajectory
+        return x
+
+    def register_step_hook(
+        self, hook: Callable[[nn.Module, StepInfo], None]
+    ) -> "RemovableHandle":
+        """Register a hook called after each optimization step.
+
+        Parameters
+        ----------
+        hook : callable
+            Function with signature: hook(module, step_info)
+
+        Returns
+        -------
+        RemovableHandle
+            Handle that can be used to remove the hook
+
+        Example
+        -------
+        >>> from energy_transformer.utils.observers import make_logger_hook
+        >>> handle = model.register_step_hook(make_logger_hook())
+        >>> output = model(x)
+        >>> handle.remove()
+        """
+        self._step_hooks.append(hook)
+        return RemovableHandle(self._step_hooks, hook)
+
+    def register_pre_descent_hook(
+        self, hook: Callable[[nn.Module, Tensor], None]
+    ) -> "RemovableHandle":
+        """Register a hook called before descent begins.
+
+        Parameters
+        ----------
+        hook : callable
+            Function with signature: hook(module, initial_tokens)
+        """
+        self._pre_descent_hooks.append(hook)
+        return RemovableHandle(self._pre_descent_hooks, hook)
+
+    def register_post_descent_hook(
+        self, hook: Callable[[nn.Module, Tensor], None]
+    ) -> "RemovableHandle":
+        """Register a hook called after descent completes.
+
+        Parameters
+        ----------
+        hook : callable
+            Function with signature: hook(module, final_tokens)
+        """
+        self._post_descent_hooks.append(hook)
+        return RemovableHandle(self._post_descent_hooks, hook)
+
+
+class RemovableHandle:
+    """Handle for removing hooks."""
+
+    def __init__(self, hooks_list: list[Callable], hook: Callable):
+        self.hooks_list = hooks_list
+        self.hook = hook
+
+    def remove(self) -> None:
+        """Remove the associated hook."""
+        from contextlib import suppress
+
+        with suppress(ValueError):
+            self.hooks_list.remove(self.hook)
 
     def _should_clone(
         self,
@@ -394,104 +424,37 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
             return force_clone
         return training or detach
 
-    def forward(
-        self,
-        x: Tensor,
-        detach: bool = False,
-        track: Track = "none",
-        mode: DescentMode = "bb",
-        force_clone: bool | None = None,
-        armijo_gamma: float = 0.5,
-        armijo_max_iter: int = 4,
-    ) -> Tensor | ETOutput:
+    def forward(self, x: Tensor) -> Tensor:
         """Optimize token configuration via descent on energy landscape.
 
         Parameters
         ----------
         x : Tensor
             Input tensor of shape [..., N, D]
-        detach : bool, optional
-            If True, detaches gradients after optimization
-        track : Track, optional
-            Controls what to track during optimization:
-            - "none": Return only optimized tokens (default)
-            - "energy": Return tokens and final energy
-            - "trajectory": Return tokens and energy trajectory
-            - "both": Return tokens, final energy, and trajectory
-        mode : DescentMode, optional
-            Descent method to use:
-            - "sgd": Fixed step size
-            - "bb": Barzilai-Borwein with Armijo backtracking (default)
-        force_clone : bool, optional
-            Overrides default cloning heuristic if provided
-        armijo_gamma : float, optional
-            Backtracking factor for BB mode, by default 0.5
-        armijo_max_iter : int, optional
-            Maximum backtracking iterations for BB mode, by default 4
 
         Returns
         -------
-        Union[Tensor, ETOutput]
-            Optimized tokens or ETOutput with additional tracked values
+        Tensor
+            Optimized tokens
 
         Notes
         -----
-        This method can operate within torch.no_grad() contexts by temporarily
-        enabling gradients for internal optimization. However, it cannot work
-        within torch.inference_mode() unless detach=True is used.
+        To access trajectory information, use hooks:
+
+        >>> from energy_transformer.utils.observers import EnergyTracker
+        >>> tracker = EnergyTracker()
+        >>> handle = model.register_step_hook(lambda m, info: tracker.update(info))
+        >>> output = model(x)
+        >>> trajectory = tracker.get_trajectory()
         """
-        # Conditional cloning: preserve original input when needed
-        if self._should_clone(self.training, detach, force_clone):
-            x = x.clone()
+        # Clone to preserve input
+        x = x.clone()
 
-        # Gradient isolation for frozen-backbone scenarios
-        if detach:
-            x = x.detach()
+        # Clear token capture flag
+        self._capture_tokens = False
 
-        # Ensure x requires gradients for optimization
-        x.requires_grad_(True)
-
-        # Determine tracking requirements
-        track_trajectory = track in ("trajectory", "both")
-        return_energy = track in ("energy", "both")
-
-        # Perform energy descent optimization
-        x, trajectory = self._energy_descent(
-            x=x,
-            steps=self.steps,
-            mode=mode,
-            detach_mode=detach,
-            track_trajectory=track_trajectory,
-            armijo_gamma=armijo_gamma,
-            armijo_max_iter=armijo_max_iter,
-        )
-
-        # Compute final energy if needed
-        final_energy = None
-        if return_energy:
-            with torch.no_grad():
-                final_energy = self.energy(x)
-
-        # Final detach if needed
-        if detach:
-            x = x.detach()
-            if final_energy is not None:
-                final_energy = final_energy.detach()
-
-        # Return appropriate output format
-        if track != "none":
-            # Only create trajectory tensor if we tracked it
-            trajectory_tensor = (
-                torch.stack(trajectory, dim=0)
-                if track_trajectory and trajectory
-                else None
-            )
-            return ETOutput(
-                tokens=x,
-                final_energy=final_energy,
-                trajectory=trajectory_tensor,
-            )
-        return x
+        # Perform descent
+        return self._descent(x, self.steps)
 
 
 # Register the EnergyTransformer class in the registry
