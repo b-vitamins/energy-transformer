@@ -1,9 +1,11 @@
 """Common type aliases for Energy Transformer layers."""
 
-from typing import Callable, Literal, Optional, Protocol, TypeVar, Union
+# ruff: noqa: A005
+from collections.abc import Callable
+from typing import Literal, Protocol, TypeVar
 
 import torch
-from torch import Tensor, nn
+from torch import nn
 
 # Tensor shape aliases for documentation
 BatchSize = int
@@ -15,8 +17,8 @@ HiddenDim = int
 NumClasses = int
 
 # Common types
-Device = Union[torch.device, str, None]
-Dtype = Optional[torch.dtype]
+Dtype = torch.dtype | None
+Device = torch.device | str | None
 ActivationType = Literal["relu", "softmax"]
 PoolType = Literal["token", "avg", "max", "none"]
 
@@ -29,11 +31,15 @@ class HasDevice(Protocol):
     """Protocol for modules with device property."""
 
     @property
-    def device(self) -> torch.device: ...
+    def device(self) -> torch.device:
+        """Device of the module."""
+        ...
 
 
 class HasDtype(Protocol):
     """Protocol for modules with dtype property."""
 
     @property
-    def dtype(self) -> torch.dtype: ...
+    def dtype(self) -> torch.dtype:
+        """Data type of the module."""
+        ...

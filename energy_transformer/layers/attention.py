@@ -1,25 +1,17 @@
 """Energy-based multi-head attention module implementation."""
 
 import math
-from typing import ClassVar, Literal, Optional, Union, overload
+from typing import ClassVar, Literal, overload
 
 import torch
 import torch.nn.functional as F  # noqa: N812
 from torch import Tensor, nn
 
-from .types import (
-    BatchSize,
-    Device,
-    Dtype,
-    EmbedDim,
-    NumHeads,
-    SequenceLength,
-)
-
 from .constants import (
     ATTENTION_EPSILON,
     ATTENTION_INIT_STD,
 )
+from .types import Device, Dtype, EmbedDim, NumHeads
 from .validation import (
     validate_divisibility,
     validate_positive,
@@ -438,7 +430,7 @@ class MultiheadEnergyAttention(nn.Module):
     def forward(
         self,
         x: Tensor,
-        attn_mask: Optional[Tensor] = None,
+        attn_mask: Tensor | None = None,
         is_causal: bool = False,
     ) -> Tensor:
         """Forward pass computing energy."""

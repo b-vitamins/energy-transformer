@@ -1,9 +1,7 @@
 r"""Energy-based LayerNorm implementation following Energy Transformer theory."""
 
 from collections.abc import Sequence
-from typing import Any, Sequence, Union
-
-from .types import Device, Dtype
+from typing import Any
 
 import torch
 import torch.nn.functional as F  # noqa: N812
@@ -13,6 +11,7 @@ from .constants import (
     DEFAULT_EPSILON,
     DEFAULT_LAYER_NORM_REGULARIZATION,
 )
+from .types import Device, Dtype
 
 
 class EnergyLayerNorm(nn.Module):

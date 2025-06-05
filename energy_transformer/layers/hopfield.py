@@ -4,19 +4,16 @@ import torch
 import torch.nn.functional as F  # noqa: N812
 from torch import nn
 
-from .types import ActivationType, Device, Dtype, EmbedDim, HiddenDim
-
 from .constants import (
     DEFAULT_HOPFIELD_BETA,
     DEFAULT_HOPFIELD_MULTIPLIER,
     DEFAULT_INIT_STD,
 )
+from .types import ActivationType, Device, Dtype, EmbedDim, HiddenDim
 from .validation import validate_positive, validate_tensor_dim
 
 
 class HopfieldNetwork(nn.Module):
-    activation: ActivationType
-    beta: nn.Parameter | None
     r"""Energy-based Hopfield Network module.
 
     Implements the Hopfield Network component of Energy Transformer blocks,
@@ -119,6 +116,9 @@ class HopfieldNetwork(nn.Module):
     .. [1] Hoover et al. (2023). Energy Transformer. See equations (5) and (9).
     .. [2] Ramsauer et al. (2020). Hopfield Networks is All You Need.
     """
+
+    activation: ActivationType
+    beta: nn.Parameter | None
 
     def __init__(
         self,

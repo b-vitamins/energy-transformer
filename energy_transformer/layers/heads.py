@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import Any, Dict, Optional, cast
+from typing import cast
 
 from torch import Tensor, nn
 
@@ -98,7 +97,7 @@ class BaseClassifierHead(nn.Module):
         return cast(Tensor, self.pool(x))
 
     def extra_repr(self) -> str:
-        """String representation for module printing."""
+        """Return string representation for module printing."""
         return (
             f"in_features={self.in_features}, "
             f"num_classes={self.num_classes}, "
