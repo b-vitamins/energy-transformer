@@ -70,7 +70,17 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
            x^{(t+1)} = x^{(t)} - \alpha \\cdot \frac{\\partial E}{\\partial g^{(t)}}
 
     4. **Gradient Context**: The gradient computation requires autograd even during
-       inference, which is why we use torch.enable_grad() context.
+       inference, which is why we use ``torch.enable_grad()``.
+
+    5. **No Parameter Updates**: Gradients computed in :meth:`_descent` are used
+       only to update the tokens. Model parameters (\(W^Q\), \(W^K\), \(\xi\),
+       \(\gamma\), \(\delta\)) remain fixed during this inner optimization.
+
+    Implementation Details:
+    The use of ``torch.enable_grad()`` ensures gradients work even in inference
+    mode. Detach operations prevent gradient accumulation across descent steps,
+    so each step starts from the current token state without backpropagating
+    through previous steps.
 
     Convergence Properties:
     The energy is bounded below (E^ATT is bounded below by entropy, E^HN by the
@@ -180,19 +190,22 @@ class EnergyTransformer(nn.Module):  # type: ignore[misc]
 
         for t in range(steps):
             # Compute components separately for observability
+            # IMPORTANT: This gradient computation is ONLY for token updates
+            # during energy minimization. It does NOT accumulate gradients in
+            # model parameters. Parameter gradients are computed during the
+            # standard backward() pass when training the model.
             with torch.enable_grad():  # type: ignore[no-untyped-call]
-                # Normalize to get g
+                # Normalize to obtain g
                 g = self.layer_norm(x.detach())  # shape: [B, N, D]
                 g_grad = g.detach().requires_grad_(True)
 
-                # Compute energy components separately
+                # Compute energy components
                 e_att = self.attention(g_grad)
                 e_hop = self.hopfield(g_grad)
                 total_energy = e_att + e_hop
 
                 # Compute gradient w.r.t. g
                 (grad,) = torch.autograd.grad(total_energy, g_grad)
-                # shape: [B, N, D]  # noqa: ERA001
 
             # Get update from optimizer
             update, step_size = self.optimizer.step(

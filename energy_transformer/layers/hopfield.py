@@ -14,10 +14,31 @@ from .validation import validate_positive, validate_tensor_dim
 
 
 class HopfieldNetwork(nn.Module):
-    r"""Energy-based Hopfield Network module.
+    r"""Hopfield Network for associative memory.
 
-    Implements the Hopfield Network component of Energy Transformer blocks,
-    which ensures token representations are consistent with learned memory patterns.
+    Mathematical Foundation
+    -----------------------
+    The Hopfield Network ensures token representations are consistent with
+    learned memory patterns. The energy function is:
+
+    .. math::
+        E^{HN} = -\sum_{B=1}^{N} \sum_{\mu=1}^{K} G\left(\sum_{j=1}^{D} \xi_{\mu j} g_{jB}\right)
+
+    where:
+    - \(\xi_{\mu j}\) are learnable memory patterns
+    - \(G(\cdot)\) is the integral of the activation function ``r`` so that
+      ``G'(\cdot) = r(\cdot)``
+
+    For different activation functions:
+    - Classical (ReLU): ``r(x) = max(0, x)`` with slowly growing energy
+    - Modern (softmax): ``r(x) = softmax(x)`` with sharply peaked basins
+
+    The gradient contribution is:
+
+    .. math::
+        -\frac{\partial E^{HN}}{\partial g_{iA}} = \sum_{\mu=1}^{K} \xi_{\mu i} r\left(\sum_{j=1}^{D} \xi_{\mu j} g_{jA}\right)
+
+    This is applied to each token individually (no inter-token mixing).
 
     Parameters
     ----------

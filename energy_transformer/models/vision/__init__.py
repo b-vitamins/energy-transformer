@@ -49,6 +49,20 @@ from .viet import (
     viet_tiny_cifar,
 )
 
+# Vision Simplicial Energy Transformer
+from .viset import (
+    VisionSimplicialTransformer,
+    viset_2l_cifar,
+    viset_4l_cifar,
+    viset_6l_cifar,
+    viset_base,
+    viset_large,
+    viset_small,
+    viset_small_cifar,
+    viset_tiny,
+    viset_tiny_cifar,
+)
+
 # Standard Vision Transformer (baseline)
 from .vit import (
     VisionTransformer,
@@ -64,11 +78,9 @@ from .vit import (
 
 __all__ = [
     "REALISER_REGISTRY",
-    # Core models and registry
     "EnergyTransformer",
-    # Vision Energy Transformer (ViET)
     "VisionEnergyTransformer",
-    # Vision Transformer (ViT) - Baseline
+    "VisionSimplicialTransformer",
     "VisionTransformer",
     "viet_2l_cifar",
     "viet_4l_cifar",
@@ -79,6 +91,15 @@ __all__ = [
     "viet_small_cifar",
     "viet_tiny",
     "viet_tiny_cifar",
+    "viset_2l_cifar",
+    "viset_4l_cifar",
+    "viset_6l_cifar",
+    "viset_base",
+    "viset_large",
+    "viset_small",
+    "viset_small_cifar",
+    "viset_tiny",
+    "viset_tiny_cifar",
     "vit_base",
     "vit_large",
     "vit_small",
