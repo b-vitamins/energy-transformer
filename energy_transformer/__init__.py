@@ -44,7 +44,6 @@ __license__ = "Apache-2.0"
 # Lazy import system using PEP 562
 _LAZY_IMPORTS = {
     "EnergyTransformer": "energy_transformer.models",
-    "testing": "energy_transformer.testing",
 }
 
 # For static type checking, import everything
@@ -94,6 +93,6 @@ def __dir__() -> list[str]:
 
 
 # Only include commonly used exports in __all__
-__all__ = ["EnergyTransformer", "testing"]
+__all__ = ["EnergyTransformer"]
 
 # NO SIDE EFFECTS ON IMPORT!  Configuration should be explicit.
