@@ -330,7 +330,6 @@ def test_numerical_stability():
 from energy_transformer.testing import (
     assert_energy_decreases,
     assert_dimension_preserved,
-    create_mock_spec
 )
 
 def test_energy_optimization():

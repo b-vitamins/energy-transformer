@@ -43,26 +43,6 @@ def simple_image_batch():
     return torch.randn(4, 3, 224, 224)
 
 
-@pytest.fixture(autouse=True)
-def reset_global_state():
-    """Reset global state before each test."""
-    from energy_transformer.spec.realise import _get_config, _thread_local
-
-    if hasattr(_thread_local, "config"):
-        delattr(_thread_local, "config")
-    config = _get_config()
-    config.cache.clear()
-    config.strict = True
-    config.warnings = True
-    config.auto_import = True
-    config.optimizations = True
-    config.max_recursion = 100
-    yield
-    if hasattr(_thread_local, "config"):
-        _thread_local.config.cache.clear()
-        delattr(_thread_local, "config")
-
-
 @pytest.fixture
 def temp_cache_dir(tmp_path):
     """Create a temporary directory for cache tests."""

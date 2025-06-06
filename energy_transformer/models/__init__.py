@@ -10,7 +10,7 @@ mechanisms as energy minimization.
 Core Components
 ---------------
 - **EnergyTransformer**: Base class implementing energy-based token refinement
-- **REALISER_REGISTRY**: Registry for specification-to-module conversion
+- **REALISER_REGISTRY**: Registry for model constructors
 
 Energy Function
 ---------------
@@ -46,7 +46,6 @@ Example
 See Also
 --------
 energy_transformer.models.vision : Vision-specific model implementations
-energy_transformer.spec : Declarative specification system for model construction
 """
 
 from .base import REALISER_REGISTRY, EnergyTransformer

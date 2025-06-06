@@ -71,10 +71,6 @@ The mutation testing script automatically finds relevant tests:
    - Primary: `tests/unit/models/vision/test_vit.py`
    - Secondary: `tests/integration/test_model_building.py`
 
-3. **Spec modules** (e.g., `spec/primitives.py`):
-   - Primary: `tests/unit/spec/test_primitives.py`
-   - Secondary: `tests/integration/test_spec_to_model.py`
-   - Tertiary: `tests/functional/test_*primitives*.py`
 
 4. **Security-sensitive modules**:
    - Always includes: `tests/security/`
@@ -119,7 +115,7 @@ def test_attention_scaling_in_full_model():
 ### Security Test Examples
 
 ```python
-# Code in energy_transformer/spec/primitives.py
+# Example mutant:
 if not isinstance(x, torch.Tensor):
     raise TypeError("Expected tensor")
 
@@ -172,10 +168,6 @@ Mutation testing runs automatically on PRs:
 - Integration tests for forward passes
 - Performance tests for inference speed
 
-### Spec System (`energy_transformer/spec/`)
-- Unit tests for individual specs
-- Integration tests for spec composition
-- Functional tests for spec-to-model conversion
 
 ### Security-Sensitive Code
 - Always include security tests

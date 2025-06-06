@@ -58,7 +58,6 @@ Follow PyTorch conventions. When in doubt, check PyTorch core.
 
 ### Architecture
 
-- **Declarative > Imperative**: Use specs for model construction
 - **Composition > Inheritance**: Build complexity from simple parts
 - **Explicit > Implicit**: No hidden state or magic
 - **Fail Fast**: Validate early with helpful errors
@@ -140,9 +139,8 @@ Doc files use hyphens: `docs/getting-started.md`
 
 1. Study existing patterns
 2. Write tests first
-3. Use spec system
-4. Validate inputs with helpful errors
-5. Document thoroughly
+3. Validate inputs with helpful errors
+4. Document thoroughly
 
 ## Test
 
@@ -176,7 +174,6 @@ ruff check . --fix && ruff format . && mypy . && pytest tests/
 
 Examples:
 - `[models] Add ViSET-XL variant`
-- `[spec] Fix dimension validation`
 - `[tests] Improve attention coverage`
 
 **Checklist:**
