@@ -799,10 +799,8 @@ stats.print_stats(10)  # Top 10 functions
 ```bash
 # Quick CIFAR-100 test
 cd examples/cifar
-python quick.py --model viset --epochs 5
+python quick.py --model viet --epochs 5
 
-# Visualize topology-aware simplices
-python demo.py
 ```
 
 ### Basic Usage

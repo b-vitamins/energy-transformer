@@ -14,7 +14,7 @@ maintainers = [
 readme = "README.md"
 license = "Apache-2.0"
 repository = "https://github.com/b-vitamins/energy-transformer"
-keywords = ["deep-learning", "transformers", "energy-based-models", "hopfield-networks", "simplicial-complexes"]
+keywords = ["deep-learning", "transformers", "energy-based-models", "hopfield-networks"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",

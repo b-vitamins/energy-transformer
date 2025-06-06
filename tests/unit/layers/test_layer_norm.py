@@ -114,3 +114,17 @@ def test_layernorm_properties() -> None:
     assert torch.allclose(ln.effective_gamma, F.softplus(ln.log_gamma))
     assert ln.device == ln.delta.device
     assert ln.dtype == ln.delta.dtype
+
+
+def test_layernorm_raises_for_shape_mismatch() -> None:
+    ln = EnergyLayerNorm(3)
+    x = torch.randn(2, 4)
+    with pytest.raises(ValueError, match="shape mismatch"):
+        ln(x)
+
+
+def test_layernorm_regularized_forward() -> None:
+    ln = EnergyLayerNorm(3, regularization=0.2)
+    x = torch.randn(2, 3)
+    out = ln(x)
+    assert out.shape == x.shape

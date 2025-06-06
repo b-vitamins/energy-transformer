@@ -3,15 +3,12 @@
 ![GitHub Workflow Status](https://github.com/b-vitamins/energy-transformer/actions/workflows/python.yml/badge.svg)
 [![codecov](https://codecov.io/gh/b-vitamins/energy-transformer/graph/badge.svg?token=6DSB7U0GJF)](https://codecov.io/gh/b-vitamins/energy-transformer)
 
-PyTorch implementation of the **Energy Transformer (ET)** and the
-**Simplicial Energy Transformer (SET)**.
+PyTorch implementation of the **Energy Transformer (ET)**.
 
 ## Key Features
 
 - **Energy-based Components** – attention, layer norm and memory are all
   formulated as energy minimisation problems.
-- **Simplicial Hopfield Networks** – topology-aware memory that
-  preserves higher-order structure.
 
 ## Installation
 
@@ -72,12 +69,6 @@ If you use this code, please cite:
   year={2023}
 }
 
-@article{burns2023simplicial,
-  title={Simplicial Hopfield networks},
-  author={Burns, Thomas and Fukai, Tomoki},
-  journal={arXiv preprint arXiv:2305.05179},
-  year={2023}
-}
 ```
 
 ## License

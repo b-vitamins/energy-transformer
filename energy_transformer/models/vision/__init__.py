@@ -4,13 +4,11 @@ This module provides three vision transformer variants, each building on the pre
 
 1. **VisionTransformer (ViT)** - Standard vision transformer baseline
 2. **VisionEnergyTransformer (ViET)** - Energy-based with regular Hopfield networks
-3. **VisionSimplicialEnergyTransformer (ViSET)** - Energy-based with topology-aware simplicial networks
 
 Model Naming Convention
 -----------------------
 - ViT: Standard Vision Transformer (baseline)
 - ViET: Vision Energy Transformer
-- ViSET: Vision Simplicial Energy Transformer
 
 Configuration Sizes
 -------------------
@@ -21,12 +19,6 @@ Configuration Sizes
 
 CIFAR Configurations
 --------------------
-Special configurations optimized for 32x32 images with 4x4 patches:
-- 2L, 4L, 6L: Shallow variants with fewer layers
-- E50-T50: 50% edges, 50% triangles (ViSET only)
-- E100: 100% edges from k-NN graph (ViSET only)
-- T100: 100% triangles from Delaunay (ViSET only)
-- Random: Random topology baseline (ViSET only)
 
 Example
 -------
@@ -36,8 +28,6 @@ Example
 >>> # Energy Transformer for CIFAR-100
 >>> model = viet_2l_cifar(num_classes=100)
 >>>
->>> # Simplicial Energy Transformer with topology awareness
->>> model = viset_2l_e50_t50_cifar(num_classes=100)
 """
 
 # Re-export base model and registry for convenience
@@ -59,25 +49,6 @@ from .viet import (
     viet_tiny_cifar,
 )
 
-# Vision Simplicial Energy Transformer
-from .viset import (
-    VisionSimplicialEnergyTransformer,
-    # Utility
-    get_viset_name,
-    viset_2l_e40_t40_tet20_cifar,
-    viset_2l_e50_t50_cifar,
-    # CIFAR configurations - topology variants
-    viset_2l_e100_cifar,
-    viset_2l_random_cifar,
-    viset_2l_t100_cifar,
-    viset_4l_e50_t50_cifar,
-    viset_6l_e50_t50_cifar,
-    # Standard configurations
-    viset_base,
-    viset_small,
-    viset_tiny,
-)
-
 # Standard Vision Transformer (baseline)
 from .vit import (
     VisionTransformer,
@@ -97,11 +68,8 @@ __all__ = [
     "EnergyTransformer",
     # Vision Energy Transformer (ViET)
     "VisionEnergyTransformer",
-    # Vision Simplicial Energy Transformer (ViSET)
-    "VisionSimplicialEnergyTransformer",
     # Vision Transformer (ViT) - Baseline
     "VisionTransformer",
-    "get_viset_name",
     "viet_2l_cifar",
     "viet_4l_cifar",
     "viet_6l_cifar",
@@ -111,16 +79,6 @@ __all__ = [
     "viet_small_cifar",
     "viet_tiny",
     "viet_tiny_cifar",
-    "viset_2l_e40_t40_tet20_cifar",
-    "viset_2l_e50_t50_cifar",
-    "viset_2l_e100_cifar",
-    "viset_2l_random_cifar",
-    "viset_2l_t100_cifar",
-    "viset_4l_e50_t50_cifar",
-    "viset_6l_e50_t50_cifar",
-    "viset_base",
-    "viset_small",
-    "viset_tiny",
     "vit_base",
     "vit_large",
     "vit_small",

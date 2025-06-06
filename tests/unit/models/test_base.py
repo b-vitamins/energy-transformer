@@ -2,6 +2,7 @@ import pytest
 import torch
 from torch import nn
 
+from energy_transformer.layers.layer_norm import EnergyLayerNorm
 from energy_transformer.models.base import EnergyTransformer
 from energy_transformer.utils.optimizers import SGD
 
@@ -210,3 +211,24 @@ def test_forward_with_hooks() -> None:
     assert "energy_mean" in stats
 
     handle.remove()
+
+
+def test_forward_raises_for_wrong_input_dim() -> None:
+    model = EnergyTransformer(
+        EnergyLayerNorm(3),
+        DummyEnergyAttention(),
+        DummyHopfieldNetwork(),
+    )
+    with pytest.raises(ValueError, match="at least 2 dimensions"):
+        model(torch.randn(3))
+
+
+def test_forward_raises_for_wrong_feature_dim() -> None:
+    model = EnergyTransformer(
+        EnergyLayerNorm(4),
+        DummyEnergyAttention(),
+        DummyHopfieldNetwork(),
+    )
+    x = torch.randn(1, 2, 3)
+    with pytest.raises(ValueError, match="feature dimension"):
+        model(x)

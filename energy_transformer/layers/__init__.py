@@ -7,7 +7,7 @@ Layer Categories
 ----------------
 - **Attention**: Energy-based multi-head attention mechanism
 - **Normalization**: Energy-based layer normalization with learnable temperature
-- **Memory**: Hopfield networks (standard and simplicial) for associative memory
+- **Memory**: Hopfield networks for associative memory
 - **Embeddings**: Patch and positional embeddings for vision models
 - **Tokens**: Special tokens (CLS) for aggregating information
 - **Heads**: Task-specific output heads for classification and feature extraction
@@ -43,7 +43,6 @@ from .heads import (
 from .hopfield import HopfieldNetwork
 from .layer_norm import EnergyLayerNorm
 from .mlp import MLP
-from .simplicial import SimplicialHopfieldNetwork
 
 __all__ = [
     "MLP",
@@ -58,5 +57,4 @@ __all__ = [
     "PatchifyEmbed",
     "PosEmbed2D",
     "ReLUMLPClassifierHead",
-    "SimplicialHopfieldNetwork",
 ]

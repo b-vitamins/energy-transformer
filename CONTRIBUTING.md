@@ -172,7 +172,7 @@ ruff check . --fix && ruff format . && mypy . && pytest tests/
 **Title:** `[component] Action taken`
 
 Examples:
-- `[models] Add ViSET-XL variant`
+- `[models] Add ViET-XL variant`
 - `[tests] Improve attention coverage`
 
 **Checklist:**
@@ -197,7 +197,7 @@ Follow [Semantic Versioning](https://semver.org/):
 ```markdown
 ## [0.2.0] - 2024-01-15
 ### Added
-- Simplicial Hopfield networks
+- Hopfield network improvements
 
 ### Changed  
 - Improved convergence criteria
