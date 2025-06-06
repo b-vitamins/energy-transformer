@@ -10,7 +10,6 @@ import sys
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 import torch
@@ -155,7 +154,7 @@ def train(model_name: str) -> Path:  # noqa: C901, PLR0912, PLR0915
     )
 
     model = MODELS[model_name]().to(device)
-    is_energy_model = model_name in {"viet", "viset"}
+    is_energy_model = model_name in ["viet", "viset"]
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Parameters: {total_params:,} ({total_params / 1e6:.2f}M)")
 
@@ -166,18 +165,6 @@ def train(model_name: str) -> Path:  # noqa: C901, PLR0912, PLR0915
 
     history: list[dict[str, float]] = []
     steps_per_epoch = len(train_loader)
-
-    if is_energy_model:
-        from energy_transformer.utils import EnergyTracker
-
-        tracker = EnergyTracker()
-        if hasattr(model, "et_blocks") and len(model.et_blocks) > 0:
-
-            def track_energy(m: nn.Module, info: Any) -> None:  # type: ignore[override]
-                if info.iteration == m.steps - 1:
-                    tracker.update(info)
-
-            handle = model.et_blocks[0].register_step_hook(track_energy)
 
     print("-" * 120)
     best_acc = 0.0
@@ -206,8 +193,21 @@ def train(model_name: str) -> Path:  # noqa: C901, PLR0912, PLR0915
             for param_group in optimizer.param_groups:
                 param_group["lr"] = lr
 
-            if is_energy_model:
-                outputs = model(inputs, et_kwargs={"detach": False})
+            # Forward pass
+            if is_energy_model and batch_idx % 10 == 0:
+                outputs, energies = model(inputs, return_energies=True)
+                if energies:
+                    e_att, e_hop = energies[0]
+                    running_e_att = (
+                        e_att.item()
+                        if batch_idx == 0
+                        else 0.9 * running_e_att + 0.1 * e_att.item()
+                    )
+                    running_e_hop = (
+                        e_hop.item()
+                        if batch_idx == 0
+                        else 0.9 * running_e_hop + 0.1 * e_hop.item()
+                    )
             else:
                 outputs = model(inputs)
 
@@ -234,13 +234,6 @@ def train(model_name: str) -> Path:  # noqa: C901, PLR0912, PLR0915
                 if batch_idx == 0
                 else 0.9 * running_loss + 0.1 * loss.item()
             )
-
-            if is_energy_model and batch_idx % 10 == 0:
-                stats = tracker.get_batch_statistics()
-                if stats:
-                    running_e_att = stats.get("attention_mean", 0).item()
-                    running_e_hop = stats.get("hopfield_mean", 0).item()
-                tracker.history.clear()
 
             _, predicted = outputs.max(1)
             if lam > LAM_THRESHOLD:
@@ -310,9 +303,6 @@ def train(model_name: str) -> Path:  # noqa: C901, PLR0912, PLR0915
                 },
                 save_dir / "best_model.pth",
             )
-
-    if is_energy_model and "handle" in locals():
-        handle.remove()
 
     with (save_dir / "history.json").open("w") as f:
         json.dump(history, f, indent=2)

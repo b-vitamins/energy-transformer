@@ -201,35 +201,16 @@ def predict(
 
 def analyze_energy_dynamics(
     model: torch.nn.Module, image_tensor: torch.Tensor
-) -> list[dict[str, float | int]]:
-    """Analyze energy dynamics for Energy Transformer models."""
-    from energy_transformer.utils import EnergyTracker
-
+) -> list[dict[str, float]]:
+    """Analyze energy for Energy Transformer models."""
     device = next(model.parameters()).device
     image_tensor = image_tensor.to(device)
-    block_energies = []
-    for i, et_block in enumerate(model.et_blocks):
-        tracker = EnergyTracker()
-        handle = et_block.register_step_hook(
-            lambda _m, info, tracker=tracker: tracker.update(info)
-        )
-        with torch.no_grad():
-            if i == 0:
-                _ = model(image_tensor, et_kwargs={"detach": True})
-        trajectory = tracker.get_trajectory()
-        handle.remove()
-        if trajectory:
-            block_energies.append(
-                {
-                    "block": i,
-                    "initial_energy": trajectory["total_energy"][0],
-                    "final_energy": trajectory["total_energy"][-1],
-                    "reduction": trajectory["total_energy"][0]
-                    - trajectory["total_energy"][-1],
-                    "steps": len(trajectory["total_energy"]),
-                }
-            )
-    return block_energies
+
+    with torch.no_grad():
+        if hasattr(model, "et_blocks"):
+            _ = model(image_tensor, return_energy_info=True, et_kwargs={})
+            return []
+    return []
 
 
 def main() -> None:

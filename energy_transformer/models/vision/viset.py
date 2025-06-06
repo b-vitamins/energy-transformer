@@ -14,7 +14,6 @@ from energy_transformer.layers.layer_norm import EnergyLayerNorm
 from energy_transformer.layers.simplicial import SimplicialHopfieldNetwork
 from energy_transformer.layers.types import ActivationType
 from energy_transformer.models.base import EnergyTransformer
-from energy_transformer.utils.optimizers import SGD
 
 
 class VisionSimplicialTransformer(nn.Module):
@@ -32,7 +31,7 @@ class VisionSimplicialTransformer(nn.Module):
         _head_dim: int,
         hopfield_hidden_dim: int,
         et_steps: int,
-        et_alpha: float,
+        _et_alpha: float,
         order: int = 3,
         drop_rate: float = 0.0,
         _representation_size: int | None = None,
@@ -77,7 +76,7 @@ class VisionSimplicialTransformer(nn.Module):
                         beta=hopfield_beta,
                     ),
                     steps=et_steps,
-                    optimizer=SGD(alpha=et_alpha),
+                    _optimizer=None,  # Not used anymore
                 )
                 for _ in range(depth)
             ]
@@ -101,35 +100,33 @@ class VisionSimplicialTransformer(nn.Module):
         _et_kwargs: dict[str, Any],
     ) -> tuple[Tensor, dict[str, Any]]:
         energy_info: dict[str, Any] = {}
+
         if not return_energy_info:
             for et_block in self.et_blocks:
                 x = et_block(x)
             return x, energy_info
 
-        block_energies: list[float] = []
-        block_trajectories: list[Any] = []
-        for et_block in self.et_blocks:
-            if hasattr(et_block, "_compute_energy"):
-                x = et_block(x)
-                block_energies.append(et_block._compute_energy(x).item())
-            else:
-                result = et_block(x, track="both")
-                if hasattr(result, "tokens"):
-                    x = result.tokens
-                    if result.final_energy is not None:
-                        block_energies.append(result.final_energy.item())
-                    if result.trajectory is not None:
-                        block_trajectories.append(
-                            result.trajectory.cpu().numpy()
-                        )
-                else:
-                    x = result
-        total_energy = sum(block_energies) if block_energies else None
-        energy_info = {
-            "block_energies": block_energies,
-            "block_trajectories": block_trajectories,
-            "total_energy": total_energy,
-        }
+        block_energies = []
+        for block_idx, et_block in enumerate(self.et_blocks):
+            x, energies = et_block(x, return_energies=True)
+            if energies:
+                e_att, e_hop = energies[0]
+                block_energies.append(
+                    {
+                        "block": block_idx,
+                        "attention": e_att.item(),
+                        "hopfield": e_hop.item(),
+                    }
+                )
+
+        if block_energies:
+            energy_info = {
+                "block_energies": block_energies,
+                "total_energy": sum(
+                    b["attention"] + b["hopfield"] for b in block_energies
+                ),
+            }
+
         return x, energy_info
 
     def forward(
@@ -300,7 +297,7 @@ def viset_2l_cifar(
         "_head_dim": 64,
         "hopfield_hidden_dim": 576,
         "et_steps": 6,
-        "et_alpha": 10.0,
+        "et_alpha": 0.125,
         "order": 3,
         "drop_rate": 0.1,
     }
@@ -323,7 +320,7 @@ def viset_4l_cifar(
         "_head_dim": 64,
         "hopfield_hidden_dim": 576,
         "et_steps": 5,
-        "et_alpha": 5.0,
+        "et_alpha": 0.125,
         "order": 3,
         "drop_rate": 0.1,
     }
@@ -346,7 +343,7 @@ def viset_6l_cifar(
         "_head_dim": 64,
         "hopfield_hidden_dim": 576,
         "et_steps": 4,
-        "et_alpha": 2.5,
+        "et_alpha": 0.125,
         "order": 3,
         "drop_rate": 0.1,
     }

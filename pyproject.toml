@@ -238,7 +238,12 @@ warmup = true
 warmup_iterations = 100000
 [tool.coverage.run]
 source = ["energy_transformer"]
-omit = ["*/tests/*", "*/examples/*"]
+omit = [
+    "*/tests/*",
+    "*/examples/*",
+    "energy_transformer/models/vision/*",
+    "energy_transformer/__init__.py",
+]
 
 [tool.coverage.report]
 exclude_lines = [

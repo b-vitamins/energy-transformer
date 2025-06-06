@@ -66,7 +66,6 @@ from energy_transformer.layers.heads import ClassifierHead
 from energy_transformer.layers.hopfield import HopfieldNetwork
 from energy_transformer.layers.layer_norm import EnergyLayerNorm
 from energy_transformer.models.base import EnergyTransformer
-from energy_transformer.utils.optimizers import SGD
 
 
 class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
@@ -121,7 +120,7 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
         _head_dim: int,
         hopfield_hidden_dim: int,
         et_steps: int,
-        et_alpha: float,
+        _et_alpha: float,
         drop_rate: float = 0.0,
         _representation_size: int | None = None,
     ) -> None:
@@ -171,7 +170,7 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
                         hidden_dim=hopfield_hidden_dim,
                     ),
                     steps=et_steps,
-                    optimizer=SGD(alpha=et_alpha),
+                    _optimizer=None,  # Not used anymore
                 )
                 for _ in range(depth)
             ],
@@ -196,57 +195,37 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
         self,
         x: Tensor,
         return_energy_info: bool,
-        et_kwargs: dict[str, Any],
+        _et_kwargs: dict[str, Any],
     ) -> tuple[Tensor, dict[str, Any]]:
-        """Process input through Energy Transformer blocks.
-
-        Parameters
-        ----------
-        x : Tensor
-            Input tensor.
-        return_energy_info : bool
-            Whether to collect energy information.
-        et_kwargs : dict
-            Additional ET block arguments.
-
-        Returns
-        -------
-        tuple[Tensor, dict]
-            Processed tensor and energy information.
-        """
+        """Process input through Energy Transformer blocks."""
         energy_info: dict[str, Any] = {}
+
         if not return_energy_info:
             for et_block in self.et_blocks:
-                x = et_block(x, **et_kwargs)
+                x = et_block(x)
             return x, energy_info
 
-        # Collect energy information
         block_energies = []
-        block_trajectories = []
+        for block_idx, et_block in enumerate(self.et_blocks):
+            x, energies = et_block(x, return_energies=True)
+            if energies:
+                e_att, e_hop = energies[0]
+                block_energies.append(
+                    {
+                        "block": block_idx,
+                        "attention": e_att.item(),
+                        "hopfield": e_hop.item(),
+                    }
+                )
 
-        for et_block in self.et_blocks:
-            track_arg = et_kwargs.get("track", "both")
-            kw = {k: v for k, v in et_kwargs.items() if k != "track"}
-            result = et_block(
-                x,
-                track=track_arg,
-                **kw,
-            )
-            if hasattr(result, "tokens"):
-                x = result.tokens
-                if result.final_energy is not None:
-                    block_energies.append(result.final_energy.item())
-                if result.trajectory is not None:
-                    block_trajectories.append(result.trajectory.cpu().numpy())
-            else:
-                x = result
+        if block_energies:
+            energy_info = {
+                "block_energies": block_energies,
+                "total_energy": sum(
+                    b["attention"] + b["hopfield"] for b in block_energies
+                ),
+            }
 
-        total_energy = sum(block_energies) if block_energies else None
-        energy_info = {
-            "block_energies": block_energies,
-            "block_trajectories": block_trajectories,
-            "total_energy": total_energy,
-        }
         return x, energy_info
 
     def forward(
@@ -453,7 +432,7 @@ def viet_2l_cifar(
         "_head_dim": 64,
         "hopfield_hidden_dim": 576,  # 3x embed_dim
         "et_steps": 6,
-        "et_alpha": 10.0,
+        "et_alpha": 0.125,
         "drop_rate": 0.1,
     }
     config.update(kwargs)
@@ -476,7 +455,7 @@ def viet_4l_cifar(
         "_head_dim": 64,
         "hopfield_hidden_dim": 576,
         "et_steps": 5,
-        "et_alpha": 5.0,
+        "et_alpha": 0.125,
         "drop_rate": 0.1,
     }
     config.update(kwargs)
@@ -499,7 +478,7 @@ def viet_6l_cifar(
         "_head_dim": 64,
         "hopfield_hidden_dim": 576,
         "et_steps": 4,
-        "et_alpha": 2.5,
+        "et_alpha": 0.125,
         "drop_rate": 0.1,
     }
     config.update(kwargs)
