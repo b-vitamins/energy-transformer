@@ -133,3 +133,18 @@ def test_classifier_head_properties() -> None:
     assert head.has_dropout
     assert head.is_pooled
     assert head.total_params == sum(p.numel() for p in head.parameters())
+
+
+def test_pool_layers() -> None:
+    token_pool = energy_transformer.layers.heads._create_pool("token")
+    x = torch.randn(2, 3, 4)
+    assert torch.allclose(token_pool(x), x[:, 0])
+
+    max_pool = energy_transformer.layers.heads._create_pool("max")
+    assert max_pool(torch.randn(2, 3, 4)).shape == (2, 4)
+    with pytest.raises(ValueError, match="Expected 2D or 3D"):
+        max_pool(torch.randn(2, 3, 4, 5))
+
+    avg_pool = energy_transformer.layers.heads._create_pool("avg")
+    y = torch.randn(2, 4)
+    assert torch.allclose(avg_pool(y), y)

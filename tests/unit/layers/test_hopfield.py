@@ -156,3 +156,8 @@ def test_hopfield_properties() -> None:
     expected_params = 4 * 6 + 6 + 1
     assert net.total_params == expected_params
     assert isinstance(net.device, torch.device)
+
+
+def test_hopfield_invalid_activation() -> None:
+    with pytest.raises(ValueError, match="activation must be"):
+        HopfieldNetwork(2, activation="tanh")
