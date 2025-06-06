@@ -51,7 +51,7 @@ References
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import torch
 from torch import Tensor, nn
@@ -187,70 +187,26 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
         nn.init.trunc_normal_(self.cls_token, std=0.02)
         nn.init.trunc_normal_(self.pos_embed.pos_embed, std=0.02)
 
-    def _process_et_blocks(
-        self,
-        x: Tensor,
-        return_energy_info: bool,
-        _et_kwargs: dict[str, Any],
-    ) -> tuple[Tensor, dict[str, Any]]:
-        """Process input through Energy Transformer blocks."""
-        energy_info: dict[str, Any] = {}
-
-        if not return_energy_info:
-            for et_block in self.et_blocks:
-                x = et_block(x)
-            return x, energy_info
-
-        block_energies = []
-        for block_idx, et_block in enumerate(self.et_blocks):
-            x, energies = et_block(x, return_energies=True)
-            if energies:
-                e_att, e_hop = energies[0]
-                block_energies.append(
-                    {
-                        "block": block_idx,
-                        "attention": e_att.item(),
-                        "hopfield": e_hop.item(),
-                    }
-                )
-
-        if block_energies:
-            energy_info = {
-                "block_energies": block_energies,
-                "total_energy": sum(
-                    b["attention"] + b["hopfield"] for b in block_energies
-                ),
-            }
-
-        return x, energy_info
-
     def forward(
         self,
         x: Tensor,
-        return_features: bool = False,
-        return_energy_info: bool = False,
-        et_kwargs: dict[str, Any] | None = None,
-    ) -> Tensor | dict[str, Any]:
+        return_energies: bool = False,
+    ) -> Tensor | tuple[Tensor, tuple[Tensor, Tensor]]:
         """Forward pass through Vision Energy Transformer.
 
         Parameters
         ----------
         x : Tensor
             Input images of shape (B, C, H, W).
-        return_features : bool
-            If True, return features instead of logits.
-        return_energy_info : bool
-            If True, return energy information from ET blocks.
-        et_kwargs : dict | None
-            Additional arguments passed to Energy Transformer blocks.
+        return_energies : bool
+            If True, return averaged energies across blocks.
 
         Returns
         -------
-        Tensor | dict
-            Logits, features, or dictionary with energy information.
+        Tensor | tuple[Tensor, tuple[Tensor, Tensor]]
+            If return_energies is False: logits of shape (B, num_classes)
+            If return_energies is True: (logits, (avg_e_att, avg_e_hop))
         """
-        et_kwargs = et_kwargs or {}
-
         # Validate input size
         if x.shape[-2:] != (self.img_size, self.img_size):
             raise ValueError(
@@ -270,26 +226,27 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
         x = self.pos_drop(x)
 
         # 4. Energy Transformer blocks
-        x, energy_info = self._process_et_blocks(
-            x,
-            return_energy_info,
-            et_kwargs,
-        )
+        all_energies = []
+        for et_block in self.et_blocks:
+            if return_energies:
+                x, energies = et_block(x, return_energies=True)
+                if energies:
+                    all_energies.append(energies[0])
+            else:
+                x = et_block(x)
 
         # 5. Final layer normalization
         x = self.norm(x)  # (B, N+1, D)
 
-        # 6. Extract features or classify
-        if return_features:
-            # Type assertion to help mypy understand x is a Tensor
-            assert isinstance(x, Tensor)
-            features = x[:, 0]  # CLS token features
-            if return_energy_info:
-                return {"features": features, "energy_info": energy_info}
-            return features
-        logits: Tensor = self.head(x)  # (B, num_classes)
-        if return_energy_info:
-            return {"logits": logits, "energy_info": energy_info}
+        # 6. Classification
+        logits = cast(Tensor, self.head(x))  # (B, num_classes)
+
+        # 7. Return based on flag
+        if return_energies and all_energies:
+            avg_e_att = torch.stack([e[0] for e in all_energies]).mean()
+            avg_e_hop = torch.stack([e[1] for e in all_energies]).mean()
+            return logits, (avg_e_att, avg_e_hop)
+
         return logits
 
 
