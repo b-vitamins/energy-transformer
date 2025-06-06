@@ -251,7 +251,7 @@ def viset_2l_cifar(
         "depth": 2,
         "num_heads": 8,
         "_head_dim": 64,
-        "hopfield_hidden_dim": 576,
+        "hopfield_hidden_dim": 192,  # reduced from 576 for fair comparison
         "et_steps": 6,
         "order": 3,
         "drop_rate": 0.1,
@@ -273,7 +273,7 @@ def viset_4l_cifar(
         "depth": 4,
         "num_heads": 8,
         "_head_dim": 64,
-        "hopfield_hidden_dim": 576,
+        "hopfield_hidden_dim": 192,  # reduced from 576 for fair comparison
         "et_steps": 5,
         "order": 3,
         "drop_rate": 0.1,
@@ -295,7 +295,7 @@ def viset_6l_cifar(
         "depth": 6,
         "num_heads": 8,
         "_head_dim": 64,
-        "hopfield_hidden_dim": 576,
+        "hopfield_hidden_dim": 192,  # reduced from 576 for fair comparison
         "et_steps": 4,
         "order": 3,
         "drop_rate": 0.1,
