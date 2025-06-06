@@ -195,7 +195,7 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
         self,
         x: Tensor,
         return_energy_info: bool,
-        _et_kwargs: dict[str, Any],
+        et_kwargs: dict[str, Any],
     ) -> tuple[Tensor, dict[str, Any]]:
         """Process input through Energy Transformer blocks."""
         energy_info: dict[str, Any] = {}

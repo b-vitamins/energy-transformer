@@ -3,6 +3,10 @@
 import torch
 from torch import Tensor, nn
 
+from energy_transformer.layers.attention import MultiheadEnergyAttention
+from energy_transformer.layers.hopfield import HopfieldNetwork
+from energy_transformer.layers.simplicial import SimplicialHopfieldNetwork
+
 
 class EnergyTransformer(nn.Module):
     """Energy Transformer with direct gradient descent."""
@@ -10,10 +14,10 @@ class EnergyTransformer(nn.Module):
     def __init__(
         self,
         layer_norm: nn.Module,
-        attention: nn.Module,
-        hopfield: nn.Module,
+        attention: MultiheadEnergyAttention,
+        hopfield: HopfieldNetwork | SimplicialHopfieldNetwork,
         steps: int = 12,
-        _optimizer: object | None = None,  # Ignored, kept for compatibility
+        optimizer: object | None = None,  # Ignored, kept for compatibility
     ) -> None:
         super().__init__()
         self.layer_norm = layer_norm
@@ -26,11 +30,11 @@ class EnergyTransformer(nn.Module):
 
     def forward(
         self, x: Tensor, return_energies: bool = False
-    ) -> Tensor | tuple[Tensor, list]:
+    ) -> Tensor | tuple[Tensor, list[tuple[Tensor, Tensor]]]:
         """Forward pass with direct gradient descent."""
         residual = x.clone()
 
-        energies: list = []
+        energies: list[tuple[Tensor, Tensor]] = []
 
         for i in range(self.steps):
             g = self.layer_norm(x)

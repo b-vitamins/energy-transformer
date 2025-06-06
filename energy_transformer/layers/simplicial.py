@@ -8,7 +8,7 @@ from torch import Tensor, nn
 
 from .types import Device, Dtype
 
-__all__ = ["SHNReLU", "SHNSoftmax", "SimplicialHopfieldNetwork"]
+__all__ = ["SimplicialHopfieldNetwork"]
 
 
 class SimplicialHopfieldNetwork(nn.Module):
@@ -101,26 +101,3 @@ class SimplicialHopfieldNetwork(nn.Module):
     def forward(self, g: Tensor) -> Tensor:
         """Compute energy - for compatibility."""
         return self.compute_energy(g)
-
-
-class SHNReLU(SimplicialHopfieldNetwork):
-    """Classical Simplicial Hopfield Network with ReLU activation."""
-
-    def __init__(
-        self, embed_dim: int, **kwargs: int | float | Device | Dtype
-    ) -> None:
-        super().__init__(embed_dim=embed_dim, activation="relu", **kwargs)
-
-
-class SHNSoftmax(SimplicialHopfieldNetwork):
-    """Modern Simplicial Hopfield Network with softmax activation."""
-
-    def __init__(
-        self,
-        embed_dim: int,
-        beta: float = 0.01,
-        **kwargs: int | float | Device | Dtype,
-    ) -> None:
-        super().__init__(
-            embed_dim=embed_dim, activation="softmax", beta=beta, **kwargs
-        )

@@ -43,7 +43,7 @@ from .heads import (
 from .hopfield import HopfieldNetwork
 from .layer_norm import EnergyLayerNorm
 from .mlp import MLP
-from .simplicial import SHNReLU, SHNSoftmax, SimplicialHopfieldNetwork
+from .simplicial import SimplicialHopfieldNetwork
 
 __all__ = [
     "MLP",
@@ -58,7 +58,5 @@ __all__ = [
     "PatchifyEmbed",
     "PosEmbed2D",
     "ReLUMLPClassifierHead",
-    "SHNReLU",
-    "SHNSoftmax",
     "SimplicialHopfieldNetwork",
 ]
