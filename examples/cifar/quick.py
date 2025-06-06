@@ -10,15 +10,11 @@ from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
 
 from energy_transformer.models.vision.viet import viet_2l_cifar
-from energy_transformer.models.vision.viset import (
-    viset_2l_e50_t50_cifar,
-    viset_2l_random_cifar,
-)
 from energy_transformer.models.vision.vit import vit_tiny_cifar
 
 
 def quick_test(
-    model_name: str = "viset",
+    model_name: str = "viet",
     epochs: int = 10,
     subset: float = 0.1,
 ) -> None:
@@ -29,8 +25,6 @@ def quick_test(
     models: dict[str, tuple[nn.Module, bool]] = {
         "vit": (vit_tiny_cifar(num_classes=100, depth=2), False),
         "viet": (viet_2l_cifar(num_classes=100), True),
-        "viset": (viset_2l_e50_t50_cifar(num_classes=100), True),
-        "viset-random": (viset_2l_random_cifar(num_classes=100), True),
     }
 
     if model_name not in models:
@@ -136,7 +130,7 @@ def quick_test(
     print(f"\nCompleted in {elapsed:.1f}s ({elapsed / epochs:.1f}s per epoch)")
 
 
-def memory_test(model_name: str = "viset") -> None:
+def memory_test(model_name: str = "viet") -> None:
     """Test memory usage."""
     if not torch.cuda.is_available():
         print("CUDA not available")
@@ -150,7 +144,6 @@ def memory_test(model_name: str = "viset") -> None:
     models: dict[str, tuple[nn.Module, bool]] = {
         "vit": (vit_tiny_cifar(num_classes=100, depth=2), False),
         "viet": (viet_2l_cifar(num_classes=100), True),
-        "viset": (viset_2l_e50_t50_cifar(num_classes=100), True),
     }
 
     model, is_et = models[model_name]
@@ -186,8 +179,8 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--model",
-        default="viset",
-        choices=["vit", "viet", "viset", "viset-random"],
+        default="viet",
+        choices=["vit", "viet"],
     )
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument(
