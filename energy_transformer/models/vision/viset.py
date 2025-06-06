@@ -31,7 +31,6 @@ class VisionSimplicialTransformer(nn.Module):
         _head_dim: int,
         hopfield_hidden_dim: int,
         et_steps: int,
-        _et_alpha: float,
         order: int = 3,
         drop_rate: float = 0.0,
         _representation_size: int | None = None,
@@ -177,7 +176,6 @@ def viset_tiny(**kwargs: Any) -> VisionSimplicialTransformer:
         "_head_dim": 64,
         "hopfield_hidden_dim": 768,
         "et_steps": 4,
-        "et_alpha": 0.125,
         "order": 3,
         "in_chans": 3,
     }
@@ -194,7 +192,6 @@ def viset_small(**kwargs: Any) -> VisionSimplicialTransformer:
         "_head_dim": 64,
         "hopfield_hidden_dim": 1536,
         "et_steps": 4,
-        "et_alpha": 0.125,
         "order": 3,
         "in_chans": 3,
     }
@@ -211,7 +208,6 @@ def viset_base(**kwargs: Any) -> VisionSimplicialTransformer:
         "_head_dim": 64,
         "hopfield_hidden_dim": 3072,
         "et_steps": 4,
-        "et_alpha": 0.125,
         "order": 3,
         "in_chans": 3,
     }
@@ -228,7 +224,6 @@ def viset_large(**kwargs: Any) -> VisionSimplicialTransformer:
         "_head_dim": 64,
         "hopfield_hidden_dim": 4096,
         "et_steps": 4,
-        "et_alpha": 0.125,
         "order": 3,
         "in_chans": 3,
     }
@@ -251,7 +246,6 @@ def viset_tiny_cifar(
         "_head_dim": 64,
         "hopfield_hidden_dim": 768,
         "et_steps": 4,
-        "et_alpha": 0.125,
         "order": 3,
         "drop_rate": 0.1,
     }
@@ -274,7 +268,6 @@ def viset_small_cifar(
         "_head_dim": 64,
         "hopfield_hidden_dim": 1536,
         "et_steps": 4,
-        "et_alpha": 0.125,
         "order": 3,
         "drop_rate": 0.1,
     }
@@ -297,7 +290,6 @@ def viset_2l_cifar(
         "_head_dim": 64,
         "hopfield_hidden_dim": 576,
         "et_steps": 6,
-        "et_alpha": 0.125,
         "order": 3,
         "drop_rate": 0.1,
     }
@@ -320,7 +312,6 @@ def viset_4l_cifar(
         "_head_dim": 64,
         "hopfield_hidden_dim": 576,
         "et_steps": 5,
-        "et_alpha": 0.125,
         "order": 3,
         "drop_rate": 0.1,
     }
@@ -343,7 +334,6 @@ def viset_6l_cifar(
         "_head_dim": 64,
         "hopfield_hidden_dim": 576,
         "et_steps": 4,
-        "et_alpha": 0.125,
         "order": 3,
         "drop_rate": 0.1,
     }
