@@ -125,7 +125,6 @@ NumPy-style docstrings:
 - Examples when helpful
 - Paper references when relevant
 
-Doc files use hyphens: `docs/getting-started.md`
 
 ### Misc
 
