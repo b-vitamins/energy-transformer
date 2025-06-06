@@ -199,21 +199,19 @@ def train(model_name: str) -> Path:  # noqa: C901, PLR0912, PLR0915
             for param_group in optimizer.param_groups:
                 param_group["lr"] = lr
 
-            # Forward pass
+            # Forward pass with energy monitoring (every 10 batches)
             if is_energy_model and batch_idx % 10 == 0:
-                outputs, energies = model(inputs, return_energies=True)
-                if energies:
-                    e_att, e_hop = energies[0]
-                    running_e_att = (
-                        e_att.item()
-                        if batch_idx == 0
-                        else 0.9 * running_e_att + 0.1 * e_att.item()
-                    )
-                    running_e_hop = (
-                        e_hop.item()
-                        if batch_idx == 0
-                        else 0.9 * running_e_hop + 0.1 * e_hop.item()
-                    )
+                outputs, (e_att, e_hop) = model(inputs, return_energies=True)
+                running_e_att = (
+                    e_att.item()
+                    if batch_idx == 0
+                    else 0.9 * running_e_att + 0.1 * e_att.item()
+                )
+                running_e_hop = (
+                    e_hop.item()
+                    if batch_idx == 0
+                    else 0.9 * running_e_hop + 0.1 * e_hop.item()
+                )
             else:
                 outputs = model(inputs)
 

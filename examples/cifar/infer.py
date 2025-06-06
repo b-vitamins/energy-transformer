@@ -174,17 +174,14 @@ def preprocess_image(image_path: str) -> torch.Tensor:
 def predict(
     model: torch.nn.Module,
     image_tensor: torch.Tensor,
-    model_name: str,
+    _model_name: str,
     top_k: int = 5,
 ) -> list[dict[str, float | int | str]]:
     """Make predictions with a model."""
     device = next(model.parameters()).device
     image_tensor = image_tensor.to(device)
     with torch.no_grad():
-        if model_name in ["viet", "viset"]:
-            outputs = model(image_tensor, et_kwargs={"detach": True})
-        else:
-            outputs = model(image_tensor)
+        outputs = model(image_tensor)
         probabilities = F.softmax(outputs, dim=1)
     top_probs, top_indices = torch.topk(probabilities[0], top_k)
     predictions = []
@@ -208,8 +205,14 @@ def analyze_energy_dynamics(
 
     with torch.no_grad():
         if hasattr(model, "et_blocks"):
-            _ = model(image_tensor, return_energy_info=True, et_kwargs={})
-            return []
+            _, (e_att, e_hop) = model(image_tensor, return_energies=True)
+            return [
+                {
+                    "attention": e_att.item(),
+                    "hopfield": e_hop.item(),
+                    "total": e_att.item() + e_hop.item(),
+                }
+            ]
     return []
 
 

@@ -92,52 +92,12 @@ class VisionSimplicialTransformer(nn.Module):
         nn.init.trunc_normal_(self.cls_token, std=0.02)
         nn.init.trunc_normal_(self.pos_embed.pos_embed, std=0.02)
 
-    def _process_et_blocks(
-        self,
-        x: Tensor,
-        return_energy_info: bool,
-        _et_kwargs: dict[str, Any],
-    ) -> tuple[Tensor, dict[str, Any]]:
-        energy_info: dict[str, Any] = {}
-
-        if not return_energy_info:
-            for et_block in self.et_blocks:
-                x = et_block(x)
-            return x, energy_info
-
-        block_energies = []
-        for block_idx, et_block in enumerate(self.et_blocks):
-            x, energies = et_block(x, return_energies=True)
-            if energies:
-                e_att, e_hop = energies[0]
-                block_energies.append(
-                    {
-                        "block": block_idx,
-                        "attention": e_att.item(),
-                        "hopfield": e_hop.item(),
-                    }
-                )
-
-        if block_energies:
-            energy_info = {
-                "block_energies": block_energies,
-                "total_energy": sum(
-                    b["attention"] + b["hopfield"] for b in block_energies
-                ),
-            }
-
-        return x, energy_info
-
     def forward(
         self,
         x: Tensor,
-        return_features: bool = False,
-        return_energy_info: bool = False,
-        et_kwargs: dict[str, Any] | None = None,
-    ) -> Tensor | dict[str, Any]:
+        return_energies: bool = False,
+    ) -> Tensor | tuple[Tensor, tuple[Tensor, Tensor]]:
         """Forward pass of the model."""
-        et_kwargs = et_kwargs or {}
-
         if x.shape[-2:] != (self.img_size, self.img_size):
             raise ValueError(
                 f"Input size {x.shape[-2:]} doesn't match model size ({self.img_size}, {self.img_size})"
@@ -149,21 +109,24 @@ class VisionSimplicialTransformer(nn.Module):
         x = self.pos_embed(x)
         x = self.pos_drop(x)
 
-        x, energy_info = self._process_et_blocks(
-            x, return_energy_info, et_kwargs
-        )
+        all_energies = []
+        for et_block in self.et_blocks:
+            if return_energies:
+                x, energies = et_block(x, return_energies=True)
+                if energies:
+                    all_energies.append(energies[0])
+            else:
+                x = et_block(x)
 
         x = self.norm(x)
 
-        if return_features:
-            assert isinstance(x, Tensor)
-            features = x[:, 0]
-            if return_energy_info:
-                return {"features": features, "energy_info": energy_info}
-            return features
-        logits: Tensor = self.head(x)
-        if return_energy_info:
-            return {"logits": logits, "energy_info": energy_info}
+        logits = cast(Tensor, self.head(x))
+
+        if return_energies and all_energies:
+            avg_e_att = torch.stack([e[0] for e in all_energies]).mean()
+            avg_e_hop = torch.stack([e[1] for e in all_energies]).mean()
+            return logits, (avg_e_att, avg_e_hop)
+
         return logits
 
 
