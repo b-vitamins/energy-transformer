@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import torch
 import torch.nn.functional as F  # noqa: N812
 from torch import Tensor, nn
@@ -22,12 +24,12 @@ class SimplicialHopfieldNetwork(nn.Module):
         order: int = 3,
         activation: str = "relu",
         beta: float = 0.01,
-        bias: bool = True,
         init_std: float = 0.02,
         device: Device = None,
         dtype: Dtype = None,
     ) -> None:
         super().__init__()
+        factory_kwargs: dict[str, Any] = {"device": device, "dtype": dtype}
 
         if order < 2:  # noqa: PLR2004
             raise ValueError(f"order must be >= 2, got {order}")
@@ -38,34 +40,18 @@ class SimplicialHopfieldNetwork(nn.Module):
         self.activation = activation
 
         self.kernel = nn.Parameter(
-            torch.randn(
-                order, embed_dim, self.hidden_dim, device=device, dtype=dtype
-            )
+            torch.randn(order, embed_dim, self.hidden_dim, **factory_kwargs)
             * init_std
         )
 
-        if bias:
-            self.bias = nn.Parameter(
-                torch.zeros(
-                    order, 1, 1, self.hidden_dim, device=device, dtype=dtype
-                )
-            )
-        else:
-            self.register_parameter("bias", None)
-
         if activation == "softmax":
-            self.beta = nn.Parameter(
-                torch.tensor(beta, device=device, dtype=dtype)
-            )
+            self.beta = nn.Parameter(torch.tensor(beta, **factory_kwargs))
         else:
             self.register_buffer("beta", None)
 
     def compute_energy(self, g: Tensor) -> Tensor:
         """Compute energy for monitoring."""
         h = torch.einsum("bnd,vdk->bvnk", g, self.kernel)
-
-        if self.bias is not None:
-            h = h + self.bias
 
         if self.activation == "relu":
             a_v = F.relu(h)
@@ -82,9 +68,6 @@ class SimplicialHopfieldNetwork(nn.Module):
         """Compute gradient directly."""
         h = torch.einsum("bnd,vdk->bvnk", g, self.kernel)
 
-        if self.bias is not None:
-            h = h + self.bias
-
         if self.activation == "relu":
             a_v = F.relu(h)
             sum_a = a_v.sum(dim=1, keepdim=True)
@@ -96,7 +79,7 @@ class SimplicialHopfieldNetwork(nn.Module):
             a_v = F.softmax(h, dim=-1)
             grad = -torch.einsum("vdk,bvnk->bnd", self.kernel, a_v) / self.order
 
-        return grad
+        return grad / (g.size(0) * g.size(1))
 
     def forward(self, g: Tensor) -> Tensor:
         """Compute energy - for compatibility."""
