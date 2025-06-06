@@ -1,210 +1,401 @@
-# Energy Transformer Tests
+# Testing
 
-## Test Organization
+## Required
 
-The test suite is organized by test type to promote clarity, maintainability, and efficient execution:
+For **any code**: unit + integration + property tests  
+For **bug fixes**: also regression test
+
+```bash
+# Development
+pytest tests/unit/path/to/test_file.py -xvs
+
+# Pre-commit
+pytest tests/ -k "module_name" -x
+
+# Full
+pytest tests/
+```
+
+## Structure
 
 ```
 tests/
-├── unit/           # Fast, isolated unit tests
-├── integration/    # Tests verifying component interactions
-├── functional/     # End-to-end functional tests
-├── performance/    # Performance and benchmark tests
-├── security/       # Security and safety tests
-├── regression/     # Tests for specific bug fixes
-└── fixtures/       # Shared test data and utilities
+├── conftest.py          # Shared fixtures
+├── unit/                # Isolated, fast
+├── integration/         # Component interaction
+├── functional/          # End-to-end workflows
+├── performance/         # Benchmarks
+├── regression/          # Bug-specific
+└── fixtures/            # Test data
 ```
 
-## Running Tests
+## Naming
 
-### Quick Test Runs
+### Files
 
-```bash
-# Run only fast unit tests (for development)
-pytest -m "unit and not slow"
-
-# Run unit tests for a specific module
-pytest tests/unit/layers/
-
-# Run with parallel execution
-pytest -n auto
+Source → Test mapping:
+```
+energy_transformer/layers/attention.py → tests/unit/layers/test_attention.py
+energy_transformer/models/vision/viet.py → tests/unit/models/vision/test_viet.py
 ```
 
-### Comprehensive Test Runs
+### Functions
 
-```bash
-# Run all tests
-pytest
-
-# Run all tests with coverage
-pytest --cov=energy_transformer --cov-report=html
-
-# Run specific test categories
-pytest tests/integration/
-pytest tests/security/
-pytest tests/performance/
+```python
+# Pattern: test_{function}_{scenario}_{outcome}
+def test_forward_with_mask_returns_correct_shape():
+def test_energy_minimization_converges():
+def test_invalid_dimensions_raises_value_error():
 ```
 
-### Test Markers
+### Classes
 
-Tests are marked with various attributes for selective execution:
-
-```bash
-# Run only slow tests
-pytest -m slow
-
-# Run tests that don't require GPU
-pytest -m "not gpu"
-
-# Run smoke tests for quick validation
-pytest -m smoke
-
-# Run security tests
-pytest -m security
-
-# Combine markers
-pytest -m "unit and not slow and not gpu"
+```python
+class TestMultiheadEnergyAttention:  # Test{ClassName}
+    def test_forward_returns_scalar_energy(self):
+    def test_gradient_matches_autograd(self):
 ```
 
-## Test Categories
+## Markers
 
-### Unit Tests (`tests/unit/`)
-- **Purpose**: Test individual components in isolation
-- **Characteristics**: Fast (<100ms), no external dependencies, heavily mocked
-- **Examples**: Individual layer tests, spec validation tests
+```python
+# Speed (auto-applied by runtime)
+@pytest.mark.fast      # <100ms
+@pytest.mark.slow      # >1s
 
-### Integration Tests (`tests/integration/`)
-- **Purpose**: Verify interactions between components
-- **Characteristics**: Test realistic workflows, may be slower than unit tests
-- **Examples**: Model building, spec-to-model conversion, graph execution
+# Resources
+@pytest.mark.gpu       # Requires CUDA
+@pytest.mark.memory    # >1GB RAM
 
-### Functional Tests (`tests/functional/`)
-- **Purpose**: End-to-end testing of complete features
-- **Characteristics**: Test public APIs, user-facing functionality
-- **Examples**: Complete vision model workflows, import behavior
+# Priority
+@pytest.mark.smoke     # Critical path
+@pytest.mark.core      # Core functionality
+```
 
-### Performance Tests (`tests/performance/`)
-- **Purpose**: Benchmark and monitor performance
-- **Characteristics**: Measure speed, memory usage, scalability
-- **Examples**: Cache performance, model inference speed
+## Unit
 
-### Security Tests (`tests/security/`)
-- **Purpose**: Verify security measures and input validation
-- **Characteristics**: Test against malicious inputs, code injection
-- **Examples**: eval() prevention, type safety validation
+**Requirements**: Fast (<100ms), isolated, deterministic, focused
 
-### Regression Tests (`tests/regression/`)
-- **Purpose**: Prevent reintroduction of fixed bugs
-- **Characteristics**: Target specific issues that were previously fixed
-- **Examples**: Deep recursion handling, validation order fixes
+```python
+# tests/unit/layers/test_attention.py
+import pytest
+import torch
+from energy_transformer.layers.attention import MultiheadEnergyAttention
 
-## Writing New Tests
+class TestMultiheadEnergyAttention:
+    
+    @pytest.fixture
+    def attention(self):
+        return MultiheadEnergyAttention(embed_dim=128, num_heads=8)
+    
+    @pytest.fixture
+    def sample_input(self):
+        return torch.randn(2, 10, 128)  # (B, N, D)
+    
+    def test_forward_returns_scalar_energy(self, attention, sample_input):
+        energy = attention(sample_input)
+        assert energy.ndim == 0
+        assert energy.dtype == torch.float32
+        assert torch.isfinite(energy)
+    
+    @pytest.mark.parametrize("batch_size,seq_len", [
+        (1, 1),    # Edge case
+        (4, 128),  # Typical
+        (32, 512), # Large
+    ])
+    def test_various_sizes(self, attention, batch_size, seq_len):
+        x = torch.randn(batch_size, seq_len, 128)
+        energy = attention(x)
+        assert torch.isfinite(energy)
+    
+    def test_gradient_computation(self, attention, sample_input):
+        # Explicit
+        grad_explicit = attention.compute_grad(sample_input)
+        
+        # Autograd
+        sample_input.requires_grad_(True)
+        energy = attention(sample_input)
+        grad_auto = torch.autograd.grad(energy, sample_input)[0]
+        
+        torch.testing.assert_close(grad_explicit, grad_auto, rtol=1e-5, atol=1e-6)
+    
+    def test_invalid_input_dimension(self, attention):
+        wrong_input = torch.randn(10, 128)  # Missing batch
+        
+        with pytest.raises(ValueError) as exc_info:
+            attention(wrong_input)
+            
+        assert "Expected 3D input" in str(exc_info.value)
+        assert "got 2D" in str(exc_info.value)
+```
 
-### 1. Determine Test Category
-- Is it testing a single component? → `unit/`
-- Is it testing component interactions? → `integration/`
-- Is it testing user-facing features? → `functional/`
-- Is it measuring performance? → `performance/`
-- Is it testing security? → `security/`
-- Is it preventing a bug regression? → `regression/`
+**DO**: fixtures, edge cases, error messages, `torch.testing.assert_close`, CPU+GPU  
+**DON'T**: test PyTorch internals, use files/network, depend on order, use delays
 
-### 2. Follow Naming Conventions
-- Test files: `test_{feature}_{aspect}.py`
-- Test classes: `Test{Feature}{Aspect}`
-- Test methods: `test_{behavior}_{expected_outcome}`
+## Integration
 
-### 3. Use Appropriate Markers
+**Requirements**: Test component interaction, realistic configs
+
+```python
+# tests/integration/test_energy_transformer_block.py
+class TestEnergyTransformerIntegration:
+    
+    @pytest.fixture
+    def et_block(self):
+        return EnergyTransformer(
+            layer_norm=EnergyLayerNorm(256),
+            attention=MultiheadEnergyAttention(256, num_heads=8),
+            hopfield=HopfieldNetwork(256, hidden_dim=1024),
+            steps=5,
+            alpha=0.1
+        )
+    
+    def test_energy_decreases(self, et_block):
+        from energy_transformer.testing import assert_energy_decreases
+        x = torch.randn(4, 50, 256)
+        assert_energy_decreases(et_block, x, tolerance=1e-6)
+    
+    @pytest.mark.slow
+    def test_convergence_improves_with_steps(self):
+        x = torch.randn(2, 50, 256)
+        energies = []
+        
+        for steps in [1, 5, 10, 20]:
+            et = EnergyTransformer(..., steps=steps)
+            # Track final energy
+            energies.append(final_energy)
+        
+        # Monotonic improvement
+        assert all(e1 >= e2 for e1, e2 in zip(energies[:-1], energies[1:]))
+```
+
+**DO**: test data flow, config compatibility, use real components  
+**DON'T**: test all combinations, duplicate unit tests, mock components
+
+## Property
+
+**Requirements**: Mathematical invariants, behavioral properties
+
+```python
+# tests/unit/layers/test_layer_norm_properties.py
+from hypothesis import given, strategies as st
+
+class TestEnergyLayerNormProperties:
+    
+    @given(
+        batch_size=st.integers(1, 32),
+        seq_len=st.integers(1, 128),
+        embed_dim=st.integers(16, 512)
+    )
+    def test_gradient_is_lagrangian_derivative(self, batch_size, seq_len, embed_dim):
+        layer = EnergyLayerNorm(embed_dim)
+        x = torch.randn(batch_size, seq_len, embed_dim, requires_grad=True)
+        
+        g = layer(x)
+        L = layer.compute_energy(x)
+        grad_L = torch.autograd.grad(L.sum(), x, create_graph=True)[0]
+        
+        torch.testing.assert_close(g, grad_L, rtol=1e-5, atol=1e-6)
+```
+
+**DO**: test invariants, use hypothesis, verify conservation laws  
+**DON'T**: exact float equality, implementation-specific properties
+
+## Regression
+
+**Requirements**: Document bug, test exact trigger, reference issue
+
+```python
+# tests/regression/test_issue_42_attention_mask.py
+"""Issue #42: Attention mask dimension bug.
+
+Bug: (B, 1, N, N) mask shape failed with unclear error.
+Fixed: commit abc123
+"""
+
+def test_attention_mask_broadcasting():
+    attn = MultiheadEnergyAttention(embed_dim=128, num_heads=8)
+    x = torch.randn(2, 10, 128)
+    
+    # Both shapes work
+    mask_3d = torch.ones(2, 10, 10, dtype=torch.bool)
+    mask_4d = torch.ones(2, 1, 10, 10, dtype=torch.bool)
+    
+    energy_3d = attn(x, attn_mask=mask_3d)
+    energy_4d = attn(x, attn_mask=mask_4d)
+    
+    torch.testing.assert_close(energy_3d, energy_4d)
+```
+
+**DO**: reference issue, document bug, test trigger + edge cases  
+**DON'T**: delete tests, over-specify implementation
+
+## Performance
+
+```python
+# tests/performance/test_attention_speed.py
+@pytest.mark.benchmark
+def test_attention_throughput(benchmark):
+    attn = MultiheadEnergyAttention(512, 8)
+    x = torch.randn(32, 128, 512)
+    
+    # Warmup
+    for _ in range(10):
+        _ = attn(x)
+        
+    result = benchmark(lambda: attn(x))
+    assert result.median < 0.01  # 10ms budget
+```
+
+## Fixtures
+
+### Global (conftest.py)
+
 ```python
 import pytest
+import torch
 
-# Mark individual tests
-@pytest.mark.slow
-@pytest.mark.gpu
-def test_complex_model_training():
-    pass
+@pytest.fixture(autouse=True)
+def set_random_seed():
+    torch.manual_seed(42)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(42)
+        torch.backends.cudnn.deterministic = True
 
-# Mark entire modules
-pytestmark = [pytest.mark.unit, pytest.mark.fast]
+@pytest.fixture(scope="session")
+def device():
+    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+@pytest.fixture
+def simple_batch():
+    return {
+        'images': torch.randn(4, 3, 32, 32),
+        'labels': torch.randint(0, 10, (4,))
+    }
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "gpu: requires CUDA")
+    config.addinivalue_line("markers", "slow: takes >1s")
 ```
 
-### 4. Use Shared Fixtures
+## Patterns
+
+### Error Testing
+
 ```python
-# Use fixtures from conftest.py
-def test_model_forward(simple_image_batch):
-    model = create_model()
-    output = model(simple_image_batch)
-    assert output.shape == (4, 1000)
+def test_dimension_mismatch_helpful_error():
+    layer = SomeLayer(expected_dim=256)
+    wrong_input = torch.randn(10, 128)
+    
+    with pytest.raises(ValueError) as exc_info:
+        layer(wrong_input)
+    
+    error = str(exc_info.value)
+    assert all(x in error for x in ["Expected", "256", "got 128", "Possible fix:"])
 ```
 
-## Coverage Requirements
+### Device Compatibility
 
-- Overall coverage must be ≥ 90%
-- New code must have ≥ 90% coverage
-- Branch coverage is required
+```python
+@pytest.mark.parametrize("device", [
+    "cpu",
+    pytest.param("cuda", marks=pytest.mark.gpu)
+])
+def test_device_compatibility(device):
+    if device == "cuda" and not torch.cuda.is_available():
+        pytest.skip("CUDA not available")
+        
+    model = MyModel().to(device)
+    x = torch.randn(2, 10, 128).to(device)
+    output = model(x)
+    assert output.device.type == device
+```
 
-Check coverage reports:
+### Numerical Stability
+
+```python
+def test_numerical_stability():
+    layer = EnergyLayer()
+    
+    # Extreme values
+    for value in [1e-8, 1e8]:
+        x = torch.full((2, 10, 128), value)
+        out = layer(x)
+        assert torch.isfinite(out).all()
+```
+
+## Utilities
+
+```python
+from energy_transformer.testing import (
+    assert_energy_decreases,
+    assert_dimension_preserved,
+    create_mock_spec
+)
+
+def test_energy_optimization():
+    model = EnergyTransformer(...)
+    x = torch.randn(4, 100, 256)
+    
+    assert_energy_decreases(
+        model, x, 
+        steps=20,
+        tolerance=1e-6,
+        strict=True  # Monotonic
+    )
+```
+
+## CI
+
+```yaml
+# Fast (<2min)
+push:
+  pytest -m "not slow and not gpu" -n auto
+
+# Full (<10min)
+pull_request:
+  pytest -m "not gpu" --cov=energy_transformer
+
+# Nightly
+schedule:
+  pytest -m gpu
+```
+
+## Coverage
+
+- Minimum: 90%
+- New code: 90%
+- Critical paths: 100%
+
 ```bash
-# Generate HTML report
 pytest --cov=energy_transformer --cov-report=html
-open htmlcov/index.html
-
-# See uncovered lines in terminal
-pytest --cov=energy_transformer --cov-report=term-missing
 ```
 
-## CI/CD Integration
-
-Tests run automatically on:
-- Every push to master/main/develop
-- Every pull request
-- Different test suites run based on context
-
-GitHub Actions workflow runs:
-1. Linting and formatting checks
-2. Type checking with mypy
-3. Unit tests (fast)
-4. Integration and functional tests
-5. Coverage reporting to Codecov
-
-## Best Practices
-
-1. **Keep Tests Fast**: Use mocks and fixtures to avoid slow operations
-2. **Test One Thing**: Each test should verify a single behavior
-3. **Use Descriptive Names**: Test names should explain what they test
-4. **Avoid Test Dependencies**: Tests should be independent and runnable in any order
-5. **Use Fixtures**: Share common setup code through pytest fixtures
-6. **Mock External Dependencies**: Don't rely on external services or files
-7. **Test Edge Cases**: Include tests for error conditions and boundary values
-8. **Document Complex Tests**: Add docstrings explaining non-obvious test logic
-9. **Run Mutation Testing**: Ensure tests actually catch bugs:
-   ```bash
-   # Test your changes
-   python scripts/run_mutation_tests.py --files path/to/your/file.py
-
-   # View surviving mutants
-   mutmut show 1
-   ```
-
-## Debugging Tests
+## Debug
 
 ```bash
-# Run with verbose output
-pytest -vv tests/unit/layers/test_attention.py
+# Verbose
+pytest test_file.py::test_function -xvs
 
-# Run with print statements visible
-pytest -s tests/integration/
+# Debugger on failure
+pytest --pdb test_file.py
 
-# Run with debugger on failure
-pytest --pdb tests/regression/
+# Show locals
+pytest -l test_file.py
 
-# Run specific test method
-pytest tests/unit/layers/test_attention.py::TestAttention::test_energy_matches_manual
+# Last failed
+pytest --lf
 ```
 
-## Adding Test Dependencies
+## Checklist
 
-Test dependencies go in `pyproject.toml`:
-- `[tool.poetry.group.dev.dependencies]` for test frameworks
-- `[tool.poetry.group.examples.dependencies]` for example-specific deps
+- [ ] Unit tests for all public methods
+- [ ] Integration test if interacts
+- [ ] Property tests for invariants
+- [ ] Regression test if bug fix
+- [ ] Docstrings on test functions
+- [ ] Coverage ≥90%
+- [ ] No flaky tests
+- [ ] Performance tests for critical paths
 
-Remember to run `poetry install --with dev` after adding dependencies.
+Good tests: fast, reliable, informative, maintainable.
