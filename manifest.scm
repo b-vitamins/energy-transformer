@@ -30,4 +30,6 @@
    "python-pylsp-ruff"
    "python-pillow"
    "python-tensorboard"
-   "python-wandb"))
+   "python-wandb"
+   "python-sphinx"
+   "python-sphinx-autodoc-typehints"))
