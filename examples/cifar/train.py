@@ -199,8 +199,8 @@ def train(model_name: str) -> Path:  # noqa: C901, PLR0912, PLR0915
             for param_group in optimizer.param_groups:
                 param_group["lr"] = lr
 
-            # Forward pass with energy monitoring (every 10 batches)
-            if is_energy_model and batch_idx % 10 == 0:
+            # Forward pass with energy monitoring every batch
+            if is_energy_model:
                 outputs, (e_att, e_hop) = model(inputs, return_energies=True)
                 running_e_att = (
                     e_att.item()
@@ -247,22 +247,21 @@ def train(model_name: str) -> Path:  # noqa: C901, PLR0912, PLR0915
                 total += targets_b.size(0)
                 correct += predicted.eq(targets_b).sum().item()
 
-            if batch_idx % 10 == 0:
-                elapsed = time.time() - epoch_start
-                acc = 100.0 * correct / total
-                if is_energy_model:
-                    sys.stdout.write(
-                        f"\rEpoch {epoch + 1:3d}/{EPOCHS} | Batch {batch_idx + 1:3d}/{steps_per_epoch} | "
-                        f"CE: {running_loss:.4f} | Acc: {acc:5.1f}% | E(A): {running_e_att:7.1f} | "
-                        f"E(H): {running_e_hop:7.1f} | |∇|: {running_grad_norm:5.1f} | LR: {lr:.0e} | t: {elapsed:3.0f}s"
-                    )
-                else:
-                    sys.stdout.write(
-                        f"\rEpoch {epoch + 1:3d}/{EPOCHS} | Batch {batch_idx + 1:3d}/{steps_per_epoch} | "
-                        f"CE: {running_loss:.4f} | Acc: {acc:5.1f}% | "
-                        f"|∇|: {running_grad_norm:5.1f} | LR: {lr:.0e} | t: {elapsed:3.0f}s"
-                    )
-                sys.stdout.flush()
+            elapsed = time.time() - epoch_start
+            acc = 100.0 * correct / total
+            if is_energy_model:
+                sys.stdout.write(
+                    f"\rEpoch {epoch + 1:3d}/{EPOCHS} | Batch {batch_idx + 1:3d}/{steps_per_epoch} | "
+                    f"CE: {running_loss:.4f} | Acc: {acc:5.1f}% | E(A): {running_e_att:7.1f} | "
+                    f"E(H): {running_e_hop:7.1f} | |∇|: {running_grad_norm:5.1f} | LR: {lr:.0e} | t: {elapsed:3.0f}s"
+                )
+            else:
+                sys.stdout.write(
+                    f"\rEpoch {epoch + 1:3d}/{EPOCHS} | Batch {batch_idx + 1:3d}/{steps_per_epoch} | "
+                    f"CE: {running_loss:.4f} | Acc: {acc:5.1f}% | "
+                    f"|∇|: {running_grad_norm:5.1f} | LR: {lr:.0e} | t: {elapsed:3.0f}s"
+                )
+            sys.stdout.flush()
 
         train_acc = 100.0 * correct / total
 
@@ -273,10 +272,7 @@ def train(model_name: str) -> Path:  # noqa: C901, PLR0912, PLR0915
         with torch.no_grad():
             for inputs, targets in test_loader:
                 inputs, targets = inputs.to(device), targets.to(device)  # noqa: PLW2901
-                if is_energy_model:
-                    outputs = model(inputs, et_kwargs={"detach": True})
-                else:
-                    outputs = model(inputs)
+                outputs = model(inputs)
                 loss = criterion(outputs, targets)
                 test_loss += loss.item()
                 _, predicted = outputs.max(1)
