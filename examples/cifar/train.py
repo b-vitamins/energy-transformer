@@ -167,6 +167,12 @@ def train(model_name: str) -> Path:  # noqa: C901, PLR0912, PLR0915
     steps_per_epoch = len(train_loader)
 
     print("-" * 120)
+    if model_name == "vit":
+        print("Monitoring: CE Loss, Accuracy, Gradient Norm")
+    else:
+        print(
+            "Monitoring: CE Loss, Accuracy, E(A)=Attention Energy, E(H)=Hopfield Energy, |∇|=Gradient Norm"
+        )
     best_acc = 0.0
     for epoch in range(EPOCHS):
         model.train()
@@ -246,11 +252,18 @@ def train(model_name: str) -> Path:  # noqa: C901, PLR0912, PLR0915
             if batch_idx % 10 == 0:
                 elapsed = time.time() - epoch_start
                 acc = 100.0 * correct / total
-                sys.stdout.write(
-                    f"\rEpoch {epoch + 1:3d}/{EPOCHS} | Batch {batch_idx + 1:3d}/{steps_per_epoch} | "
-                    f"CE: {running_loss:.4f} | Acc: {acc:5.1f}% | E(A): {running_e_att:7.1f} | "
-                    f"E(H): {running_e_hop:7.1f} | |∇|: {running_grad_norm:5.1f} | LR: {lr:.0e} | t: {elapsed:3.0f}s"
-                )
+                if is_energy_model:
+                    sys.stdout.write(
+                        f"\rEpoch {epoch + 1:3d}/{EPOCHS} | Batch {batch_idx + 1:3d}/{steps_per_epoch} | "
+                        f"CE: {running_loss:.4f} | Acc: {acc:5.1f}% | E(A): {running_e_att:7.1f} | "
+                        f"E(H): {running_e_hop:7.1f} | |∇|: {running_grad_norm:5.1f} | LR: {lr:.0e} | t: {elapsed:3.0f}s"
+                    )
+                else:
+                    sys.stdout.write(
+                        f"\rEpoch {epoch + 1:3d}/{EPOCHS} | Batch {batch_idx + 1:3d}/{steps_per_epoch} | "
+                        f"CE: {running_loss:.4f} | Acc: {acc:5.1f}% | "
+                        f"|∇|: {running_grad_norm:5.1f} | LR: {lr:.0e} | t: {elapsed:3.0f}s"
+                    )
                 sys.stdout.flush()
 
         train_acc = 100.0 * correct / total

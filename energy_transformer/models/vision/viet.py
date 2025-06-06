@@ -40,7 +40,6 @@ Parameters
 ----------
 The key hyperparameters for ViET are:
 - `et_steps`: Number of energy minimization steps (default: 4-6)
-- `et_alpha`: Step size for gradient descent (default: 0.125-10.0)
 - `hopfield_hidden_dim`: Hidden dimension for Hopfield networks
 
 References
@@ -100,8 +99,6 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
         Hidden dimension for Hopfield networks.
     et_steps : int
         Number of energy optimization steps per block.
-    et_alpha : float
-        Step size for energy optimization.
     drop_rate : float
         Dropout rate.
     representation_size : int | None
@@ -120,7 +117,6 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
         _head_dim: int,
         hopfield_hidden_dim: int,
         et_steps: int,
-        _et_alpha: float,
         drop_rate: float = 0.0,
         _representation_size: int | None = None,
     ) -> None:
@@ -309,7 +305,6 @@ def viet_tiny(**kwargs: Any) -> VisionEnergyTransformer:
         "_head_dim": 64,
         "hopfield_hidden_dim": 768,  # 4x embed_dim
         "et_steps": 4,
-        "et_alpha": 0.125,
         "in_chans": 3,
     }
     config.update(kwargs)
@@ -325,7 +320,6 @@ def viet_small(**kwargs: Any) -> VisionEnergyTransformer:
         "_head_dim": 64,
         "hopfield_hidden_dim": 1536,  # 4x embed_dim
         "et_steps": 4,
-        "et_alpha": 0.125,
         "in_chans": 3,
     }
     config.update(kwargs)
@@ -341,7 +335,6 @@ def viet_base(**kwargs: Any) -> VisionEnergyTransformer:
         "_head_dim": 64,
         "hopfield_hidden_dim": 3072,  # 4x embed_dim
         "et_steps": 4,
-        "et_alpha": 0.125,
         "in_chans": 3,
     }
     config.update(kwargs)
@@ -357,7 +350,6 @@ def viet_large(**kwargs: Any) -> VisionEnergyTransformer:
         "_head_dim": 64,
         "hopfield_hidden_dim": 4096,  # 4x embed_dim
         "et_steps": 4,
-        "et_alpha": 0.125,
         "in_chans": 3,
     }
     config.update(kwargs)
@@ -383,7 +375,6 @@ def viet_tiny_cifar(
         "_head_dim": 64,
         "hopfield_hidden_dim": 768,
         "et_steps": 4,
-        "et_alpha": 0.125,
         "drop_rate": 0.1,
     }
     config.update(kwargs)
@@ -406,7 +397,6 @@ def viet_small_cifar(
         "_head_dim": 64,
         "hopfield_hidden_dim": 1536,
         "et_steps": 4,
-        "et_alpha": 0.125,
         "drop_rate": 0.1,
     }
     config.update(kwargs)
@@ -432,7 +422,6 @@ def viet_2l_cifar(
         "_head_dim": 64,
         "hopfield_hidden_dim": 576,  # 3x embed_dim
         "et_steps": 6,
-        "et_alpha": 0.125,
         "drop_rate": 0.1,
     }
     config.update(kwargs)
@@ -455,7 +444,6 @@ def viet_4l_cifar(
         "_head_dim": 64,
         "hopfield_hidden_dim": 576,
         "et_steps": 5,
-        "et_alpha": 0.125,
         "drop_rate": 0.1,
     }
     config.update(kwargs)
@@ -478,7 +466,6 @@ def viet_6l_cifar(
         "_head_dim": 64,
         "hopfield_hidden_dim": 576,
         "et_steps": 4,
-        "et_alpha": 0.125,
         "drop_rate": 0.1,
     }
     config.update(kwargs)
