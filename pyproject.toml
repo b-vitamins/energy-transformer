@@ -125,7 +125,6 @@ convention = "numpy"
 "tests/*.py" = ["D", "ANN", "S101", "PLR2004", "PLR0915", "RUF009"]
 "examples/*.py" = ["D", "ANN", "T201"]
 "benchmarks/*.py" = ["D", "ANN"]
-"energy_transformer/spec/*.py" = ["RUF009"]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 10

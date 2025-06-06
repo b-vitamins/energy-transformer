@@ -4,9 +4,7 @@
 [![codecov](https://codecov.io/gh/b-vitamins/energy-transformer/graph/badge.svg?token=6DSB7U0GJF)](https://codecov.io/gh/b-vitamins/energy-transformer)
 
 PyTorch implementation of the **Energy Transformer (ET)** and the
-**Simplicial Energy Transformer (SET)**. The project also provides a
-specification system for declaratively building models and a plugin-based
-realiser that converts specifications into PyTorch modules.
+**Simplicial Energy Transformer (SET)**.
 
 ## Key Features
 
@@ -14,8 +12,6 @@ realiser that converts specifications into PyTorch modules.
   formulated as energy minimisation problems.
 - **Simplicial Hopfield Networks** – topology-aware memory that
   preserves higher-order structure.
-- **Specification System** – declaratively define models using composable
-  specs and realise them into modules.
 
 ## Installation
 
@@ -56,44 +52,6 @@ logits = model(images, et_kwargs={"detach": False})
 print(logits.shape)
 ```
 
-## Building with Specifications
-
-The spec system allows declarative model construction:
-
-```python
-from energy_transformer import seq, realise
-from energy_transformer.spec.library import (
-    PatchEmbedSpec, CLSTokenSpec, PosEmbedSpec,
-    ETBlockSpec, LayerNormSpec, ClassificationHeadSpec,
-)
-
-spec = seq(
-    PatchEmbedSpec(img_size=32, patch_size=4, embed_dim=64),
-    CLSTokenSpec(),
-    PosEmbedSpec(include_cls=True),
-    ETBlockSpec(),
-    LayerNormSpec(),
-    ClassificationHeadSpec(num_classes=10),
-)
-model = realise(spec)
-```
-
-The resulting module can be used like any other PyTorch model.
-
-### Metrics and Debugging
-
-```python
-from energy_transformer.spec import configure_realisation, get_realisation_metrics
-from energy_transformer.spec.debug import DebugTracer
-
-tracer = DebugTracer()
-configure_realisation(enable_metrics=True, debug_tracer=tracer)
-
-# Realise a spec as above
-model = realise(spec)
-print(get_realisation_metrics())
-tracer.print_summary()
-```
 
 ## Examples
 

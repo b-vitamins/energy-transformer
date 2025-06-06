@@ -6,10 +6,9 @@ standard transformer components with energy-based alternatives.
 
 Quick Start
 -----------
->>> from energy_transformer import realise, seq
->>> from energy_transformer.spec.library import ETBlockSpec
+>>> from energy_transformer.models import viet_base
 >>>
->>> model = realise(seq(ETBlockSpec(), ETBlockSpec()))
+>>> model = viet_base(img_size=64, patch_size=16, num_classes=10)
 
 For visualization and optional features:
 >>> from energy_transformer.utils import visualize  # Loads matplotlib
@@ -44,41 +43,13 @@ __license__ = "Apache-2.0"
 
 # Lazy import system using PEP 562
 _LAZY_IMPORTS = {
-    # Core - always available
-    "realise": "energy_transformer.spec",
-    "register": "energy_transformer.spec",
-    "seq": "energy_transformer.spec",
-    "loop": "energy_transformer.spec",
-    "parallel": "energy_transformer.spec",
-    "cond": "energy_transformer.spec",
-    "Spec": "energy_transformer.spec",
-    "Context": "energy_transformer.spec",
-    "ValidationError": "energy_transformer.spec",
-    "RealisationError": "energy_transformer.spec",
-    # Heavy imports - loaded on demand
     "EnergyTransformer": "energy_transformer.models",
-    "visualize": "energy_transformer.spec",
-    "configure_realisation": "energy_transformer.spec",
     "testing": "energy_transformer.testing",
 }
 
 # For static type checking, import everything
 if TYPE_CHECKING:  # pragma: no cover
-    from .models import EnergyTransformer  # noqa: F401
-    from .spec import (
-        Context,
-        RealisationError,
-        Spec,
-        ValidationError,
-        cond,  # noqa: F401
-        configure_realisation,  # noqa: F401
-        loop,
-        parallel,
-        realise,
-        register,  # noqa: F401
-        seq,
-        visualize,  # noqa: F401
-    )
+    from .models import EnergyTransformer
 
 
 def __getattr__(name: str) -> object:
@@ -123,15 +94,6 @@ def __dir__() -> list[str]:
 
 
 # Only include commonly used exports in __all__
-__all__ = [
-    "Context",
-    "RealisationError",
-    "Spec",
-    "ValidationError",
-    "loop",
-    "parallel",
-    "realise",
-    "seq",
-]
+__all__ = ["EnergyTransformer", "testing"]
 
 # NO SIDE EFFECTS ON IMPORT!  Configuration should be explicit.
