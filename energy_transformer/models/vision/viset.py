@@ -76,7 +76,7 @@ class VisionSimplicialTransformer(nn.Module):
                         beta=hopfield_beta,
                     ),
                     steps=et_steps,
-                    optimizer=None,  # Not used anymore
+                    _optimizer=None,  # Not used anymore
                 )
                 for _ in range(depth)
             ]
@@ -97,7 +97,7 @@ class VisionSimplicialTransformer(nn.Module):
         self,
         x: Tensor,
         return_energy_info: bool,
-        et_kwargs: dict[str, Any],
+        _et_kwargs: dict[str, Any],
     ) -> tuple[Tensor, dict[str, Any]]:
         energy_info: dict[str, Any] = {}
 

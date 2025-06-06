@@ -170,7 +170,7 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
                         hidden_dim=hopfield_hidden_dim,
                     ),
                     steps=et_steps,
-                    optimizer=None,  # Not used anymore
+                    _optimizer=None,  # Not used anymore
                 )
                 for _ in range(depth)
             ],
@@ -195,7 +195,7 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
         self,
         x: Tensor,
         return_energy_info: bool,
-        et_kwargs: dict[str, Any],
+        _et_kwargs: dict[str, Any],
     ) -> tuple[Tensor, dict[str, Any]]:
         """Process input through Energy Transformer blocks."""
         energy_info: dict[str, Any] = {}

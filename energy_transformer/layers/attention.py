@@ -54,7 +54,7 @@ class MultiheadEnergyAttention(nn.Module):
         if beta is None:
             beta = 1.0 / math.sqrt(self.head_dim)
 
-        if isinstance(beta, (int, float)):
+        if isinstance(beta, int | float):
             beta_tensor = torch.full(
                 (num_heads,), float(beta), device=device, dtype=dtype
             )

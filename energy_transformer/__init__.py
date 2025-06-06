@@ -27,7 +27,8 @@ def __getattr__(name: str) -> object:
 
 def __dir__() -> list[str]:
     """List available attributes for tab completion."""
-    return list(_LAZY_IMPORTS.keys()) + [
+    return [
+        *_LAZY_IMPORTS.keys(),
         "__version__",
         "__author__",
         "__license__",

@@ -17,7 +17,7 @@ class EnergyTransformer(nn.Module):
         attention: MultiheadEnergyAttention,
         hopfield: HopfieldNetwork | SimplicialHopfieldNetwork,
         steps: int = 12,
-        optimizer: object | None = None,  # Ignored, kept for compatibility
+        _optimizer: object | None = None,  # Ignored, kept for compatibility
     ) -> None:
         super().__init__()
         self.layer_norm = layer_norm
