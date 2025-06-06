@@ -20,12 +20,33 @@ from .validation import (
 
 
 class MultiheadEnergyAttention(nn.Module):
-    r"""Multi-head energy-based attention.
+    r"""Multi-Head Energy Attention mechanism.
 
-    This module implements energy-based attention where attention patterns emerge
-    from minimizing an energy function rather than explicit softmax normalization.
-    The energy function implicitly defines the attention operation through its
-    gradient.
+    Mathematical Foundation
+    -----------------------
+    The energy-based attention exchanges information between tokens (particles)
+    by aligning queries and keys in internal space. The energy function is:
+
+    .. math::
+        E^{ATT} = -\frac{1}{\beta} \sum_{h=1}^{H} \sum_{C=1}^{N} \log\left(\sum_{B \neq C} \exp(\beta A_{hBC})\right)
+
+    where the attention matrix is computed as:
+
+    .. math::
+        A_{hBC} &= \sum_\alpha K_{\alpha hB} Q_{\alpha hC} \\
+        K_{\alpha hB} &= \sum_j W^K_{\alpha hj} g_{jB} \\
+        Q_{\alpha hC} &= \sum_j W^Q_{\alpha hj} g_{jC}
+
+    The gradient contribution to token updates is:
+
+    .. math::
+        -\frac{\partial E^{ATT}}{\partial g_{iA}} = \sum_{C \neq A} \sum_\alpha W^Q_{\alpha i} K_{\alpha C} \text{softmax}_C\left(\beta \sum_\gamma K_{\gamma C} Q_{\gamma A}\right) \\
+        \quad + W^K_{\alpha i} Q_{\alpha C} \text{softmax}_A\left(\beta \sum_\gamma K_{\gamma A} Q_{\gamma C}\right)
+
+    The first term is conventional attention with ``V = (W^Q)^T K``. The second
+    term is novel and crucial for ensuring energy minimization under recurrent
+    application. This distinguishes Energy Attention from Modern Hopfield
+    Networks.
 
     Parameters
     ----------
@@ -77,28 +98,6 @@ class MultiheadEnergyAttention(nn.Module):
 
     .. math::
         K_{\alpha hB} = \sum_{j} W_{\alpha hj}^K g_{jB}, \quad Q_{\alpha hC} = \sum_{j} W_{\alpha hj}^Q g_{jC}
-
-    Key Theoretical Properties:
-
-    1. **Self-Attention Exclusion**: The sum explicitly excludes B=C, meaning tokens
-       do not attend to themselves. This is crucial for the energy formulation.
-
-    2. **Two-Term Gradient**: The gradient with respect to g has two terms:
-
-       .. math::
-           -\frac{\partial E^{ATT}}{\partial g_{iA}} = \text{Term}_1 + \text{Term}_2
-
-       where:
-
-       - Term 1: :math:`\sum_{C \neq A} W_i^Q K_C \text{softmax}_C(\beta K_C^T Q_A)`
-         This is conventional attention with value matrix V = (W^Q)^T K
-
-       - Term 2: :math:`\sum_{C \neq A} W_i^K Q_C \text{softmax}_A(\beta K_A^T Q_C)`
-         This is the novel contribution ensuring energy minimization
-
-    3. **Relationship to Hopfield Networks**: While inspired by Modern Hopfield Networks,
-       this differs fundamentally because keys are dynamic variables that evolve with
-       queries, not fixed memories.
 
     Examples
     --------

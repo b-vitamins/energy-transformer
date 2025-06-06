@@ -17,8 +17,27 @@ from .types import Device, Dtype
 class EnergyLayerNorm(nn.Module):
     r"""Energy-based Layer Normalization.
 
-    Implements layer normalization as described in Energy Transformer theory,
-    where the operation emerges as the gradient of an energy function.
+    Mathematical Foundation
+    -----------------------
+    Each token is represented by a vector ``x \in \mathbb{R}^D``. The
+    layer-normalized representation is:
+
+    .. math::
+        g_i = \gamma \frac{x_i - \bar{x}}{\sqrt{\frac{1}{D}\sum_j(x_j - \bar{x})^2 + \varepsilon}} + \delta_i
+
+    where :math:`\bar{x} = \frac{1}{D}\sum_{k=1}^D x_k`.
+
+    Importantly, this operation can be viewed as the partial derivative of the
+    Lagrangian:
+
+    .. math::
+        L = D\gamma\sqrt{\frac{1}{D}\sum_j(x_j - \bar{x})^2 + \varepsilon} + \sum_j \delta_j x_j
+
+    such that :math:`g_i = \frac{\partial L}{\partial x_i}`. This property is
+    crucial for proving energy decrease in the Energy Transformer dynamics. The
+    symmetric part of the Hessian
+    :math:`M_{ij} = \frac{\partial^2 L}{\partial x_i \partial x_j}` is positive
+    semi-definite, which guarantees :math:`\frac{dE}{dt} \leq 0`.
 
     Parameters
     ----------
