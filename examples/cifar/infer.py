@@ -256,17 +256,15 @@ def main() -> None:
         )
 
     if args.analyze_energy and args.model in ["viet", "viset"]:
-        print(f"\n{args.model.upper()} Energy Dynamics:")
+        print(f"\n{args.model.upper()} Energy Analysis:")
         energies = analyze_energy_dynamics(model, image_tensor)
-        total_reduction = sum(e["reduction"] for e in energies)
-        print(
-            f"Total energy reduction across {len(energies)} blocks: {total_reduction:.2f}"
-        )
-        for e in energies:
-            print(
-                f"  Block {e['block']}: {e['initial_energy']:.2f} → {e['final_energy']:.2f} "
-                f"(reduction: {e['reduction']:.2f}, steps: {e['steps']})"
-            )
+        if energies:
+            energy = energies[0]
+            print(f"  Attention Energy: {energy['attention']:.2f}")
+            print(f"  Hopfield Energy: {energy['hopfield']:.2f}")
+            print(f"  Total Energy: {energy['total']:.2f}")
+        else:
+            print("  Energy analysis not available")
     elif args.analyze_energy:
         print(
             f"\nEnergy analysis not available for {args.model.upper()} (not an ET model)"
