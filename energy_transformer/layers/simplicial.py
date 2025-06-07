@@ -218,23 +218,23 @@ class SimplicialHopfieldNetwork(nn.Module):
         grad = torch.zeros_like(g)
         patterns = self.patterns  # (D,H)
 
+        batch_offsets = torch.arange(b, device=device).view(b, 1, 1) * n
+        flat_grad = grad.view(b * n, d)
+
         def _scatter(vertices: Tensor, a: Tensor) -> None:
             """Scatter gradient contributions to vertices."""
-            # Gradient contribution: -Ξ @ a
-            contrib = -torch.einsum("dk,bmk->bmd", patterns, a) * (
-                1.0 / num_simplices
-            )
+            contrib = -torch.einsum("dk,bmk->bmd", patterns, a)
+            contrib = contrib * (1.0 / num_simplices)
 
-            # Efficient scatter using index_add
-            flat_grad = grad.view(b * n, d)
-            for pos in range(vertices.size(1)):
-                idx = vertices[:, pos]  # (M,)
-                # Create batch-aware indices
-                batch_offsets = torch.arange(b, device=device).unsqueeze(1) * n
-                offsets = idx.unsqueeze(0) + batch_offsets  # (B, M)
-                flat_grad.index_add_(
-                    0, offsets.reshape(-1), contrib.reshape(-1, d)
-                )
+            offsets = vertices.unsqueeze(0) + batch_offsets  # (B,M,K)
+            contrib_exp = contrib.unsqueeze(2).expand(
+                -1, -1, vertices.size(1), -1
+            )
+            flat_grad.index_add_(
+                0,
+                offsets.reshape(-1),
+                contrib_exp.reshape(-1, d),
+            )
 
         if edges.numel() > 0:
             h_e = h[:, edges[:, 0]] + h[:, edges[:, 1]]
