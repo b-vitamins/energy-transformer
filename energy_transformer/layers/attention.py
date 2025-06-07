@@ -8,10 +8,12 @@ import torch
 import torch.nn.functional as F  # noqa: N812
 from torch import Tensor, nn
 
+from .base import EnergyModule
+from .constants import MASK_FILL_VALUE
 from .types import Device, Dtype
 
 
-class MultiheadEnergyAttention(nn.Module):
+class MultiheadEnergyAttention(EnergyModule):
     """Multi-Head Energy Attention with direct gradient computation."""
 
     def __init__(
@@ -72,7 +74,7 @@ class MultiheadEnergyAttention(nn.Module):
 
         n = a.size(-1)
         mask = torch.eye(n, device=a.device, dtype=torch.bool)
-        a = a.masked_fill(mask.unsqueeze(0).unsqueeze(0), -1e9)
+        a = a.masked_fill(mask.unsqueeze(0).unsqueeze(0), MASK_FILL_VALUE)
 
         lse: Tensor = torch.logsumexp(a, dim=-1)
         beta_scaled = self.betas.view(1, -1, 1)  # type: ignore[operator]
@@ -89,7 +91,7 @@ class MultiheadEnergyAttention(nn.Module):
 
         n = a.size(-1)
         mask = torch.eye(n, device=a.device, dtype=torch.bool)
-        a = a.masked_fill(mask.unsqueeze(0).unsqueeze(0), -1e9)
+        a = a.masked_fill(mask.unsqueeze(0).unsqueeze(0), MASK_FILL_VALUE)
 
         a = F.softmax(a, dim=-1)
 

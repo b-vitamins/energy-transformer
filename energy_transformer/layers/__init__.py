@@ -1,49 +1,21 @@
-"""Energy Transformer layers.
+from __future__ import annotations
 
-This module provides the core layer implementations for Energy Transformer models,
-including energy-based alternatives to standard transformer components.
+from typing import TYPE_CHECKING
 
-Layer Categories
-----------------
-- **Attention**: Energy-based multi-head attention mechanism
-- **Normalization**: Energy-based layer normalization with learnable temperature
-- **Memory**: Hopfield networks for associative memory
-- **Embeddings**: Patch and positional embeddings for vision models
-- **Tokens**: Special tokens (CLS) for aggregating information
-- **Heads**: Task-specific output heads for classification and feature extraction
-
-Example
--------
->>> # Build a simple Energy Transformer block
->>> import torch
->>> from energy_transformer.layers import (
-...     EnergyLayerNorm, MultiheadEnergyAttention, HopfieldNetwork
-... )
->>>
->>> # Create layers
->>> norm = EnergyLayerNorm(768)
->>> attn = MultiheadEnergyAttention(embed_dim=768, num_heads=12)
->>> hopfield = HopfieldNetwork(768, hidden_dim=3072)
->>>
->>> # Use in forward pass
->>> x = torch.randn(4, 100, 768)  # (batch, seq_len, embed_dim)
->>> x_norm = norm(x)
->>> energy = attn(x_norm) + hopfield(x_norm)
-"""
-
-from .attention import MultiheadEnergyAttention
-from .embeddings import ConvPatchEmbed, PatchifyEmbed, PosEmbed2D
-from .heads import (
-    ClassifierHead,
-    LinearClassifierHead,
-    NormLinearClassifierHead,
-    NormMLPClassifierHead,
-    ReLUMLPClassifierHead,
-)
-from .hopfield import HopfieldNetwork
-from .layer_norm import EnergyLayerNorm
-from .mlp import MLP
-from .simplicial import SimplicialHopfieldNetwork
+if TYPE_CHECKING:  # pragma: no cover
+    from .attention import MultiheadEnergyAttention
+    from .embeddings import ConvPatchEmbed, PatchifyEmbed, PosEmbed2D
+    from .heads import (
+        ClassifierHead,
+        LinearClassifierHead,
+        NormLinearClassifierHead,
+        NormMLPClassifierHead,
+        ReLUMLPClassifierHead,
+    )
+    from .hopfield import HopfieldNetwork
+    from .layer_norm import EnergyLayerNorm
+    from .mlp import MLP
+    from .simplicial import SimplicialHopfieldNetwork
 
 __all__ = [
     "MLP",
@@ -60,3 +32,31 @@ __all__ = [
     "ReLUMLPClassifierHead",
     "SimplicialHopfieldNetwork",
 ]
+
+_ATTR_TO_MODULE = {
+    "MLP": ".mlp",
+    "ClassifierHead": ".heads",
+    "ConvPatchEmbed": ".embeddings",
+    "EnergyLayerNorm": ".layer_norm",
+    "HopfieldNetwork": ".hopfield",
+    "LinearClassifierHead": ".heads",
+    "MultiheadEnergyAttention": ".attention",
+    "NormLinearClassifierHead": ".heads",
+    "NormMLPClassifierHead": ".heads",
+    "PatchifyEmbed": ".embeddings",
+    "PosEmbed2D": ".embeddings",
+    "ReLUMLPClassifierHead": ".heads",
+    "SimplicialHopfieldNetwork": ".simplicial",
+}
+
+
+def __getattr__(name: str) -> object:
+    module_name = _ATTR_TO_MODULE.get(name)
+    if module_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    from importlib import import_module
+
+    module = import_module(f"{__name__}{module_name}")
+    attr = getattr(module, name)
+    globals()[name] = attr
+    return attr

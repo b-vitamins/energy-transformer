@@ -4,6 +4,8 @@ This module implements the Vision Energy Transformer, which replaces standard
 transformer components with energy-based alternatives as described in
 "Energy Transformer" (Hoover et al., 2023).
 
+from __future__ import annotations
+
 Key Differences from Standard ViT
 ---------------------------------
 - Multi-Head Energy Attention instead of standard self-attention
