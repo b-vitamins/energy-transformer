@@ -11,12 +11,6 @@ def test_lazy_load_energy_transformer() -> None:
     assert models.EnergyTransformer is cls_first
 
 
-def test_lazy_load_registry() -> None:
-    reg_first = models.REALISER_REGISTRY
-    assert isinstance(reg_first, dict)
-    assert models.REALISER_REGISTRY is reg_first
-
-
 def test_lazy_load_invalid_attr() -> None:
     with pytest.raises(AttributeError, match="has no attribute"):
         _ = models.Foo

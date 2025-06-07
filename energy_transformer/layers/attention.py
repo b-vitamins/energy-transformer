@@ -8,6 +8,8 @@ import torch
 import torch.nn.functional as F  # noqa: N812
 from torch import Tensor, nn
 
+__all__ = ["MultiheadEnergyAttention"]
+
 from .base import EnergyModule
 from .constants import MASK_FILL_VALUE
 from .types import Device, Dtype

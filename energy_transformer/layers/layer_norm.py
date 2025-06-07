@@ -7,6 +7,8 @@ import torch
 import torch.nn.functional as F  # noqa: N812
 from torch import nn
 
+__all__ = ["EnergyLayerNorm"]
+
 from .constants import (
     DEFAULT_EPSILON,
     DEFAULT_LAYER_NORM_REGULARIZATION,

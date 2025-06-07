@@ -3,10 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover
-    from energy_transformer.models.base import (
-        REALISER_REGISTRY,
-        EnergyTransformer,
-    )
+    from energy_transformer.models.base import EnergyTransformer
 
     from .viet import (
         VisionEnergyTransformer,
@@ -43,7 +40,6 @@ if TYPE_CHECKING:  # pragma: no cover
     )
 
 __all__ = [
-    "REALISER_REGISTRY",
     "EnergyTransformer",
     "VisionEnergyTransformer",
     "VisionSimplicialTransformer",
@@ -76,15 +72,12 @@ __all__ = [
 
 
 def __getattr__(name: str) -> object:
-    if name in {"EnergyTransformer", "REALISER_REGISTRY"}:
-        from energy_transformer.models.base import (
-            REALISER_REGISTRY as _REG,
-        )
+    if name == "EnergyTransformer":
         from energy_transformer.models.base import (
             EnergyTransformer as _EnergyTransformer,
         )
 
-        return _EnergyTransformer if name == "EnergyTransformer" else _REG
+        return _EnergyTransformer
     if name in {
         "VisionEnergyTransformer",
         "viet_2l_cifar",

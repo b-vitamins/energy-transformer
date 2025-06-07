@@ -55,6 +55,19 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+__all__ = [
+    "VisionEnergyTransformer",
+    "viet_2l_cifar",
+    "viet_4l_cifar",
+    "viet_6l_cifar",
+    "viet_base",
+    "viet_large",
+    "viet_small",
+    "viet_small_cifar",
+    "viet_tiny",
+    "viet_tiny_cifar",
+]
+
 import torch
 from torch import Tensor, nn
 

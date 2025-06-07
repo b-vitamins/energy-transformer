@@ -4,6 +4,19 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+__all__ = [
+    "VisionSimplicialTransformer",
+    "viset_2l_cifar",
+    "viset_4l_cifar",
+    "viset_6l_cifar",
+    "viset_base",
+    "viset_large",
+    "viset_small",
+    "viset_small_cifar",
+    "viset_tiny",
+    "viset_tiny_cifar",
+]
+
 import torch
 from torch import Tensor, nn
 
