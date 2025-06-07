@@ -159,8 +159,7 @@ class VisionSimplicialTransformer(nn.Module):
         for et_block in self.et_blocks:
             if return_energies:
                 x, energies = et_block(x, return_energies=True)
-                if energies:
-                    all_energies.append(energies[0])
+                all_energies.append(energies[0])
             else:
                 x = et_block(x)
 
