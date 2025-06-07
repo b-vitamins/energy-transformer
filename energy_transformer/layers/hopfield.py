@@ -1,4 +1,4 @@
-"""Hopfield Network with direct gradient computation."""
+"""Hopfield Network with explicit energy gradients."""
 
 from __future__ import annotations
 
@@ -13,7 +13,29 @@ from .types import Device, Dtype
 
 
 class HopfieldNetwork(EnergyModule):
-    """Hopfield Network with direct gradient computation."""
+    """Hopfield Network with direct gradient computation.
+
+    Parameters
+    ----------
+    embed_dim : int
+        Input embedding dimension ``D``.
+    hidden_dim : int, optional
+        Hidden dimension. Defaults to ``hidden_ratio * embed_dim``.
+    hidden_ratio : float, default=4.0
+        Ratio of hidden to input dimension when ``hidden_dim`` is ``None``.
+    activation : {'relu', 'softmax'}, default='relu'
+        Activation function used to compute pattern activations.
+    beta : float, default=0.01
+        Inverse temperature when ``activation='softmax'``.
+    bias : bool, default=True
+        If ``True`` includes bias parameters.
+    init_std : float, default=0.02
+        Standard deviation for weight initialization.
+    device : Device, optional
+        Device for parameters.
+    dtype : Dtype, optional
+        Data type for parameters.
+    """
 
     def __init__(
         self,
@@ -65,7 +87,18 @@ class HopfieldNetwork(EnergyModule):
         return h
 
     def compute_energy(self, g: Tensor) -> Tensor:
-        """Compute energy for monitoring."""
+        """Compute energy for monitoring.
+
+        Parameters
+        ----------
+        g : Tensor
+            Input tensor of shape ``(B, N, D)``.
+
+        Returns
+        -------
+        Tensor
+            Scalar energy averaged over batch and sequence length.
+        """
         h = self._preactivate(g)
 
         if self.activation == "relu":
@@ -79,7 +112,18 @@ class HopfieldNetwork(EnergyModule):
         return energy / (g.size(0) * g.size(1))
 
     def compute_grad(self, g: Tensor) -> Tensor:
-        """Compute gradient directly."""
+        """Compute gradient directly.
+
+        Parameters
+        ----------
+        g : Tensor
+            Input tensor of shape ``(B, N, D)``.
+
+        Returns
+        -------
+        Tensor
+            Gradient tensor of the same shape as ``g``.
+        """
         h = self._preactivate(g)
 
         if self.activation == "relu":
@@ -91,5 +135,5 @@ class HopfieldNetwork(EnergyModule):
         return -torch.einsum("bnk,kd->bnd", a, self.kernel.T)
 
     def forward(self, g: Tensor) -> Tensor:
-        """Compute energy - for compatibility."""
+        """Return energy for compatibility with :class:`EnergyTransformer`."""
         return self.compute_energy(g)

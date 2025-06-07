@@ -1,54 +1,15 @@
-"""Vision Energy Transformer (ViET) implementation.
+"""Vision Energy Transformer (ViET).
 
-This module implements the Vision Energy Transformer, which replaces standard
-transformer components with energy-based alternatives as described in
-"Energy Transformer" (Hoover et al., 2023). See [Hoover2023ViET]_ for details.
-
-from __future__ import annotations
-
-Key Differences from Standard ViT
----------------------------------
-- Multi-Head Energy Attention instead of standard self-attention
-- Hopfield Networks instead of MLP blocks
-- Energy-based LayerNorm with learnable temperature
-- Iterative refinement through gradient descent on energy landscape
-
-Classes
--------
-VisionEnergyTransformer
-    Main ViET model that orchestrates energy-based components
-
-Factory Functions
------------------
-viet_tiny, viet_small, viet_base, viet_large
-    Standard configurations matching ViT sizes
-viet_tiny_cifar, viet_small_cifar
-    CIFAR-optimized configurations
-viet_2l_cifar, viet_4l_cifar, viet_6l_cifar
-    Shallow variants for computational efficiency
-
-Example
--------
->>> # Create a 2-layer ViET for CIFAR-100
->>> model = viet_2l_cifar(num_classes=100)
->>>
->>> # Forward pass with energy information
->>> images = torch.randn(32, 3, 32, 32)
->>> result = model(images, return_energy_info=True)
->>> logits = result['logits']
->>> energy_trajectory = result['energy_info']['block_energies']
-
-Parameters
-----------
-The key hyperparameters for ViET are:
-- `et_steps`: Number of energy minimization steps (default: 4-6)
-- `hopfield_hidden_dim`: Hidden dimension for Hopfield networks
+Vision Transformer variant using energy-based components such as
+:class:`MultiheadEnergyAttention` and :class:`HopfieldNetwork`.
+It is based on the Energy Transformer architecture described in
+[Hoover2023ViET]_.
 
 References
 ----------
-.. [Hoover2023ViET] Hoover, B., Liang, Y., Pham, B., Panda, R., Strobelt, H., Chau, D. H.,
-       Zaki, M. J., & Krotov, D. (2023). Energy Transformer.
-       arXiv preprint arXiv:2302.07253.
+.. [Hoover2023ViET] Hoover, B., Liang, Y., Pham, B., Panda, R., Strobelt, H.,
+   Chau, D. H., Zaki, M. J., & Krotov, D. (2023). *Energy Transformer*.
+   arXiv preprint arXiv:2302.07253.
 """
 
 from __future__ import annotations
