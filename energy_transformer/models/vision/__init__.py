@@ -1,80 +1,46 @@
-"""Vision models for Energy Transformer.
+from __future__ import annotations
 
-This module provides three vision transformer variants, each building on the previous:
+from typing import TYPE_CHECKING
 
-1. **VisionTransformer (ViT)** - Standard vision transformer baseline
-2. **VisionEnergyTransformer (ViET)** - Energy-based with regular Hopfield networks
+if TYPE_CHECKING:  # pragma: no cover
+    from energy_transformer.models.base import (
+        REALISER_REGISTRY,
+        EnergyTransformer,
+    )
 
-Model Naming Convention
------------------------
-- ViT: Standard Vision Transformer (baseline)
-- ViET: Vision Energy Transformer
-
-Configuration Sizes
--------------------
-- Tiny: 192 dim, 3 heads (5.7M params)
-- Small: 384 dim, 6 heads (22M params)
-- Base: 768 dim, 12 heads (86M params)
-- Large: 1024 dim, 16 heads (307M params)
-
-CIFAR Configurations
---------------------
-
-Example
--------
->>> # Standard ViT for ImageNet
->>> model = vit_base(img_size=224, patch_size=16, num_classes=1000)
->>>
->>> # Energy Transformer for CIFAR-100
->>> model = viet_2l_cifar(num_classes=100)
->>>
-"""
-
-# Re-export base model and registry for convenience
-from energy_transformer.models.base import REALISER_REGISTRY, EnergyTransformer
-
-# Vision Energy Transformer
-from .viet import (
-    VisionEnergyTransformer,
-    # CIFAR configurations
-    viet_2l_cifar,
-    viet_4l_cifar,
-    viet_6l_cifar,
-    # Standard configurations
-    viet_base,
-    viet_large,
-    viet_small,
-    viet_small_cifar,
-    viet_tiny,
-    viet_tiny_cifar,
-)
-
-# Vision Simplicial Energy Transformer
-from .viset import (
-    VisionSimplicialTransformer,
-    viset_2l_cifar,
-    viset_4l_cifar,
-    viset_6l_cifar,
-    viset_base,
-    viset_large,
-    viset_small,
-    viset_small_cifar,
-    viset_tiny,
-    viset_tiny_cifar,
-)
-
-# Standard Vision Transformer (baseline)
-from .vit import (
-    VisionTransformer,
-    # Standard configurations
-    vit_base,
-    vit_large,
-    vit_small,
-    # CIFAR configurations
-    vit_small_cifar,
-    vit_tiny,
-    vit_tiny_cifar,
-)
+    from .viet import (
+        VisionEnergyTransformer,
+        viet_2l_cifar,
+        viet_4l_cifar,
+        viet_6l_cifar,
+        viet_base,
+        viet_large,
+        viet_small,
+        viet_small_cifar,
+        viet_tiny,
+        viet_tiny_cifar,
+    )
+    from .viset import (
+        VisionSimplicialTransformer,
+        viset_2l_cifar,
+        viset_4l_cifar,
+        viset_6l_cifar,
+        viset_base,
+        viset_large,
+        viset_small,
+        viset_small_cifar,
+        viset_tiny,
+        viset_tiny_cifar,
+    )
+    from .vit import (
+        VisionTransformer,
+        vit_base,
+        vit_large,
+        vit_small,
+        vit_small_cifar,
+        vit_tiny,
+        vit_tiny_cifar,
+    )
 
 __all__ = [
     "REALISER_REGISTRY",
@@ -107,3 +73,58 @@ __all__ = [
     "vit_tiny",
     "vit_tiny_cifar",
 ]
+
+
+def __getattr__(name: str) -> object:
+    if name in {"EnergyTransformer", "REALISER_REGISTRY"}:
+        from energy_transformer.models.base import (
+            REALISER_REGISTRY as _REG,
+        )
+        from energy_transformer.models.base import (
+            EnergyTransformer as _EnergyTransformer,
+        )
+
+        return _EnergyTransformer if name == "EnergyTransformer" else _REG
+    if name in {
+        "VisionEnergyTransformer",
+        "viet_2l_cifar",
+        "viet_4l_cifar",
+        "viet_6l_cifar",
+        "viet_base",
+        "viet_large",
+        "viet_small",
+        "viet_small_cifar",
+        "viet_tiny",
+        "viet_tiny_cifar",
+    }:
+        from . import viet
+
+        return getattr(viet, name)
+    if name in {
+        "VisionSimplicialTransformer",
+        "viset_2l_cifar",
+        "viset_4l_cifar",
+        "viset_6l_cifar",
+        "viset_base",
+        "viset_large",
+        "viset_small",
+        "viset_small_cifar",
+        "viset_tiny",
+        "viset_tiny_cifar",
+    }:
+        from . import viset
+
+        return getattr(viset, name)
+    if name in {
+        "VisionTransformer",
+        "vit_base",
+        "vit_large",
+        "vit_small",
+        "vit_small_cifar",
+        "vit_tiny",
+        "vit_tiny_cifar",
+    }:
+        from . import vit
+
+        return getattr(vit, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

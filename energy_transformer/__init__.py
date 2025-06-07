@@ -1,5 +1,7 @@
 """Energy Transformer: Energy-based transformers with associative memory."""
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 __version__ = "0.3.1"

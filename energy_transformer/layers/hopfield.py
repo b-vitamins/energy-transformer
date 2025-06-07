@@ -6,10 +6,11 @@ import torch
 import torch.nn.functional as F  # noqa: N812
 from torch import Tensor, nn
 
+from .base import EnergyModule
 from .types import Device, Dtype
 
 
-class HopfieldNetwork(nn.Module):
+class HopfieldNetwork(EnergyModule):
     """Hopfield Network with direct gradient computation."""
 
     def __init__(

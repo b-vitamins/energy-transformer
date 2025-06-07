@@ -1,9 +1,15 @@
 """Base Energy Transformer."""
 
+from __future__ import annotations
+
 import torch
 from torch import Tensor, nn
 
 from energy_transformer.layers.attention import MultiheadEnergyAttention
+from energy_transformer.layers.constants import (
+    DEFAULT_ALPHA,
+    DEFAULT_SKIP_SCALE_INIT,
+)
 from energy_transformer.layers.hopfield import HopfieldNetwork
 from energy_transformer.layers.simplicial import SimplicialHopfieldNetwork
 
@@ -25,8 +31,8 @@ class EnergyTransformer(nn.Module):
         self.hopfield = hopfield
         self.steps = steps
 
-        self.alpha = 0.125
-        self.skip_scale = nn.Parameter(torch.ones(1) * 0.1)
+        self.alpha = DEFAULT_ALPHA
+        self.skip_scale = nn.Parameter(torch.ones(1) * DEFAULT_SKIP_SCALE_INIT)
 
     def forward(
         self, x: Tensor, return_energies: bool = False
