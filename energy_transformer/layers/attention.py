@@ -13,6 +13,7 @@ __all__ = ["MultiheadEnergyAttention"]
 from .base import EnergyModule
 from .constants import MASK_FILL_VALUE
 from .types import Device, Dtype
+from .validation import validate_divisibility
 
 
 class MultiheadEnergyAttention(EnergyModule):
@@ -35,10 +36,13 @@ class MultiheadEnergyAttention(EnergyModule):
         self.batch_first = batch_first
         self.head_dim = embed_dim // num_heads
 
-        if embed_dim % num_heads != 0:
-            raise ValueError(
-                f"embed_dim ({embed_dim}) must be divisible by num_heads ({num_heads})"
-            )
+        validate_divisibility(
+            embed_dim,
+            num_heads,
+            self.__class__.__name__,
+            "embed_dim",
+            "num_heads",
+        )
 
         # Projection weights
         self.wk = nn.Parameter(

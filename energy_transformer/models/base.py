@@ -12,6 +12,7 @@ from energy_transformer.layers.constants import (
 )
 from energy_transformer.layers.hopfield import HopfieldNetwork
 from energy_transformer.layers.simplicial import SimplicialHopfieldNetwork
+from energy_transformer.layers.validation import validate_positive
 
 __all__ = ["EnergyTransformer"]
 
@@ -28,8 +29,7 @@ class EnergyTransformer(nn.Module):
     ) -> None:
         super().__init__()
 
-        if steps < 1:
-            raise ValueError(f"steps must be positive, got {steps}")
+        validate_positive(steps, self.__class__.__name__, "steps")
         self.layer_norm = layer_norm
         self.attention = attention
         self.hopfield = hopfield
