@@ -20,3 +20,10 @@ energy\_transformer.models.base module
    :undoc-members:
    :show-inheritance:
 
+Module contents
+---------------
+
+.. automodule:: energy_transformer.models
+   :members:
+   :undoc-members:
+   :show-inheritance:
