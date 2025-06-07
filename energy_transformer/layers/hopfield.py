@@ -31,6 +31,11 @@ class HopfieldNetwork(EnergyModule):
 
         self.embed_dim = embed_dim
         self.hidden_dim = hidden_dim or int(embed_dim * hidden_ratio)
+        if activation not in {"relu", "softmax"}:
+            raise ValueError(
+                f"{self.__class__.__name__}: activation must be 'relu' or 'softmax',"
+                f" got {activation!r}."
+            )
         self.activation = activation
 
         self.kernel = nn.Parameter(
@@ -52,12 +57,16 @@ class HopfieldNetwork(EnergyModule):
         else:
             self.register_buffer("beta", None)
 
-    def compute_energy(self, g: Tensor) -> Tensor:
-        """Compute energy for monitoring."""
+    def _preactivate(self, g: Tensor) -> Tensor:
+        """Linear transform with optional bias."""
         h = torch.einsum("bnd,dk->bnk", g, self.kernel)
-
         if self.bias is not None:
             h = h + self.bias
+        return h
+
+    def compute_energy(self, g: Tensor) -> Tensor:
+        """Compute energy for monitoring."""
+        h = self._preactivate(g)
 
         if self.activation == "relu":
             a = F.relu(h)
@@ -71,10 +80,7 @@ class HopfieldNetwork(EnergyModule):
 
     def compute_grad(self, g: Tensor) -> Tensor:
         """Compute gradient directly."""
-        h = torch.einsum("bnd,dk->bnk", g, self.kernel)
-
-        if self.bias is not None:
-            h = h + self.bias
+        h = self._preactivate(g)
 
         if self.activation == "relu":
             a = F.relu(h)

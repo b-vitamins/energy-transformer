@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from typing import cast
 
 import torch
 import torch.nn.functional as F  # noqa: N812
@@ -71,35 +72,34 @@ class MultiheadEnergyAttention(EnergyModule):
 
         self.register_buffer("betas", beta_tensor)
 
-    def compute_energy(self, g: Tensor) -> Tensor:
-        """Compute energy for monitoring only."""
-        k: Tensor = torch.einsum("bnd,hzd->bnhz", g, self.wk)
-        q: Tensor = torch.einsum("bnd,hzd->bnhz", g, self.wq)
+    def _project(self, g: Tensor) -> tuple[Tensor, Tensor]:
+        """Project input into query and key tensors."""
+        k = torch.einsum("bnd,hzd->bnhz", g, self.wk)
+        q = torch.einsum("bnd,hzd->bnhz", g, self.wq)
+        return k, q
 
-        a: Tensor = torch.einsum("h,bnhz,bmhz->bhnm", self.betas, q, k)
-
+    def _affinity(self, q: Tensor, k: Tensor) -> Tensor:
+        """Compute masked attention affinities."""
+        a = torch.einsum("h,bnhz,bmhz->bhnm", self.betas, q, k)
         n = a.size(-1)
         mask = torch.eye(n, device=a.device, dtype=torch.bool)
-        a = a.masked_fill(mask.unsqueeze(0).unsqueeze(0), MASK_FILL_VALUE)
+        return a.masked_fill(mask.unsqueeze(0).unsqueeze(0), MASK_FILL_VALUE)
 
-        lse: Tensor = torch.logsumexp(a, dim=-1)
-        beta_scaled = self.betas.view(1, -1, 1)  # type: ignore[operator]
-        energy = -(lse / beta_scaled).sum()
+    def compute_energy(self, g: Tensor) -> Tensor:
+        """Compute scalar energy for monitoring."""
+        k, q = self._project(g)
+        a = self._affinity(q, k)
+
+        lse = torch.logsumexp(a, dim=-1)
+        betas = cast(Tensor, self.betas).view(1, -1, 1)
+        energy = -(lse / betas).sum()
 
         return energy / (g.size(0) * g.size(1))
 
     def compute_grad(self, g: Tensor) -> Tensor:
         """Compute gradient directly without autograd."""
-        k: Tensor = torch.einsum("bnd,hzd->bnhz", g, self.wk)
-        q: Tensor = torch.einsum("bnd,hzd->bnhz", g, self.wq)
-
-        a: Tensor = torch.einsum("h,bnhz,bmhz->bhnm", self.betas, q, k)
-
-        n = a.size(-1)
-        mask = torch.eye(n, device=a.device, dtype=torch.bool)
-        a = a.masked_fill(mask.unsqueeze(0).unsqueeze(0), MASK_FILL_VALUE)
-
-        a = F.softmax(a, dim=-1)
+        k, q = self._project(g)
+        a = F.softmax(self._affinity(q, k), dim=-1)
 
         f1: Tensor = torch.einsum("hzd,bmhz->bmhd", self.wq, k)
         grad1: Tensor = -torch.einsum("bmhd,bhnm->bnd", f1, a)
