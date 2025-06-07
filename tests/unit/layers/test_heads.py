@@ -148,3 +148,23 @@ def test_pool_layers() -> None:
     avg_pool = energy_transformer.layers.heads._create_pool("avg")
     y = torch.randn(2, 4)
     assert torch.allclose(avg_pool(y), y)
+
+
+def test_global_max_pool_2d() -> None:
+    pool = energy_transformer.layers.heads._GlobalMaxPool()
+    x = torch.randn(2, 4)
+    out = pool(x)
+    assert torch.allclose(out, x)
+
+
+def test_global_max_pool_invalid_dims() -> None:
+    pool = energy_transformer.layers.heads._GlobalMaxPool()
+    with pytest.raises(ValueError, match="Expected 2D or 3D"):
+        pool(torch.randn(2, 3, 4, 5))
+
+
+def test_global_avg_pool_2d() -> None:
+    pool = energy_transformer.layers.heads._GlobalAvgPool()
+    x = torch.randn(2, 4)
+    out = pool(x)
+    assert torch.allclose(out, x)
