@@ -2,7 +2,7 @@
 
 This module implements the Vision Energy Transformer, which replaces standard
 transformer components with energy-based alternatives as described in
-"Energy Transformer" (Hoover et al., 2023).
+"Energy Transformer" (Hoover et al., 2023). See [Hoover2023ViET]_ for details.
 
 from __future__ import annotations
 
@@ -46,7 +46,7 @@ The key hyperparameters for ViET are:
 
 References
 ----------
-.. [1] Hoover, B., Liang, Y., Pham, B., Panda, R., Strobelt, H., Chau, D. H.,
+.. [Hoover2023ViET] Hoover, B., Liang, Y., Pham, B., Panda, R., Strobelt, H., Chau, D. H.,
        Zaki, M. J., & Krotov, D. (2023). Energy Transformer.
        arXiv preprint arXiv:2302.07253.
 """
