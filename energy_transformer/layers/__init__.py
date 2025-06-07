@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Convenience imports for commonly used layer components."""
+
+from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
