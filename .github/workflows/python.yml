@@ -97,3 +97,6 @@ jobs:
           name: codecov-umbrella
           fail_ci_if_error: false
           verbose: true
+
+      - name: Build docs
+        run: poetry run sphinx-build -b html docs docs/_build/html
