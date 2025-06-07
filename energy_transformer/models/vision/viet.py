@@ -2,6 +2,8 @@
 
 Vision Transformer variant using energy-based components such as
 :class:`MultiheadEnergyAttention` and :class:`HopfieldNetwork`.
+It is based on the Energy Transformer architecture described in
+[Hoover2023ViET]_.
 
 References
 ----------
