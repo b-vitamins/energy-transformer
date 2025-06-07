@@ -72,13 +72,11 @@ import torch
 from torch import Tensor, nn
 
 from energy_transformer.layers.attention import MultiheadEnergyAttention
-from energy_transformer.layers.embeddings import (
-    ConvPatchEmbed,
-    PosEmbed2D,
-)
+from energy_transformer.layers.embeddings import ConvPatchEmbed, PosEmbed2D
 from energy_transformer.layers.heads import ClassifierHead
 from energy_transformer.layers.hopfield import HopfieldNetwork
 from energy_transformer.layers.layer_norm import EnergyLayerNorm
+from energy_transformer.layers.validation import validate_shape_match
 from energy_transformer.models.base import EnergyTransformer
 
 
@@ -221,12 +219,12 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
             If return_energies is False: logits of shape (B, num_classes)
             If return_energies is True: (logits, (avg_e_att, avg_e_hop))
         """
-        # Validate input size
-        if x.shape[-2:] != (self.img_size, self.img_size):
-            raise ValueError(
-                f"Input size {x.shape[-2:]} doesn't match model size "
-                f"({self.img_size}, {self.img_size})",
-            )
+        validate_shape_match(
+            x,
+            (-1, -1, self.img_size, self.img_size),
+            self.__class__.__name__,
+            dims_to_check=(2, 3),
+        )
 
         # 1. Patch embedding
         x = self.patch_embed(x)  # (B, N, D)

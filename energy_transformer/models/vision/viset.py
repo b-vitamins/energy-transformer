@@ -25,6 +25,7 @@ from energy_transformer.layers.embeddings import ConvPatchEmbed, PosEmbed2D
 from energy_transformer.layers.heads import ClassifierHead
 from energy_transformer.layers.layer_norm import EnergyLayerNorm
 from energy_transformer.layers.simplicial import SimplicialHopfieldNetwork
+from energy_transformer.layers.validation import validate_shape_match
 from energy_transformer.models.base import EnergyTransformer
 
 
@@ -141,10 +142,12 @@ class VisionSimplicialTransformer(nn.Module):
         return_energies: bool = False,
     ) -> Tensor | tuple[Tensor, tuple[Tensor, Tensor]]:
         """Forward pass of the model."""
-        if x.shape[-2:] != (self.img_size, self.img_size):
-            raise ValueError(
-                f"Input size {x.shape[-2:]} doesn't match model size ({self.img_size}, {self.img_size})"
-            )
+        validate_shape_match(
+            x,
+            (-1, -1, self.img_size, self.img_size),
+            self.__class__.__name__,
+            dims_to_check=(2, 3),
+        )
 
         x = self.patch_embed(x)
         cls_tokens = self.cls_token.expand(x.size(0), -1, -1)

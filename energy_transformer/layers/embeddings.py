@@ -11,6 +11,10 @@ from torch import Tensor, nn
 
 from .constants import DEFAULT_IMAGE_CHANNELS, DEFAULT_INIT_STD
 from .types import ModuleFactory
+from .validation import (
+    validate_shape_match,
+    validate_tensor_dim,
+)
 
 ImageSize = int | tuple[int, int]
 PatchSize = int | tuple[int, int]
@@ -143,14 +147,13 @@ class ConvPatchEmbed(nn.Module):
             Output tensor of shape (B, N, D) if flatten=True,
             otherwise (B, D, H', W') where H'=H/patch_size.
         """
-        b, c, h, w = x.shape
-        if h != self.img_size[0] or w != self.img_size[1]:
-            raise ValueError(
-                f"ConvPatchEmbed: Input image size mismatch. "
-                f"Expected: {self.img_size[0]}x{self.img_size[1]}, "
-                f"got: {h}x{w}. "
-                f"Hint: Resize your images or create a new model with img_size=({h}, {w})."
-            )
+        validate_tensor_dim(x, 4, self.__class__.__name__)
+        validate_shape_match(
+            x,
+            (-1, -1, self.img_size[0], self.img_size[1]),
+            self.__class__.__name__,
+            dims_to_check=(2, 3),
+        )
 
         x = self.proj(x)  # shape: [B, D, H/p, W/p]
         if self.flatten:
@@ -282,12 +285,15 @@ class PatchifyEmbed(nn.Module):
         Tensor
             Patches of shape (B, N, C, pH, pW).
         """
-        b, c, h, w = x.shape
-        if (h, w) != self.img_size:
-            raise ValueError(
-                f"PatchifyEmbed: Input image size mismatch. "
-                f"Expected: {self.img_size}, got: {(h, w)}"
-            )
+        validate_tensor_dim(x, 4, self.__class__.__name__)
+        validate_shape_match(
+            x,
+            (-1, -1, self.img_size[0], self.img_size[1]),
+            self.__class__.__name__,
+            dims_to_check=(2, 3),
+        )
+
+        b = x.size(0)
 
         x_unfold = F.unfold(x, **self._unfold_params)
         x_unfold = x_unfold.transpose(1, 2)
@@ -426,29 +432,25 @@ class PosEmbed2D(nn.Module):
             If sequence length doesn't match positional embedding length.
         """
         if x.ndim == 3:  # (B, L, D)  # noqa: PLR2004
-            seq_dim = 1
-            if x.size(seq_dim) != self.pos_embed.size(0):
-                raise ValueError(
-                    f"PosEmbed2D: Sequence length mismatch. "
-                    f"Expected: {self.pos_embed.size(0)} "
-                    f"({'with' if self.cls_token else 'without'} CLS token), "
-                    f"got: {x.size(seq_dim)}. "
-                    f"Hint: Check if CLS token is properly added before positional encoding."
-                )
+            validate_shape_match(
+                x,
+                (-1, self.pos_embed.size(0), -1),
+                self.__class__.__name__,
+                dims_to_check=(1,),
+            )
             x = x + self.pos_embed.unsqueeze(0).to(x.dtype)
         elif x.ndim == 2:  # (L, D)  # noqa: PLR2004
-            seq_dim = 0
-            if x.size(seq_dim) != self.pos_embed.size(0):
-                raise ValueError(
-                    f"PosEmbed2D: Sequence length mismatch. "
-                    f"Expected: {self.pos_embed.size(0)} "
-                    f"({'with' if self.cls_token else 'without'} CLS token), "
-                    f"got: {x.size(seq_dim)}. "
-                    f"Hint: Check if CLS token is properly added before positional encoding."
-                )
+            validate_shape_match(
+                x,
+                (self.pos_embed.size(0), -1),
+                self.__class__.__name__,
+                dims_to_check=(0,),
+            )
             x = x + self.pos_embed.to(x.dtype)
         else:
-            raise ValueError(f"Expected 2D or 3D input, got {x.ndim}D.")
+            raise ValueError(
+                f"PosEmbed2D: Expected 2D or 3D input, got {x.ndim}D."
+            )
 
         return cast(Tensor, self.pos_drop(x))
 
