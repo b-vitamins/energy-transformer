@@ -51,8 +51,6 @@ class VisionSimplicialTransformer(nn.Module):
         Number of Energy Transformer blocks.
     num_heads : int
         Number of attention heads.
-    _head_dim : int
-        Dimension of each attention head (for compatibility).
     hopfield_hidden_dim : int
         Hidden dimension for Simplicial Hopfield networks.
     et_steps : int
@@ -76,7 +74,6 @@ class VisionSimplicialTransformer(nn.Module):
         embed_dim: int,
         depth: int,
         num_heads: int,
-        _head_dim: int,
         hopfield_hidden_dim: int,
         et_steps: int,
         drop_rate: float = 0.0,
@@ -181,7 +178,6 @@ def viset_tiny(**kwargs: Any) -> VisionSimplicialTransformer:
         "embed_dim": 192,
         "depth": 12,
         "num_heads": 3,
-        "_head_dim": 64,
         "hopfield_hidden_dim": 768,
         "et_steps": 4,
         "in_chans": 3,
@@ -197,7 +193,6 @@ def viset_small(**kwargs: Any) -> VisionSimplicialTransformer:
         "embed_dim": 384,
         "depth": 12,
         "num_heads": 6,
-        "_head_dim": 64,
         "hopfield_hidden_dim": 1536,
         "et_steps": 4,
         "in_chans": 3,
@@ -213,7 +208,6 @@ def viset_base(**kwargs: Any) -> VisionSimplicialTransformer:
         "embed_dim": 768,
         "depth": 12,
         "num_heads": 12,
-        "_head_dim": 64,
         "hopfield_hidden_dim": 3072,
         "et_steps": 4,
         "in_chans": 3,
@@ -229,7 +223,6 @@ def viset_large(**kwargs: Any) -> VisionSimplicialTransformer:
         "embed_dim": 1024,
         "depth": 24,
         "num_heads": 16,
-        "_head_dim": 64,
         "hopfield_hidden_dim": 4096,
         "et_steps": 4,
         "in_chans": 3,
@@ -251,7 +244,6 @@ def viset_tiny_cifar(
         "embed_dim": 192,
         "depth": 12,
         "num_heads": 3,
-        "_head_dim": 64,
         "hopfield_hidden_dim": 768,
         "et_steps": 4,
         "drop_rate": 0.1,
@@ -273,7 +265,6 @@ def viset_small_cifar(
         "embed_dim": 384,
         "depth": 12,
         "num_heads": 6,
-        "_head_dim": 64,
         "hopfield_hidden_dim": 1536,
         "et_steps": 4,
         "drop_rate": 0.1,
@@ -295,7 +286,6 @@ def viset_2l_cifar(
         "embed_dim": 192,
         "depth": 2,
         "num_heads": 8,
-        "_head_dim": 64,
         "hopfield_hidden_dim": 192,
         "et_steps": 6,
         "drop_rate": 0.1,
@@ -317,7 +307,6 @@ def viset_4l_cifar(
         "embed_dim": 192,
         "depth": 4,
         "num_heads": 8,
-        "_head_dim": 64,
         "hopfield_hidden_dim": 192,
         "et_steps": 5,
         "drop_rate": 0.1,
@@ -339,7 +328,6 @@ def viset_6l_cifar(
         "embed_dim": 192,
         "depth": 6,
         "num_heads": 8,
-        "_head_dim": 64,
         "hopfield_hidden_dim": 192,
         "et_steps": 4,
         "drop_rate": 0.1,

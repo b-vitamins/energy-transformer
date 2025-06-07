@@ -70,18 +70,19 @@ class BaseClassifierHead(nn.Module):
 
     @staticmethod
     def _create_pool(pool_type: PoolType) -> nn.Module:
-        if pool_type == "avg":
-            return _GlobalAvgPool()
-        if pool_type == "max":
-            return _GlobalMaxPool()
-        if pool_type == "token":
-            return _TokenPool()
-        if pool_type == "none":
-            return nn.Identity()
-        raise ValueError(
-            f"BaseClassifierHead: Unknown pool_type '{pool_type}'. "
-            "Expected one of: 'avg', 'max', 'token', 'none'."
-        )
+        """Return pooling layer based on ``pool_type``."""
+        pools: dict[PoolType, nn.Module] = {
+            "avg": _GlobalAvgPool(),
+            "max": _GlobalMaxPool(),
+            "token": _TokenPool(),
+            "none": nn.Identity(),
+        }
+        if pool_type not in pools:
+            raise ValueError(
+                f"BaseClassifierHead: Unknown pool_type '{pool_type}'. "
+                "Expected one of: 'avg', 'max', 'token', 'none'."
+            )
+        return pools[pool_type]
 
     def _init_linear_zero(self, layer: nn.Linear) -> None:
         nn.init.zeros_(layer.weight)
