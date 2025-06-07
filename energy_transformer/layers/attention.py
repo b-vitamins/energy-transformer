@@ -1,4 +1,4 @@
-"""Energy-based multi-head attention."""
+"""Energy-based multi-head attention layer."""
 
 from __future__ import annotations
 
@@ -17,7 +17,26 @@ from .validation import validate_divisibility
 
 
 class MultiheadEnergyAttention(EnergyModule):
-    """Multi-Head Energy Attention with direct gradient computation."""
+    """Multi-Head Energy Attention with explicit gradients.
+
+    Parameters
+    ----------
+    embed_dim : int
+        Input embedding dimension ``D``.
+    num_heads : int
+        Number of attention heads ``H``.
+    beta : float or Tensor, optional
+        Initial inverse temperature. If ``None``, defaults to
+        ``1 / sqrt(embed_dim // num_heads)``.
+    init_std : float, default=0.002
+        Standard deviation for weight initialization.
+    batch_first : bool, default=True
+        If ``True`` expects input of shape ``(B, N, D)``.
+    device : Device, optional
+        Device for module parameters.
+    dtype : Dtype, optional
+        Data type for module parameters.
+    """
 
     def __init__(
         self,
@@ -86,7 +105,18 @@ class MultiheadEnergyAttention(EnergyModule):
         return a.masked_fill(mask.unsqueeze(0).unsqueeze(0), MASK_FILL_VALUE)
 
     def compute_energy(self, g: Tensor) -> Tensor:
-        """Compute scalar energy for monitoring."""
+        """Compute scalar energy for monitoring.
+
+        Parameters
+        ----------
+        g : Tensor
+            Input tensor of shape ``(B, N, D)``.
+
+        Returns
+        -------
+        Tensor
+            Scalar energy averaged over batch and sequence length.
+        """
         k, q = self._project(g)
         a = self._affinity(q, k)
 
@@ -96,7 +126,18 @@ class MultiheadEnergyAttention(EnergyModule):
         return energy / (g.size(0) * g.size(1))
 
     def compute_grad(self, g: Tensor) -> Tensor:
-        """Compute gradient directly without autograd."""
+        """Compute gradient directly without autograd.
+
+        Parameters
+        ----------
+        g : Tensor
+            Input tensor of shape ``(B, N, D)``.
+
+        Returns
+        -------
+        Tensor
+            Gradient tensor of the same shape as ``g``.
+        """
         k, q = self._project(g)
         a = F.softmax(self._affinity(q, k), dim=-1)
 
@@ -109,5 +150,5 @@ class MultiheadEnergyAttention(EnergyModule):
         return grad1 + grad2
 
     def forward(self, x: Tensor) -> Tensor:
-        """Compute energy - for compatibility with EnergyTransformer."""
+        """Compute energy for compatibility with :class:`EnergyTransformer`."""
         return self.compute_energy(x)

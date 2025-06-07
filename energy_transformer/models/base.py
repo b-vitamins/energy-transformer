@@ -18,7 +18,19 @@ __all__ = ["EnergyTransformer"]
 
 
 class EnergyTransformer(nn.Module):
-    """Energy Transformer with direct gradient descent."""
+    """Energy Transformer core module.
+
+    Parameters
+    ----------
+    layer_norm : nn.Module
+        Normalization layer used before each energy component.
+    attention : MultiheadEnergyAttention
+        Energy-based attention module.
+    hopfield : HopfieldNetwork | SimplicialHopfieldNetwork
+        Associative memory module.
+    steps : int, default=12
+        Number of iterative refinement steps.
+    """
 
     def __init__(
         self,
@@ -41,7 +53,20 @@ class EnergyTransformer(nn.Module):
     def forward(
         self, x: Tensor, return_energies: bool = False
     ) -> Tensor | tuple[Tensor, list[tuple[Tensor, Tensor]]]:
-        """Run iterative energy minimization."""
+        """Run iterative energy minimization.
+
+        Parameters
+        ----------
+        x : Tensor
+            Input tensor of shape ``(B, N, D)``.
+        return_energies : bool, default=False
+            If ``True`` return average attention and Hopfield energies.
+
+        Returns
+        -------
+        Tensor | tuple[Tensor, list[tuple[Tensor, Tensor]]]
+            Output tensor, optionally with energy history.
+        """
         residual = x.clone()
 
         for _ in range(self.steps):
