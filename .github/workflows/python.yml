@@ -1,5 +1,4 @@
 name: Python
-
 on:
   push:
     branches: ["master", "main", "develop"]
@@ -18,17 +17,14 @@ on:
       - '.gitignore'
       - 'LICENSE'
       - '.github/**.md'
-
 # Cancel in-progress runs when a new run is triggered
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
-
 # Restrict permissions for security
 permissions:
   contents: read
   pull-requests: read
-
 jobs:
   test:
     name: Test & Lint
@@ -62,7 +58,7 @@ jobs:
       - name: Install dependencies
         # Only install if cache miss - saves significant time
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
-        run: poetry install --no-interaction --only main,dev
+        run: poetry install --no-interaction --only main,dev,docs
       
       - name: Lint with ruff
         run: |
@@ -79,6 +75,15 @@ jobs:
             --cov-report=xml \
             --cov-report=term-missing:skip-covered \
             --junitxml=junit/test-results.xml
+      
+      - name: Build documentation
+        run: poetry run sphinx-build -b html docs docs/_build/html
+      
+      - name: Upload documentation
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation
+          path: docs/_build/html/
       
       - name: Upload test results
         if: always()
