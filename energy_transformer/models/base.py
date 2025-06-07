@@ -13,6 +13,8 @@ from energy_transformer.layers.constants import (
 from energy_transformer.layers.hopfield import HopfieldNetwork
 from energy_transformer.layers.simplicial import SimplicialHopfieldNetwork
 
+__all__ = ["EnergyTransformer"]
+
 
 class EnergyTransformer(nn.Module):
     """Energy Transformer with direct gradient descent."""
@@ -25,6 +27,9 @@ class EnergyTransformer(nn.Module):
         steps: int = 12,
     ) -> None:
         super().__init__()
+
+        if steps < 1:
+            raise ValueError(f"steps must be positive, got {steps}")
         self.layer_norm = layer_norm
         self.attention = attention
         self.hopfield = hopfield
@@ -55,6 +60,3 @@ class EnergyTransformer(nn.Module):
             e_att = self.attention.compute_energy(self.layer_norm(x))
             e_hop = self.hopfield.compute_energy(self.layer_norm(x))
         return x, [(e_att, e_hop)]
-
-
-REALISER_REGISTRY = {"EnergyTransformer": EnergyTransformer}

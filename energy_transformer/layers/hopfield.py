@@ -6,6 +6,8 @@ import torch
 import torch.nn.functional as F  # noqa: N812
 from torch import Tensor, nn
 
+__all__ = ["HopfieldNetwork"]
+
 from .base import EnergyModule
 from .types import Device, Dtype
 

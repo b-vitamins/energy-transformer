@@ -32,3 +32,13 @@ def test_return_energies() -> None:
     out, energies = model(x, return_energies=True)
     assert isinstance(out, torch.Tensor)
     assert len(energies) == 1
+
+
+def test_invalid_steps_raises_value_error() -> None:
+    with pytest.raises(ValueError, match="steps must be positive"):
+        EnergyTransformer(
+            layer_norm=EnergyLayerNorm(2),
+            attention=MultiheadEnergyAttention(2, num_heads=1),
+            hopfield=HopfieldNetwork(2, hidden_dim=2),
+            steps=0,
+        )

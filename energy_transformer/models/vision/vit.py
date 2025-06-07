@@ -49,6 +49,17 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+__all__ = [
+    "PatchEmbedding",
+    "VisionTransformer",
+    "vit_base",
+    "vit_large",
+    "vit_small",
+    "vit_small_cifar",
+    "vit_tiny",
+    "vit_tiny_cifar",
+]
+
 import torch
 from torch import Tensor, nn
 
