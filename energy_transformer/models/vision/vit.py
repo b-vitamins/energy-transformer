@@ -28,6 +28,7 @@ vit_tiny, vit_small, vit_base, vit_large
     Standard ViT configurations
 vit_tiny_cifar, vit_small_cifar
     CIFAR-optimized configurations with 4x4 patches
+    See [Dosovitskiy2020]_ for details on the Vision Transformer architecture.
 
 Example
 -------
@@ -40,7 +41,7 @@ Example
 
 References
 ----------
-.. [1] Dosovitskiy, A., Beyer, L., Kolesnikov, A., Weissenborn, D., Zhai, X.,
+.. [Dosovitskiy2020] Dosovitskiy, A., Beyer, L., Kolesnikov, A., Weissenborn, D., Zhai, X.,
        Unterthiner, T., ... & Houlsby, N. (2020). An Image is Worth 16x16 Words:
        Transformers for Image Recognition at Scale. arXiv preprint arXiv:2010.11929.
 """

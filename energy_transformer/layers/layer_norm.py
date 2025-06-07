@@ -99,7 +99,7 @@ class EnergyLayerNorm(nn.Module):
     The Hessian :math:`M_{ij} = \frac{\partial^2 L}{\partial x_i \partial x_j}` is positive
     semi-definite, which guarantees that the energy decreases during the forward dynamics
     of the Energy Transformer. This is crucial for the convergence proof in equation (7)
-    of the paper.
+    of the paper [Hoover2023]_.
 
     The regularization term \u03bbx can be added to help preserve input information during
     the iterative refinement process, though it's not part of the original formulation.
@@ -119,7 +119,7 @@ class EnergyLayerNorm(nn.Module):
 
     References
     ----------
-    .. [1] Hoover, B., Liang, Y., Pham, B., Panda, R., Strobelt, H., Chau, D. H.,
+    .. [Hoover2023] Hoover, B., Liang, Y., Pham, B., Panda, R., Strobelt, H., Chau, D. H.,
        Zaki, M. J., & Krotov, D. (2023). Energy Transformer.
        arXiv preprint arXiv:2302.07253. See equations (1) and (2).
     """
