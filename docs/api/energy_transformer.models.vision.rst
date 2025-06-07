@@ -28,3 +28,10 @@ energy\_transformer.models.vision.vit module
    :undoc-members:
    :show-inheritance:
 
+Module contents
+---------------
+
+.. automodule:: energy_transformer.models.vision
+   :members:
+   :undoc-members:
+   :show-inheritance:

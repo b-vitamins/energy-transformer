@@ -92,3 +92,10 @@ energy\_transformer.layers.validation module
    :undoc-members:
    :show-inheritance:
 
+Module contents
+---------------
+
+.. automodule:: energy_transformer.layers
+   :members:
+   :undoc-members:
+   :show-inheritance:
