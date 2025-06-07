@@ -47,7 +47,7 @@ References
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import torch
 from torch import Tensor, nn
@@ -219,7 +219,6 @@ class VisionTransformer(nn.Module):  # type: ignore[misc]
         # Classification
         x = self.norm(x)
         x = x[:, 0]  # CLS token
-        from typing import cast
 
         return cast(Tensor, self.head(x))
 
@@ -266,8 +265,6 @@ class TransformerBlock(nn.Module):  # type: ignore[misc]
         Tensor
             Output tensor of shape (B, N, D).
         """
-        from typing import cast
-
         x = x + cast(Tensor, self.attn(self.norm1(x)))
         return x + cast(Tensor, self.mlp(self.norm2(x)))
 
@@ -326,8 +323,6 @@ class Attention(nn.Module):  # type: ignore[misc]
         attn = self.attn_drop(attn)
 
         # Aggregate
-        from typing import cast
-
         x = (attn @ v).transpose(1, 2).reshape(batch_size, seq_len, embed_dim)
         x = cast(Tensor, self.proj(x))
         return cast(Tensor, self.proj_drop(x))
@@ -364,8 +359,6 @@ class MLP(nn.Module):  # type: ignore[misc]
         Tensor
             Output tensor.
         """
-        from typing import cast
-
         x = cast(Tensor, self.fc1(x))
         x = cast(Tensor, self.act(x))
         x = cast(Tensor, self.drop(x))

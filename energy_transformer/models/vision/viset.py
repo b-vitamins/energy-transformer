@@ -106,7 +106,6 @@ class VisionSimplicialTransformer(nn.Module):
                         triangle_fraction=triangle_fraction,
                     ),
                     steps=et_steps,
-                    _optimizer=None,  # Not used anymore
                 )
                 for _ in range(depth)
             ]

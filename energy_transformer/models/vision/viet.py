@@ -168,7 +168,6 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
                         hidden_dim=hopfield_hidden_dim,
                     ),
                     steps=et_steps,
-                    _optimizer=None,  # Not used anymore
                 )
                 for _ in range(depth)
             ],

@@ -23,7 +23,6 @@ class EnergyTransformer(nn.Module):
         attention: MultiheadEnergyAttention,
         hopfield: HopfieldNetwork | SimplicialHopfieldNetwork,
         steps: int = 12,
-        _optimizer: object | None = None,  # Ignored, kept for compatibility
     ) -> None:
         super().__init__()
         self.layer_norm = layer_norm
@@ -37,31 +36,25 @@ class EnergyTransformer(nn.Module):
     def forward(
         self, x: Tensor, return_energies: bool = False
     ) -> Tensor | tuple[Tensor, list[tuple[Tensor, Tensor]]]:
-        """Forward pass with direct gradient descent."""
+        """Run iterative energy minimization."""
         residual = x.clone()
 
-        energies: list[tuple[Tensor, Tensor]] = []
-
-        for i in range(self.steps):
+        for _ in range(self.steps):
             g = self.layer_norm(x)
-            grad_attn = self.attention.compute_grad(g)
-            x = x - self.alpha * grad_attn
+            x = x - self.alpha * self.attention.compute_grad(g)
 
             g = self.layer_norm(x)
-            grad_hop = self.hopfield.compute_grad(g)
-            x = x - self.alpha * grad_hop
-
-            if return_energies and i == self.steps - 1:
-                with torch.no_grad():
-                    e_att = self.attention.compute_energy(self.layer_norm(x))
-                    e_hop = self.hopfield.compute_energy(self.layer_norm(x))
-                    energies.append((e_att, e_hop))
+            x = x - self.alpha * self.hopfield.compute_grad(g)
 
         x = x + self.skip_scale * residual
 
-        if return_energies:
-            return x, energies
-        return x
+        if not return_energies:
+            return x
+
+        with torch.no_grad():
+            e_att = self.attention.compute_energy(self.layer_norm(x))
+            e_hop = self.hopfield.compute_energy(self.layer_norm(x))
+        return x, [(e_att, e_hop)]
 
 
 REALISER_REGISTRY = {"EnergyTransformer": EnergyTransformer}
