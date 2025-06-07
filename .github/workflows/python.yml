@@ -17,14 +17,17 @@ on:
       - '.gitignore'
       - 'LICENSE'
       - '.github/**.md'
+
 # Cancel in-progress runs when a new run is triggered
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
+
 # Restrict permissions for security
 permissions:
   contents: read
   pull-requests: read
+
 jobs:
   test:
     name: Test & Lint
@@ -51,8 +54,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .venv
-          key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+          key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}-main-dev-docs
           restore-keys: |
+            venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}-
             venv-${{ runner.os }}-
       
       - name: Install dependencies
@@ -102,6 +106,3 @@ jobs:
           name: codecov-umbrella
           fail_ci_if_error: false
           verbose: true
-
-      - name: Build docs
-        run: poetry run sphinx-build -b html docs docs/_build/html
