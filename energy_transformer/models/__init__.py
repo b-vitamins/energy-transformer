@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""High-level Energy Transformer models."""
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -13,4 +15,5 @@ def __getattr__(name: str) -> object:
         from .base import EnergyTransformer
 
         return EnergyTransformer
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    msg = f"module {__name__!r} has no attribute {name!r}"
+    raise AttributeError(msg)

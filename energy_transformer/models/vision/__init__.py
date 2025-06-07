@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Vision-specific Energy Transformer model variants."""
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -120,4 +122,5 @@ def __getattr__(name: str) -> object:
         from . import vit
 
         return getattr(vit, name)
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    msg = f"module {__name__!r} has no attribute {name!r}"
+    raise AttributeError(msg)
