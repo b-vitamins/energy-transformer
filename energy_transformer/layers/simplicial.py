@@ -153,7 +153,7 @@ class SimplicialHopfieldNetwork(nn.Module):
         Tensor
             Scalar energy value averaged over batch, tokens, and simplices.
         """
-        b, n, _ = g.shape
+        b, n = g.shape[:2]
         device = g.device
         edges, triangles = self._choose_simplices(n, device)
         num_simplices = edges.size(0) + triangles.size(0)
