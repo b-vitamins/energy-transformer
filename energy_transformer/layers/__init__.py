@@ -1,3 +1,5 @@
+"""Convenience imports for commonly used layer components."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -53,7 +55,8 @@ _ATTR_TO_MODULE = {
 def __getattr__(name: str) -> object:
     module_name = _ATTR_TO_MODULE.get(name)
     if module_name is None:
-        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+        msg = f"module {__name__!r} has no attribute {name!r}"
+        raise AttributeError(msg)
     from importlib import import_module
 
     module = import_module(f"{__name__}{module_name}")

@@ -13,11 +13,12 @@ def validate_tensor_dim(
 ) -> None:
     """Validate tensor dimensionality."""
     if x.dim() != expected_dim:
-        raise ValueError(
+        msg = (
             f"{module_name}: {param_name} must be {expected_dim}D tensor. "
             f"Expected shape: {'[' + ', '.join(['...'] * expected_dim) + ']'}, "
             f"got shape: {list(x.shape)} ({x.dim()}D)."
         )
+        raise ValueError(msg)
 
 
 def validate_shape_match(
@@ -33,18 +34,20 @@ def validate_shape_match(
 
     for dim_idx in dims_to_check:
         if dim_idx >= x.dim():
-            raise ValueError(
+            msg = (
                 f"{module_name}: {param_name} has insufficient dimensions. "
                 f"Expected at least {dim_idx + 1} dimensions, got {x.dim()}."
             )
+            raise ValueError(msg)
         if (
             expected_shape[dim_idx] != -1
             and x.shape[dim_idx] != expected_shape[dim_idx]
         ):
-            raise ValueError(
+            msg = (
                 f"{module_name}: {param_name} dimension {dim_idx} mismatch. "
                 f"Expected: {expected_shape[dim_idx]}, got: {x.shape[dim_idx]}."
             )
+            raise ValueError(msg)
 
 
 def validate_divisibility(
@@ -56,11 +59,12 @@ def validate_divisibility(
 ) -> None:
     """Validate that value is divisible by divisor."""
     if value % divisor != 0:
-        raise ValueError(
+        msg = (
             f"{module_name}: {value_name} must be divisible by {divisor_name}. "
             f"Got {value_name}={value}, {divisor_name}={divisor}, "
             f"remainder={value % divisor}."
         )
+        raise ValueError(msg)
 
 
 def validate_positive(
@@ -70,10 +74,11 @@ def validate_positive(
 ) -> None:
     """Validate that value is positive."""
     if value <= 0:
-        raise ValueError(
+        msg = (
             f"{module_name}: {param_name} must be positive. "
             f"Got {param_name}={value}."
         )
+        raise ValueError(msg)
 
 
 def format_shape_error(

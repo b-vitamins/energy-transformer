@@ -1,3 +1,5 @@
+"""High-level Energy Transformer models."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -13,4 +15,5 @@ def __getattr__(name: str) -> object:
         from .base import EnergyTransformer
 
         return EnergyTransformer
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    msg = f"module {__name__!r} has no attribute {name!r}"
+    raise AttributeError(msg)
