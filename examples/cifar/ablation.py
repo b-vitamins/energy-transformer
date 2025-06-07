@@ -132,7 +132,7 @@ def train_epoch(
     loader: DataLoader[Any],
     optimizer: optim.Optimizer,
     criterion: nn.Module,
-    scaler: torch.amp.GradScaler | None,
+    scaler: torch.cuda.amp.GradScaler | None,
     device: torch.device,
     epoch: int,
     total_epochs: int,
@@ -147,7 +147,7 @@ def train_epoch(
         data, target = data_cpu.to(device), target_cpu.to(device)
         optimizer.zero_grad()
         device_type, enabled = device.type, scaler is not None
-        with torch.amp.autocast(device_type=device_type, enabled=enabled):
+        with torch.autocast(device_type=device_type, enabled=enabled):
             output = (
                 model(data, et_kwargs={"detach": False})
                 if is_et
@@ -244,7 +244,7 @@ def train_model(
     )
     criterion = nn.CrossEntropyLoss()
     if device.type == "cuda":
-        scaler = torch.amp.GradScaler(device.type)
+        scaler = torch.cuda.amp.GradScaler()
     else:
         scaler = None
 
