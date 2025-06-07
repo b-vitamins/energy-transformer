@@ -51,12 +51,13 @@ class EnergyTransformer(nn.Module):
             g = self.layer_norm(x)
             x = x - self.alpha * self.hopfield.compute_grad(g)
 
-        x = x + self.skip_scale * residual
+        out = x + self.skip_scale * residual
 
         if not return_energies:
-            return x
+            return out
 
         with torch.no_grad():
-            e_att = self.attention.compute_energy(self.layer_norm(x))
-            e_hop = self.hopfield.compute_energy(self.layer_norm(x))
-        return x, [(e_att, e_hop)]
+            g = self.layer_norm(out)
+            e_att = self.attention.compute_energy(g)
+            e_hop = self.hopfield.compute_energy(g)
+        return out, [(e_att, e_hop)]
