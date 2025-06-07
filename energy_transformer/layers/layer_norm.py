@@ -226,21 +226,16 @@ class EnergyLayerNorm(nn.Module):
                 f"for normalized_shape={self.normalized_shape}. Got {x.dim()}D input."
             )
 
-        for i, (actual, expected) in enumerate(
-            zip(
-                x.shape[-len(self.normalized_shape) :],
-                self.normalized_shape,
-                strict=False,
+        expected_tail = tuple(self.normalized_shape)
+        actual_tail = x.shape[-len(expected_tail) :]
+        if actual_tail != expected_tail:
+            raise ValueError(
+                "EnergyLayerNorm: Input shape mismatch. "
+                f"Expected trailing dimensions {expected_tail}, "
+                f"got {tuple(actual_tail)}"
             )
-        ):
-            if actual != expected:
-                raise ValueError(
-                    f"EnergyLayerNorm: Input shape mismatch at dimension {-len(self.normalized_shape) + i}. "
-                    f"Expected trailing dimensions {self.normalized_shape}, "
-                    f"got {tuple(x.shape[-len(self.normalized_shape) :])}"
-                )
 
-        dims = [-(i + 1) for i in range(len(self.normalized_shape))]
+        dims = tuple(range(-len(self.normalized_shape), 0))
 
         x_mean = x.mean(dim=dims, keepdim=True)
         x_centered = x - x_mean
