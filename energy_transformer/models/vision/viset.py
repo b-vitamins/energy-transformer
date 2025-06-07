@@ -12,12 +12,46 @@ from energy_transformer.layers.embeddings import ConvPatchEmbed, PosEmbed2D
 from energy_transformer.layers.heads import ClassifierHead
 from energy_transformer.layers.layer_norm import EnergyLayerNorm
 from energy_transformer.layers.simplicial import SimplicialHopfieldNetwork
-from energy_transformer.layers.types import ActivationType
 from energy_transformer.models.base import EnergyTransformer
 
 
 class VisionSimplicialTransformer(nn.Module):
-    """Vision Simplicial Energy Transformer (ViSET)."""
+    """Vision Simplicial Energy Transformer (ViSET).
+
+    A Vision Transformer that uses Simplicial Hopfield Networks
+    for associative memory instead of standard MLP blocks.
+
+    Parameters
+    ----------
+    img_size : int
+        Input image size (assumed square).
+    patch_size : int
+        Size of image patches (assumed square).
+    in_chans : int
+        Number of input channels.
+    num_classes : int
+        Number of output classes.
+    embed_dim : int
+        Embedding dimension.
+    depth : int
+        Number of Energy Transformer blocks.
+    num_heads : int
+        Number of attention heads.
+    _head_dim : int
+        Dimension of each attention head (for compatibility).
+    hopfield_hidden_dim : int
+        Hidden dimension for Simplicial Hopfield networks.
+    et_steps : int
+        Number of energy optimization steps per block.
+    drop_rate : float
+        Dropout rate.
+    _representation_size : int | None
+        Size of representation layer (for compatibility).
+    hopfield_beta : float
+        Inverse temperature for Simplicial Hopfield.
+    triangle_fraction : float
+        Fraction of simplices that are triangles vs edges.
+    """
 
     def __init__(
         self,
@@ -31,11 +65,10 @@ class VisionSimplicialTransformer(nn.Module):
         _head_dim: int,
         hopfield_hidden_dim: int,
         et_steps: int,
-        order: int = 3,
         drop_rate: float = 0.0,
         _representation_size: int | None = None,
-        hopfield_activation: str = "relu",
-        hopfield_beta: float = 0.01,
+        hopfield_beta: float = 0.1,
+        triangle_fraction: float = 0.5,
     ) -> None:
         super().__init__()
 
@@ -44,7 +77,6 @@ class VisionSimplicialTransformer(nn.Module):
         self.embed_dim = embed_dim
         self.depth = depth
         self.num_classes = num_classes
-        self.order = order
 
         self.patch_embed = ConvPatchEmbed(
             img_size=img_size,
@@ -70,9 +102,8 @@ class VisionSimplicialTransformer(nn.Module):
                     hopfield=SimplicialHopfieldNetwork(
                         embed_dim,
                         hidden_dim=hopfield_hidden_dim,
-                        order=order,
-                        activation=cast(ActivationType, hopfield_activation),
                         beta=hopfield_beta,
+                        triangle_fraction=triangle_fraction,
                     ),
                     steps=et_steps,
                     _optimizer=None,  # Not used anymore
@@ -139,8 +170,8 @@ def viset_tiny(**kwargs: Any) -> VisionSimplicialTransformer:
         "_head_dim": 64,
         "hopfield_hidden_dim": 768,
         "et_steps": 4,
-        "order": 3,
         "in_chans": 3,
+        "triangle_fraction": 0.5,
     }
     config.update(kwargs)
     return VisionSimplicialTransformer(**config)
@@ -155,8 +186,8 @@ def viset_small(**kwargs: Any) -> VisionSimplicialTransformer:
         "_head_dim": 64,
         "hopfield_hidden_dim": 1536,
         "et_steps": 4,
-        "order": 3,
         "in_chans": 3,
+        "triangle_fraction": 0.5,
     }
     config.update(kwargs)
     return VisionSimplicialTransformer(**config)
@@ -171,8 +202,8 @@ def viset_base(**kwargs: Any) -> VisionSimplicialTransformer:
         "_head_dim": 64,
         "hopfield_hidden_dim": 3072,
         "et_steps": 4,
-        "order": 3,
         "in_chans": 3,
+        "triangle_fraction": 0.5,
     }
     config.update(kwargs)
     return VisionSimplicialTransformer(**config)
@@ -187,8 +218,8 @@ def viset_large(**kwargs: Any) -> VisionSimplicialTransformer:
         "_head_dim": 64,
         "hopfield_hidden_dim": 4096,
         "et_steps": 4,
-        "order": 3,
         "in_chans": 3,
+        "triangle_fraction": 0.5,
     }
     config.update(kwargs)
     return VisionSimplicialTransformer(**config)
@@ -209,8 +240,8 @@ def viset_tiny_cifar(
         "_head_dim": 64,
         "hopfield_hidden_dim": 768,
         "et_steps": 4,
-        "order": 3,
         "drop_rate": 0.1,
+        "triangle_fraction": 0.5,
     }
     config.update(kwargs)
     return VisionSimplicialTransformer(**config)
@@ -231,8 +262,8 @@ def viset_small_cifar(
         "_head_dim": 64,
         "hopfield_hidden_dim": 1536,
         "et_steps": 4,
-        "order": 3,
         "drop_rate": 0.1,
+        "triangle_fraction": 0.5,
     }
     config.update(kwargs)
     return VisionSimplicialTransformer(**config)
@@ -251,10 +282,10 @@ def viset_2l_cifar(
         "depth": 2,
         "num_heads": 8,
         "_head_dim": 64,
-        "hopfield_hidden_dim": 192,  # reduced from 576 for fair comparison
+        "hopfield_hidden_dim": 192,
         "et_steps": 6,
-        "order": 3,
         "drop_rate": 0.1,
+        "triangle_fraction": 0.5,
     }
     config.update(kwargs)
     return VisionSimplicialTransformer(**config)
@@ -273,10 +304,10 @@ def viset_4l_cifar(
         "depth": 4,
         "num_heads": 8,
         "_head_dim": 64,
-        "hopfield_hidden_dim": 192,  # reduced from 576 for fair comparison
+        "hopfield_hidden_dim": 192,
         "et_steps": 5,
-        "order": 3,
         "drop_rate": 0.1,
+        "triangle_fraction": 0.5,
     }
     config.update(kwargs)
     return VisionSimplicialTransformer(**config)
@@ -295,10 +326,10 @@ def viset_6l_cifar(
         "depth": 6,
         "num_heads": 8,
         "_head_dim": 64,
-        "hopfield_hidden_dim": 192,  # reduced from 576 for fair comparison
+        "hopfield_hidden_dim": 192,
         "et_steps": 4,
-        "order": 3,
         "drop_rate": 0.1,
+        "triangle_fraction": 0.5,
     }
     config.update(kwargs)
     return VisionSimplicialTransformer(**config)
