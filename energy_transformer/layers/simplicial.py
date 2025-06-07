@@ -120,20 +120,20 @@ class SimplicialHopfieldNetwork(nn.Module):
 
         m_tri_desired = int(round(self.triangle_fraction * total))
         m_tri = min(m_tri_desired, tris_all.size(0))
-        m_edge = total - m_tri
-        m_edge = min(m_edge, edges_all.size(0))
-        if m_edge >= edges_all.size(0):
-            edges = edges_all
+        m_edge = min(total - m_tri, edges_all.size(0))
+
+        if m_edge < edges_all.size(0):
+            perm = torch.randperm(edges_all.size(0), device=device)[:m_edge]
+            edges = edges_all[perm]
         else:
-            perm = torch.randperm(edges_all.size(0), device=device)
-            edges = edges_all[perm[:m_edge]]
+            edges = edges_all
 
         if m_tri > 0:
-            if m_tri >= tris_all.size(0):
-                triangles = tris_all
+            if m_tri < tris_all.size(0):
+                perm = torch.randperm(tris_all.size(0), device=device)[:m_tri]
+                triangles = tris_all[perm]
             else:
-                perm = torch.randperm(tris_all.size(0), device=device)
-                triangles = tris_all[perm[:m_tri]]
+                triangles = tris_all
         else:
             triangles = torch.empty(0, 3, dtype=torch.long, device=device)
 
