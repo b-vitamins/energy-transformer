@@ -100,9 +100,6 @@ class ConvPatchEmbed(nn.Module):
         Normalization layer.
     """
 
-    img_size: tuple[int, int]
-    patch_size: tuple[int, int]
-
     def __init__(
         self,
         img_size: ImageSize,
@@ -233,9 +230,6 @@ class PatchifyEmbed(nn.Module):
     norm : nn.Module
         Normalization layer.
     """
-
-    img_size: tuple[int, int]
-    patch_size: tuple[int, int]
 
     def __init__(
         self,
