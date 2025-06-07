@@ -167,12 +167,6 @@ def train(model_name: str) -> Path:  # noqa: C901, PLR0912, PLR0915
     steps_per_epoch = len(train_loader)
 
     print("-" * 120)
-    if model_name == "vit":
-        print("Monitoring: CE Loss, Accuracy, Gradient Norm")
-    else:
-        print(
-            "Monitoring: CE Loss, Accuracy, E(A)=Attention Energy, E(H)=Hopfield Energy, |∇|=Gradient Norm"
-        )
     best_acc = 0.0
     for epoch in range(EPOCHS):
         model.train()
