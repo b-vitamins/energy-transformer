@@ -15,7 +15,23 @@ if TYPE_CHECKING:  # pragma: no cover
 
 
 def __getattr__(name: str) -> object:
-    """Lazy load modules and attributes."""
+    """Lazy load modules and attributes on demand.
+
+    Parameters
+    ----------
+    name : str
+        Attribute to retrieve from a lazily loaded submodule.
+
+    Returns
+    -------
+    object
+        The requested attribute.
+
+    Raises
+    ------
+    AttributeError
+        If ``name`` is not a known lazy attribute.
+    """
     if name in _LAZY_IMPORTS:
         module_name = _LAZY_IMPORTS[name]
         import importlib

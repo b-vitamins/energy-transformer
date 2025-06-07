@@ -11,6 +11,23 @@ __all__ = ["EnergyTransformer"]
 
 
 def __getattr__(name: str) -> object:
+    """Lazily import the :class:`EnergyTransformer` model.
+
+    Parameters
+    ----------
+    name : str
+        Attribute being requested.
+
+    Returns
+    -------
+    object
+        The requested attribute.
+
+    Raises
+    ------
+    AttributeError
+        If ``name`` is not ``"EnergyTransformer"``.
+    """
     if name == "EnergyTransformer":
         from .base import EnergyTransformer
 

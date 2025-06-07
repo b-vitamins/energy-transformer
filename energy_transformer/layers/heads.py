@@ -87,16 +87,44 @@ class BaseClassifierHead(nn.Module):
         return _POOLS[pool_type]
 
     def _init_linear_zero(self, layer: nn.Linear) -> None:
+        """Initialize linear layer weights to zeros.
+
+        Parameters
+        ----------
+        layer : nn.Linear
+            Layer to initialize.
+        """
         nn.init.zeros_(layer.weight)
         if layer.bias is not None:
             nn.init.zeros_(layer.bias)
 
     def _init_linear_normal(self, layer: nn.Linear, std: float = 0.02) -> None:
+        """Initialize linear layer with truncated normal weights.
+
+        Parameters
+        ----------
+        layer : nn.Linear
+            Layer to initialize.
+        std : float, default=0.02
+            Standard deviation of the normal distribution.
+        """
         nn.init.trunc_normal_(layer.weight, std=std)
         if layer.bias is not None:
             nn.init.zeros_(layer.bias)
 
     def _pool_features(self, x: Tensor) -> Tensor:
+        """Apply configured pooling to ``x``.
+
+        Parameters
+        ----------
+        x : Tensor
+            Input tensor of shape ``(B, N, C)`` or ``(B, C)``.
+
+        Returns
+        -------
+        Tensor
+            Pooled features.
+        """
         return cast(Tensor, self.pool(x))
 
     def extra_repr(self) -> str:

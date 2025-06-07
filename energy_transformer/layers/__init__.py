@@ -53,6 +53,23 @@ _ATTR_TO_MODULE = {
 
 
 def __getattr__(name: str) -> object:
+    """Dynamically import attributes on first access.
+
+    Parameters
+    ----------
+    name : str
+        Attribute name to resolve.
+
+    Returns
+    -------
+    object
+        Requested attribute from the appropriate submodule.
+
+    Raises
+    ------
+    AttributeError
+        If ``name`` is not a lazily-loadable attribute.
+    """
     module_name = _ATTR_TO_MODULE.get(name)
     if module_name is None:
         msg = f"module {__name__!r} has no attribute {name!r}"
