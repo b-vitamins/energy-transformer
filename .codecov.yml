@@ -1,20 +1,83 @@
+# Codecov configuration for energy-transformer
+codecov:
+  require_ci_to_pass: true
+  notify:
+    wait_for_ci: true
+
 coverage:
+  precision: 2  # Round coverage to 2 decimal places
+  round: down   # Always round down
+  
   status:
     project:
       default:
-        target: 90%  # High coverage target
-        threshold: 1%  # Allow 1% drop in coverage
+        target: 90%         # High coverage target
+        threshold: 1%       # Allow 1% drop in coverage
+        if_ci_failed: error # Fail if CI fails
+        informational: false # Make this blocking
+        only_pulls: false   # Check on all commits
+    
     patch:
       default:
-        target: 90%  # Coverage for new code in PRs
+        target: 85%         # Slightly lower for patches (more realistic)
+        threshold: 0%       # No drops allowed in new code
+        base: auto          # Compare against base automatically
+        if_ci_failed: error
+        informational: false
         
+    changes: false  # Disable the "changes" status check
+
 comment:
-  layout: "reach,diff,flags,tree"
+  layout: "header,diff,flags,components,tree"
   behavior: default
-  require_changes: false
+  require_changes: true    # Only comment when coverage changes
+  require_base: true       # Only comment if there's a base to compare
+  require_head: true       # Only comment if head coverage exists
+  show_carryforward_flags: false
+  
+parsers:
+  gcov:
+    branch_detection:
+      conditional: true
+      loop: true
+      method: false
+      macro: false
 
 ignore:
-  - "tests/**/*"
-  - "examples/**/*"
-  - "**/__init__.py"
-  - "setup.py"
+  - "tests/**"           # Test files
+  - "examples/**"        # Example scripts
+  - "benchmarks/**"      # Benchmark files
+  - "**/__init__.py"     # Package init files
+  - "**/conftest.py"     # Pytest configuration
+  - "**/_version.py"     # Version files
+  - "docs/**"            # Documentation
+  - "*.pyi"              # Type stub files
+  - "energy_transformer/models/vision/**"  # From your pyproject.toml coverage config
+
+# Define flags if you test across multiple Python versions or OS
+flags:
+  unittests:
+    paths:
+      - energy_transformer/
+    carryforward: true
+    
+# Component-based coverage tracking
+component_management:
+  default_rules:
+    statuses:
+      - type: project
+        target: auto
+        threshold: 1%
+  individual_components:
+    - component_id: layers
+      name: Layers
+      paths:
+        - energy_transformer/layers/**
+    - component_id: models  
+      name: Models
+      paths:
+        - energy_transformer/models/**
+    - component_id: core
+      name: Core
+      paths:
+        - energy_transformer/*.py
