@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import math
-from typing import cast
 
 import torch
 import torch.nn.functional as F  # noqa: N812
@@ -70,6 +69,7 @@ class MultiheadEnergyAttention(EnergyModule):
         else:
             beta_tensor = beta.to(device=device, dtype=dtype)
 
+        self.betas: Tensor
         self.register_buffer("betas", beta_tensor)
 
     def _project(self, g: Tensor) -> tuple[Tensor, Tensor]:
@@ -91,8 +91,7 @@ class MultiheadEnergyAttention(EnergyModule):
         a = self._affinity(q, k)
 
         lse = torch.logsumexp(a, dim=-1)
-        betas = cast(Tensor, self.betas).view(1, -1, 1)
-        energy = -(lse / betas).sum()
+        energy = -(lse / self.betas.view(1, -1, 1)).sum()
 
         return energy / (g.size(0) * g.size(1))
 
