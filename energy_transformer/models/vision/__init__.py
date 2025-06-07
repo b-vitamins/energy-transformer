@@ -105,6 +105,23 @@ _ATTR_TO_MODULE = {
 
 
 def __getattr__(name: str) -> object:
+    """Lazily resolve vision model attributes.
+
+    Parameters
+    ----------
+    name : str
+        Attribute name to import from a submodule.
+
+    Returns
+    -------
+    object
+        The requested attribute.
+
+    Raises
+    ------
+    AttributeError
+        If ``name`` is not recognized.
+    """
     module_name = _ATTR_TO_MODULE.get(name)
     if module_name is None:
         msg = f"module {__name__!r} has no attribute {name!r}"
