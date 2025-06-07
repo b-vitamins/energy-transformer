@@ -127,7 +127,7 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
         et_steps: int,
         drop_rate: float = 0.0,
     ) -> None:
-        """Initialize VisionImageTransformer."""
+        """Initialize :class:`VisionEnergyTransformer`."""
         super().__init__()
 
         # Store configuration

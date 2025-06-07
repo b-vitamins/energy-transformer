@@ -1,5 +1,6 @@
 r"""Energy-based LayerNorm implementation following Energy Transformer theory."""
 
+import math
 from collections.abc import Sequence
 from typing import Any
 
@@ -143,9 +144,7 @@ class EnergyLayerNorm(nn.Module):
         self.regularization = regularization
         self.enforce_positive_gamma = enforce_positive_gamma
 
-        self._D_cached = 1
-        for dim in self.normalized_shape:
-            self._D_cached *= dim
+        self._D_cached = math.prod(self.normalized_shape)
 
         if self.enforce_positive_gamma:
             init_val = torch.log(torch.expm1(torch.tensor(1.0))).item()
@@ -200,7 +199,7 @@ class EnergyLayerNorm(nn.Module):
     def _reset_parameters(self) -> None:
         """Initialize parameters using best practices."""
         if self.enforce_positive_gamma:
-            init_val = torch.log(torch.expm1(torch.tensor(1.0)))
+            init_val = math.log(math.expm1(1.0))
             self.log_gamma.data.fill_(init_val)
         else:
             self.gamma.data.fill_(1.0)
