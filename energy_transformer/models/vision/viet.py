@@ -112,8 +112,6 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
         Number of energy optimization steps per block.
     drop_rate : float
         Dropout rate.
-    representation_size : int | None
-        Size of representation layer before classification head.
     """
 
     def __init__(
@@ -128,7 +126,6 @@ class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
         hopfield_hidden_dim: int,
         et_steps: int,
         drop_rate: float = 0.0,
-        _representation_size: int | None = None,
     ) -> None:
         """Initialize VisionImageTransformer."""
         super().__init__()

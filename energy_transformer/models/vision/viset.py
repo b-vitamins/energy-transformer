@@ -57,8 +57,6 @@ class VisionSimplicialTransformer(nn.Module):
         Number of energy optimization steps per block.
     drop_rate : float
         Dropout rate.
-    _representation_size : int | None
-        Size of representation layer (for compatibility).
     hopfield_beta : float
         Inverse temperature for Simplicial Hopfield.
     triangle_fraction : float
@@ -77,7 +75,6 @@ class VisionSimplicialTransformer(nn.Module):
         hopfield_hidden_dim: int,
         et_steps: int,
         drop_rate: float = 0.0,
-        _representation_size: int | None = None,
         hopfield_beta: float = 0.1,
         triangle_fraction: float = 0.5,
     ) -> None:

@@ -26,7 +26,6 @@ __all__ = [
     "MIXED_PRECISION_DTYPES",
     "SMALL_INIT_STD",
     "ZERO_INIT_STD",
-    "PoolType",
 ]
 
 # Numerical stability constants
@@ -63,12 +62,3 @@ DEFAULT_COMPUTE_DTYPE: torch.dtype = torch.float32
 # Dimension thresholds
 MEMORY_EFFICIENT_SEQ_THRESHOLD: int = 512
 MIN_SEQUENCE_LENGTH: int = 1
-
-
-class PoolType:
-    """String constants for pooling types."""
-
-    TOKEN = "token"  # noqa: S105
-    AVG = "avg"
-    MAX = "max"
-    NONE = "none"
