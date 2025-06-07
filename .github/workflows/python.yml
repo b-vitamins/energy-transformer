@@ -62,7 +62,7 @@ jobs:
       - name: Install dependencies
         # Only install if cache miss - saves significant time
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
-        run: poetry install --no-interaction --only main,dev
+        run: poetry install --no-interaction --only main,dev,docs
       
       - name: Lint with ruff
         run: |
