@@ -47,6 +47,14 @@ class _GlobalMaxPool(nn.Module):
         raise ValueError(f"Expected 2D or 3D input, got {x.dim()}D")
 
 
+_POOLS: dict[PoolType, nn.Module] = {
+    "avg": _GlobalAvgPool(),
+    "max": _GlobalMaxPool(),
+    "token": _TokenPool(),
+    "none": nn.Identity(),
+}
+
+
 class BaseClassifierHead(nn.Module):
     """Base class for classifier heads with common functionality."""
 
@@ -71,18 +79,12 @@ class BaseClassifierHead(nn.Module):
     @staticmethod
     def _create_pool(pool_type: PoolType) -> nn.Module:
         """Return pooling layer based on ``pool_type``."""
-        pools: dict[PoolType, nn.Module] = {
-            "avg": _GlobalAvgPool(),
-            "max": _GlobalMaxPool(),
-            "token": _TokenPool(),
-            "none": nn.Identity(),
-        }
-        if pool_type not in pools:
+        if pool_type not in _POOLS:
             raise ValueError(
                 f"BaseClassifierHead: Unknown pool_type '{pool_type}'. "
                 "Expected one of: 'avg', 'max', 'token', 'none'."
             )
-        return pools[pool_type]
+        return _POOLS[pool_type]
 
     def _init_linear_zero(self, layer: nn.Linear) -> None:
         nn.init.zeros_(layer.weight)
@@ -375,31 +377,6 @@ class NormMLPClassifierHead(BaseClassifierHead):
         x = self.drop(x)  # (B, hidden)
         return cast(Tensor, self.fc2(x))  # (B, num_classes)
 
-    @property
-    def features_in(self) -> int:
-        """Input feature dimension."""
-        return self.in_features
-
-    @property
-    def features_out(self) -> int:
-        """Output feature dimension (number of classes)."""
-        return self.num_classes
-
-    @property
-    def has_dropout(self) -> bool:
-        """Whether dropout is applied."""
-        return self.drop_rate > 0
-
-    @property
-    def is_pooled(self) -> bool:
-        """Whether input pooling is applied."""
-        return self.pool_type != "none"
-
-    @property
-    def total_params(self) -> int:
-        """Total number of parameters."""
-        return sum(p.numel() for p in self.parameters())
-
 
 class NormLinearClassifierHead(BaseClassifierHead):
     """Normalized linear classifier head.
@@ -455,7 +432,7 @@ class NormLinearClassifierHead(BaseClassifierHead):
         return cast(Tensor, self.fc(x))
 
 
-class ReLUMLPClassifierHead(nn.Module):
+class ReLUMLPClassifierHead(BaseClassifierHead):
     """ReLU-based MLP classifier head.
 
     Two-layer MLP with ReLU activation, layer normalization,
@@ -489,18 +466,12 @@ class ReLUMLPClassifierHead(nn.Module):
         norm_layer: ModuleFactory | None = nn.LayerNorm,
         bias: bool = True,
     ) -> None:
-        super().__init__()
+        super().__init__(in_features, num_classes, pool_type, drop_rate)
         hidden_features = hidden_features or num_classes
 
-        self.in_features = in_features
-        self.num_classes = num_classes
-        self.pool_type = pool_type
-        self.drop_rate = drop_rate
-        self.pool = _create_pool(pool_type)
         self.norm = norm_layer(in_features) if norm_layer else nn.Identity()
         self.fc1 = nn.Linear(in_features, hidden_features, bias=bias)
         self.act = nn.ReLU(inplace=True)
-        self.drop = nn.Dropout(drop_rate)
         self.fc2 = nn.Linear(hidden_features, num_classes, bias=bias)
 
         self._init_weights()
