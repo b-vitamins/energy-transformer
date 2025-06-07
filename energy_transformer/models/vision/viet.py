@@ -41,7 +41,7 @@ from energy_transformer.layers.validation import validate_shape_match
 from energy_transformer.models.base import EnergyTransformer
 
 
-class VisionEnergyTransformer(nn.Module):  # type: ignore[misc]
+class VisionEnergyTransformer(nn.Module):
     """Vision Energy Transformer (ViET).
 
     A Vision Transformer that replaces standard components with energy-based
