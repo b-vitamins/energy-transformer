@@ -23,8 +23,6 @@ extensions = [
     "sphinx.ext.intersphinx",
     "sphinx.ext.mathjax",
     "sphinx.ext.githubpages",
-    # Additional extensions
-    "sphinx_autodoc_typehints",
 ]
 
 # Optional extensions
@@ -87,10 +85,6 @@ napoleon_type_aliases = {
     "Dtype": "torch.dtype",
 }
 
-# Type hints
-typehints_defaults = "comma"
-typehints_use_signature = True
-typehints_use_signature_return = True
 
 # Intersphinx mapping (link to other projects)
 intersphinx_mapping = {
