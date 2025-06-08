@@ -1,0 +1,47 @@
+/* Custom CSS for Energy Transformer docs */
+
+/* Improve readability */
+.rst-content .section {
+    margin-bottom: 2rem;
+}
+
+/* Better code blocks */
+.highlight pre {
+    padding: 1rem;
+    border-radius: 0.25rem;
+}
+
+/* Improve API documentation */
+.py.class, .py.function, .py.method {
+    margin-bottom: 2rem;
+}
+
+/* Better admonitions */
+.admonition {
+    border-radius: 0.25rem;
+    margin: 1rem 0;
+}
+
+/* Source link styling */
+.viewcode-link {
+    float: right;
+    font-size: 0.9em;
+}
+
+/* Signature formatting */
+.sig-param {
+    font-style: italic;
+}
+
+/* Type hints */
+.sig-return-typehint {
+    color: #666;
+}
+
+/* Module index */
+.modindex-jumpbox {
+    margin: 1rem 0;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-radius: 0.25rem;
+}
