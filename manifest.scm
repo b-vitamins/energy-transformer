@@ -32,7 +32,6 @@
    "python-tensorboard"
    "python-wandb"
    "python-sphinx"
-   "python-sphinx-autodoc-typehints"
    "python-pydata-sphinx-theme"
    "python-sphinx-copybutton"
    "python-myst-parser"

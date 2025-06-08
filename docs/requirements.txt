@@ -1,6 +1,5 @@
 # Core dependencies needed for building docs
 sphinx==8.2.3
-sphinx-autodoc-typehints==3.2.0
 pydata-sphinx-theme==0.16.1
 sphinx-copybutton==0.5.2
 myst-parser==4.0.1

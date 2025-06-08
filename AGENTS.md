@@ -455,7 +455,6 @@ extensions = [
     'sphinx.ext.napoleon',  # For NumPy-style docstrings
     'sphinx.ext.viewcode',
     'sphinx.ext.mathjax',   # For LaTeX math
-    'sphinx_autodoc_typehints',
 ]
 
 # Napoleon settings for NumPy style
