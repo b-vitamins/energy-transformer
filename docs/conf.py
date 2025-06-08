@@ -25,10 +25,26 @@ extensions = [
     "sphinx.ext.githubpages",
     # Additional extensions
     "sphinx_autodoc_typehints",
-    "sphinx_copybutton",
-    "myst_parser",
-    "numpydoc",
 ]
+
+# Optional extensions
+try:
+    import sphinx_copybutton  # noqa: F401
+except ImportError:  # pragma: no cover - optional feature
+    pass
+else:
+    extensions.append("sphinx_copybutton")
+
+for ext in [
+    ("myst_parser", "myst_parser"),
+    ("numpydoc", "numpydoc"),
+]:
+    try:
+        __import__(ext[0])
+    except ImportError:  # pragma: no cover - optional feature
+        pass
+    else:
+        extensions.append(ext[1])
 
 # Templates and patterns
 templates_path = ["_templates"]
@@ -92,36 +108,40 @@ myst_enable_extensions = [
     "tasklist",
 ]
 
-# HTML output with PyData theme
-html_theme = "pydata_sphinx_theme"
+# HTML output
 html_static_path = ["_static"]
 
-html_theme_options = {
-    "github_url": "https://github.com/b-vitamins/energy-transformer",
-    "icon_links": [
-        {
-            "name": "PyPI",
-            "url": "https://pypi.org/project/energy-transformer/",
-            "icon": "fa-brands fa-python",
-        },
-    ],
-    "logo": {
-        "text": "Energy Transformer",
-    },
-    "show_toc_level": 2,
-    "navigation_depth": 3,
-    "show_nav_level": 1,
-    "navigation_with_keys": True,
-    "collapse_navigation": False,
-    "show_prev_next": True,
-    "use_edit_page_button": True,
-    "navbar_align": "left",
-    "header_links_before_dropdown": 4,
-    "primary_sidebar_end": ["indices.html"],
-    "secondary_sidebar_items": ["page-toc", "edit-this-page", "sourcelink"],
-    "pygment_light_style": "default",
-    "pygment_dark_style": "monokai",
-}
+try:
+    import pydata_sphinx_theme  # noqa: F401
+except ImportError:  # pragma: no cover - optional theme
+    html_theme = "alabaster"
+    html_theme_options = {}
+else:
+    html_theme = "pydata_sphinx_theme"
+    html_theme_options = {
+        "github_url": "https://github.com/b-vitamins/energy-transformer",
+        "icon_links": [
+            {
+                "name": "PyPI",
+                "url": "https://pypi.org/project/energy-transformer/",
+                "icon": "fa-brands fa-python",
+            },
+        ],
+        "logo": {"text": "Energy Transformer"},
+        "show_toc_level": 2,
+        "navigation_depth": 3,
+        "show_nav_level": 1,
+        "navigation_with_keys": True,
+        "collapse_navigation": False,
+        "show_prev_next": True,
+        "use_edit_page_button": True,
+        "navbar_align": "left",
+        "header_links_before_dropdown": 4,
+        "primary_sidebar_end": ["indices.html"],
+        "secondary_sidebar_items": ["page-toc", "edit-this-page", "sourcelink"],
+        "pygment_light_style": "default",
+        "pygment_dark_style": "monokai",
+    }
 
 html_context = {
     "github_user": "b-vitamins",
