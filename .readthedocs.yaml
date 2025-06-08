@@ -6,7 +6,6 @@ build:
   os: ubuntu-22.04
   tools:
     python: "3.11"
-    sphinx: "6.2.1"
   jobs:
     post_create_environment:
       # Install poetry
@@ -21,8 +20,6 @@ sphinx:
   configuration: docs/conf.py
   builder: html
   fail_on_warning: false  # Set to true after initial setup
-  version: "6.2.1"
-
 
 # Build PDF & ePub
 formats:
