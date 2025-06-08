@@ -20,14 +20,8 @@ sphinx:
   configuration: docs/conf.py
   builder: html
   fail_on_warning: false  # Set to true after initial setup
+  version: "6.2.1"
 
-# Python environment
-python:
-  install:
-    - method: pip
-      path: .
-      extra_requirements:
-        - docs
 
 # Build PDF & ePub
 formats:
