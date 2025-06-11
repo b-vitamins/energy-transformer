@@ -39,10 +39,6 @@ git add -A && git commit -m "..."
 ### PyTorch First
 Follow PyTorch's conventions for everything - API design, naming, code organization. When in doubt, check how PyTorch core does it.
 
-## Coding Conventions
-
-### PyTorch First
-Follow PyTorch's conventions for everything - API design, naming, code organization. When in doubt, check how PyTorch core does it.
 
 ### Modern Python (3.11+)
 
@@ -280,24 +276,6 @@ class AttentionConfig:
 4. **No duplicate code**: Extract common patterns
 5. **No mixed concerns**: Single responsibility per function/class
 
-### Common Patterns
-
-```python
-# Parameter initialization (PyTorch style)
-def reset_parameters(self) -> None:
-    nn.init.xavier_uniform_(self.weight)
-    if self.bias is not None:
-        nn.init.zeros_(self.bias)
-
-# Factory functions for model variants
-def vit_base(**kwargs) -> VisionTransformer:
-    return VisionTransformer(
-        embed_dim=768,
-        depth=12,
-        num_heads=12,
-        **kwargs
-    )
-```
 
 ### Common Patterns
 
