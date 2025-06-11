@@ -854,7 +854,6 @@ python -c "import energy_transformer; print('No circular imports')"
 
 # Profile import time
 python -X importtime -c "import energy_transformer" 2>&1 | grep energy_transformer
-
 # Run specific test pattern
 pytest tests/ -k "attention" -v
 ```
@@ -864,3 +863,45 @@ pytest tests/ -k "attention" -v
 - Main paper: "Energy Transformer" (Hoover et al., 2023)
 - Issues: Check GitHub issues for known problems
 - Discussions: See GitHub discussions for design decisions
+
+## Commit Message Standards
+
+Use [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) to structure commit history.
+Prefixes include `feat`, `fix`, `docs`, `style`, `refactor`, `test`, and `chore`.
+Example:
+
+```
+feat(layers): add Hopfield normalization
+```
+
+Each commit should be atomic and self-contained. Run all pre-commit checks before committing.
+
+## Pull Request Standards
+
+1. Title format: `[component] Summary of change`.
+2. Description should outline _why_ the change is needed and reference any issues.
+3. Include a checklist confirming tests, type checks, and docs were updated.
+4. Mark the PR ready for review only after CI passes locally.
+
+## Code Housekeeping
+
+- Update dependencies monthly using `poetry update`.
+- Remove deprecated code promptly.
+- Monitor CI for security alerts and address immediately.
+- Track technical debt in GitHub issues.
+
+## Version Management
+
+The project follows Semantic Versioning. Update `__version__` in `energy_transformer/__init__.py` and `pyproject.toml` together. Tag releases with `vMAJOR.MINOR.PATCH`.
+
+## CHANGELOG Maintenance
+
+Document user-facing changes in `CHANGELOG.md` under an `Unreleased` section using the categories *Added*, *Changed*, *Deprecated*, *Removed*, *Fixed*, and *Security*.
+
+## Testing Standards
+
+Maintain at least 90% coverage. Organise tests under `tests/` following the conventions in `tests/README.md`. Use markers such as `@pytest.mark.slow` for long-running tests.
+
+## Documentation Standards
+
+Write NumPy-style docstrings for all public functions and classes. Update the README or relevant tutorial when behavior changes. Build docs locally with `poetry run make -C docs html` to verify.
