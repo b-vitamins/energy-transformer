@@ -39,7 +39,6 @@ git add -A && git commit -m "..."
 ### PyTorch First
 Follow PyTorch's conventions for everything - API design, naming, code organization. When in doubt, check how PyTorch core does it.
 
-
 ### Modern Python (3.11+)
 
 Use modern Python features for cleaner, more maintainable code:
@@ -883,3 +882,35 @@ Maintain at least 90% coverage. Organise tests under `tests/` following the conv
 ## Documentation Standards
 
 Write NumPy-style docstrings for all public functions and classes. Update the README or relevant tutorial when behavior changes. Build docs locally with `poetry run make -C docs html` to verify.
+
+## Housekeeping & Release Protocols
+
+### Commit Message Format
+- Use `component: short imperative summary`.
+- Keep lines under 72 characters.
+- Reference issues in parentheses, e.g. `optim: fix lr schedule (#123)`.
+
+### Commit Sequencing
+1. Run `ruff check --fix`, `ruff format`, `mypy`, and `pytest tests/` before each commit.
+2. Keep commits small and logically focused.
+3. Avoid mixing refactors with new features.
+
+### PR Message Format
+- **Title:** `[component] Summary`
+- **Body:**
+  - Overview of changes
+  - Testing details
+  - Note breaking changes or migrations
+
+### CHANGELOG Maintenance
+- Edit `CHANGELOG.md` under an **Unreleased** section for every PR.
+- Use `Added`, `Changed`, `Fixed`, `Removed` bullet lists and link PR numbers.
+
+### Release Process
+1. Bump `pyproject.toml`'s `version` field according to SemVer.
+2. Move `Unreleased` notes in `CHANGELOG.md` to a new version heading with the release date.
+3. Tag the release as `vX.Y.Z` and push the tag.
+
+### Regular Housekeeping
+- Remove stale TODOs and keep docs in sync with code.
+- Periodically run `ruff check . --select F401` to catch unused imports.
