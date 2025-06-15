@@ -65,17 +65,17 @@ class MultiheadEnergyAttention(EnergyModule):
 
         # Projection weights
         self.wk = nn.Parameter(
-            torch.randn(
+            torch.empty(
                 num_heads, self.head_dim, embed_dim, device=device, dtype=dtype
             )
-            * init_std
         )
         self.wq = nn.Parameter(
-            torch.randn(
+            torch.empty(
                 num_heads, self.head_dim, embed_dim, device=device, dtype=dtype
             )
-            * init_std
         )
+        nn.init.trunc_normal_(self.wk, std=init_std)
+        nn.init.trunc_normal_(self.wq, std=init_std)
 
         # Temperature parameters
         if beta is None:
@@ -152,3 +152,8 @@ class MultiheadEnergyAttention(EnergyModule):
     def forward(self, x: Tensor) -> Tensor:
         """Compute energy for compatibility with :class:`EnergyTransformer`."""
         return self.compute_energy(x)
+
+    @property
+    def num_parameters(self) -> int:
+        """Number of trainable parameters."""
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)

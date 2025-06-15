@@ -170,6 +170,11 @@ class VisionSimplicialTransformer(nn.Module):
 
         return logits
 
+    @property
+    def num_parameters(self) -> int:
+        """Number of trainable parameters."""
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+
 
 def viset_tiny(**kwargs: Any) -> VisionSimplicialTransformer:
     """ViSET-Tiny configuration."""

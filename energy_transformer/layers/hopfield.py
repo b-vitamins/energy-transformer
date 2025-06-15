@@ -53,18 +53,27 @@ class HopfieldNetwork(EnergyModule):
 
         self.embed_dim = embed_dim
         self.hidden_dim = hidden_dim or int(embed_dim * hidden_ratio)
-        if activation not in {"relu", "softmax"}:
-            msg = (
-                f"{self.__class__.__name__}: activation must be 'relu' or 'softmax',"
-                f" got {activation!r}."
-            )
-            raise ValueError(msg)
-        self.activation = activation
+
+        match activation:
+            case "relu":
+                self.activation = "relu"
+                self.register_buffer("beta", None)
+            case "softmax":
+                self.activation = "softmax"
+                self.beta = nn.Parameter(
+                    torch.tensor(beta, device=device, dtype=dtype)
+                )
+            case _:
+                msg = (
+                    f"{self.__class__.__name__}: activation must be 'relu' or 'softmax',"
+                    f" got {activation!r}."
+                )
+                raise ValueError(msg)
 
         self.kernel = nn.Parameter(
-            torch.randn(embed_dim, self.hidden_dim, device=device, dtype=dtype)
-            * init_std
+            torch.empty(embed_dim, self.hidden_dim, device=device, dtype=dtype)
         )
+        nn.init.trunc_normal_(self.kernel, std=init_std)
 
         if bias:
             self.bias = nn.Parameter(
@@ -72,13 +81,6 @@ class HopfieldNetwork(EnergyModule):
             )
         else:
             self.register_parameter("bias", None)
-
-        if activation == "softmax":
-            self.beta = nn.Parameter(
-                torch.tensor(beta, device=device, dtype=dtype)
-            )
-        else:
-            self.register_buffer("beta", None)
 
     def _preactivate(self, g: Tensor) -> Tensor:
         """Linear transform with optional bias."""
@@ -138,3 +140,8 @@ class HopfieldNetwork(EnergyModule):
     def forward(self, g: Tensor) -> Tensor:
         """Return energy for compatibility with :class:`EnergyTransformer`."""
         return self.compute_energy(g)
+
+    @property
+    def num_parameters(self) -> int:
+        """Number of trainable parameters."""
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
