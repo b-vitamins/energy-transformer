@@ -6,8 +6,9 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover
     from .base import EnergyTransformer
+    from .configs import ViETConfig, ViSETConfig, ViTConfig
 
-__all__ = ["EnergyTransformer"]
+__all__ = ["EnergyTransformer", "ViETConfig", "ViSETConfig", "ViTConfig"]
 
 
 def __getattr__(name: str) -> object:
@@ -32,5 +33,13 @@ def __getattr__(name: str) -> object:
         from .base import EnergyTransformer
 
         return EnergyTransformer
+    if name in {"ViTConfig", "ViETConfig", "ViSETConfig"}:
+        from .configs import ViETConfig, ViSETConfig, ViTConfig
+
+        return {
+            "ViTConfig": ViTConfig,
+            "ViETConfig": ViETConfig,
+            "ViSETConfig": ViSETConfig,
+        }[name]
     msg = f"module {__name__!r} has no attribute {name!r}"
     raise AttributeError(msg)
