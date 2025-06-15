@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from ..configs import ViETConfig
+from energy_transformer.models.configs import ViETConfig
 
 __all__ = [
     "VisionEnergyTransformer",

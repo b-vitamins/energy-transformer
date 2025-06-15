@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from ..configs import ViSETConfig
+from energy_transformer.models.configs import ViSETConfig
 
 __all__ = [
     "VisionSimplicialTransformer",

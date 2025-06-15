@@ -50,7 +50,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from ..configs import ViTConfig
+from energy_transformer.models.configs import ViTConfig
 
 __all__ = [
     "PatchEmbedding",

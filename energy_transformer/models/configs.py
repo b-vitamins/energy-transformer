@@ -24,6 +24,7 @@ class ViTConfig:
     drop_rate: float = 0.0
 
     def apply_overrides(self, **overrides: Any) -> Self:
+        """Apply runtime overrides to this configuration."""
         for key, value in overrides.items():
             if not hasattr(self, key):
                 msg = f"{self.__class__.__name__}: unknown field {key!r}"
@@ -31,7 +32,8 @@ class ViTConfig:
             setattr(self, key, value)
         return self
 
-    def build(self) -> "VisionTransformer":
+    def build(self) -> VisionTransformer:
+        """Construct a :class:`VisionTransformer` from this configuration."""
         from .vision.vit import VisionTransformer
 
         return VisionTransformer(
@@ -63,6 +65,7 @@ class ViETConfig:
     drop_rate: float = 0.0
 
     def apply_overrides(self, **overrides: Any) -> Self:
+        """Apply runtime overrides to this configuration."""
         for key, value in overrides.items():
             if not hasattr(self, key):
                 msg = f"{self.__class__.__name__}: unknown field {key!r}"
@@ -70,7 +73,8 @@ class ViETConfig:
             setattr(self, key, value)
         return self
 
-    def build(self) -> "VisionEnergyTransformer":
+    def build(self) -> VisionEnergyTransformer:
+        """Construct a :class:`VisionEnergyTransformer` from this configuration."""
         from .vision.viet import VisionEnergyTransformer
 
         return VisionEnergyTransformer(
@@ -105,6 +109,7 @@ class ViSETConfig:
     triangle_fraction: float = 0.5
 
     def apply_overrides(self, **overrides: Any) -> Self:
+        """Apply runtime overrides to this configuration."""
         for key, value in overrides.items():
             if not hasattr(self, key):
                 msg = f"{self.__class__.__name__}: unknown field {key!r}"
@@ -112,7 +117,8 @@ class ViSETConfig:
             setattr(self, key, value)
         return self
 
-    def build(self) -> "VisionSimplicialTransformer":
+    def build(self) -> VisionSimplicialTransformer:
+        """Construct a :class:`VisionSimplicialTransformer` from this configuration."""
         from .vision.viset import VisionSimplicialTransformer
 
         return VisionSimplicialTransformer(
