@@ -54,10 +54,11 @@ class HopfieldNetwork(EnergyModule):
         self.embed_dim = embed_dim
         self.hidden_dim = hidden_dim or int(embed_dim * hidden_ratio)
         if activation not in {"relu", "softmax"}:
-            raise ValueError(
+            msg = (
                 f"{self.__class__.__name__}: activation must be 'relu' or 'softmax',"
                 f" got {activation!r}."
             )
+            raise ValueError(msg)
         self.activation = activation
 
         self.kernel = nn.Parameter(

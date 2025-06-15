@@ -249,9 +249,10 @@ class ClassifierHead(nn.Module):
         ----------
         x : Tensor
             Input tensor of shape:
-            - (B, N, C) for sequence input with pool_type in ['avg', 'max', 'token']
-            - (B, C) for pre-pooled input with pool_type='none'
-            - (B, C, N) for use_conv=True
+            - ``(B, N, C)`` for sequence input when ``pool_type`` is
+              ``'avg'``, ``'max'`` or ``'token'``
+            - ``(B, C)`` for pre-pooled input with ``pool_type='none'``
+            - ``(B, C, N)`` when ``use_conv=True``
 
         Returns
         -------
@@ -259,10 +260,12 @@ class ClassifierHead(nn.Module):
             Logits of shape (B, num_classes).
         """
         if self.pool_type != "none" and x.dim() not in [2, 3]:
-            raise ValueError(
-                f"{self.__class__.__name__}: Input must be 2D or 3D when pool_type='{self.pool_type}'. "
+            msg = (
+                f"{self.__class__.__name__}: Input must be 2D or 3D when "
+                f"pool_type='{self.pool_type}'. "
                 f"Got {x.dim()}D input with shape {list(x.shape)}."
             )
+            raise ValueError(msg)
 
         if self.pool_type == "token":
             # Extract CLS token
