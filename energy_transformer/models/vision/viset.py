@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+from energy_transformer.models.configs import ViSETConfig
+
 __all__ = [
     "VisionSimplicialTransformer",
     "viset_2l_cifar",
@@ -171,164 +173,164 @@ class VisionSimplicialTransformer(nn.Module):
 
 def viset_tiny(**kwargs: Any) -> VisionSimplicialTransformer:
     """ViSET-Tiny configuration."""
-    config: dict[str, Any] = {
-        "embed_dim": 192,
-        "depth": 12,
-        "num_heads": 3,
-        "hopfield_hidden_dim": 768,
-        "et_steps": 4,
-        "in_chans": 3,
-        "triangle_fraction": 0.5,
-    }
-    config.update(kwargs)
-    return VisionSimplicialTransformer(**config)
+    config = ViSETConfig(
+        embed_dim=192,
+        depth=12,
+        num_heads=3,
+        hopfield_hidden_dim=768,
+        et_steps=4,
+        in_chans=3,
+        triangle_fraction=0.5,
+    )
+    config.apply_overrides(**kwargs)
+    return config.build()
 
 
 def viset_small(**kwargs: Any) -> VisionSimplicialTransformer:
     """ViSET-Small configuration."""
-    config: dict[str, Any] = {
-        "embed_dim": 384,
-        "depth": 12,
-        "num_heads": 6,
-        "hopfield_hidden_dim": 1536,
-        "et_steps": 4,
-        "in_chans": 3,
-        "triangle_fraction": 0.5,
-    }
-    config.update(kwargs)
-    return VisionSimplicialTransformer(**config)
+    config = ViSETConfig(
+        embed_dim=384,
+        depth=12,
+        num_heads=6,
+        hopfield_hidden_dim=1536,
+        et_steps=4,
+        in_chans=3,
+        triangle_fraction=0.5,
+    )
+    config.apply_overrides(**kwargs)
+    return config.build()
 
 
 def viset_base(**kwargs: Any) -> VisionSimplicialTransformer:
     """ViSET-Base configuration."""
-    config: dict[str, Any] = {
-        "embed_dim": 768,
-        "depth": 12,
-        "num_heads": 12,
-        "hopfield_hidden_dim": 3072,
-        "et_steps": 4,
-        "in_chans": 3,
-        "triangle_fraction": 0.5,
-    }
-    config.update(kwargs)
-    return VisionSimplicialTransformer(**config)
+    config = ViSETConfig(
+        embed_dim=768,
+        depth=12,
+        num_heads=12,
+        hopfield_hidden_dim=3072,
+        et_steps=4,
+        in_chans=3,
+        triangle_fraction=0.5,
+    )
+    config.apply_overrides(**kwargs)
+    return config.build()
 
 
 def viset_large(**kwargs: Any) -> VisionSimplicialTransformer:
     """ViSET-Large configuration."""
-    config: dict[str, Any] = {
-        "embed_dim": 1024,
-        "depth": 24,
-        "num_heads": 16,
-        "hopfield_hidden_dim": 4096,
-        "et_steps": 4,
-        "in_chans": 3,
-        "triangle_fraction": 0.5,
-    }
-    config.update(kwargs)
-    return VisionSimplicialTransformer(**config)
+    config = ViSETConfig(
+        embed_dim=1024,
+        depth=24,
+        num_heads=16,
+        hopfield_hidden_dim=4096,
+        et_steps=4,
+        in_chans=3,
+        triangle_fraction=0.5,
+    )
+    config.apply_overrides(**kwargs)
+    return config.build()
 
 
 def viset_tiny_cifar(
     num_classes: int = 100, **kwargs: Any
 ) -> VisionSimplicialTransformer:
     """ViSET-Tiny for CIFAR datasets."""
-    config: dict[str, Any] = {
-        "img_size": 32,
-        "patch_size": 4,
-        "in_chans": 3,
-        "num_classes": num_classes,
-        "embed_dim": 192,
-        "depth": 12,
-        "num_heads": 3,
-        "hopfield_hidden_dim": 768,
-        "et_steps": 4,
-        "drop_rate": 0.1,
-        "triangle_fraction": 0.5,
-    }
-    config.update(kwargs)
-    return VisionSimplicialTransformer(**config)
+    config = ViSETConfig(
+        img_size=32,
+        patch_size=4,
+        in_chans=3,
+        num_classes=num_classes,
+        embed_dim=192,
+        depth=12,
+        num_heads=3,
+        hopfield_hidden_dim=768,
+        et_steps=4,
+        drop_rate=0.1,
+        triangle_fraction=0.5,
+    )
+    config.apply_overrides(**kwargs)
+    return config.build()
 
 
 def viset_small_cifar(
     num_classes: int = 100, **kwargs: Any
 ) -> VisionSimplicialTransformer:
     """ViSET-Small for CIFAR datasets."""
-    config: dict[str, Any] = {
-        "img_size": 32,
-        "patch_size": 4,
-        "in_chans": 3,
-        "num_classes": num_classes,
-        "embed_dim": 384,
-        "depth": 12,
-        "num_heads": 6,
-        "hopfield_hidden_dim": 1536,
-        "et_steps": 4,
-        "drop_rate": 0.1,
-        "triangle_fraction": 0.5,
-    }
-    config.update(kwargs)
-    return VisionSimplicialTransformer(**config)
+    config = ViSETConfig(
+        img_size=32,
+        patch_size=4,
+        in_chans=3,
+        num_classes=num_classes,
+        embed_dim=384,
+        depth=12,
+        num_heads=6,
+        hopfield_hidden_dim=1536,
+        et_steps=4,
+        drop_rate=0.1,
+        triangle_fraction=0.5,
+    )
+    config.apply_overrides(**kwargs)
+    return config.build()
 
 
 def viset_2l_cifar(
     num_classes: int = 100, **kwargs: Any
 ) -> VisionSimplicialTransformer:
     """2-layer ViSET for CIFAR datasets."""
-    config: dict[str, Any] = {
-        "img_size": 32,
-        "patch_size": 4,
-        "in_chans": 3,
-        "num_classes": num_classes,
-        "embed_dim": 192,
-        "depth": 2,
-        "num_heads": 8,
-        "hopfield_hidden_dim": 192,
-        "et_steps": 6,
-        "drop_rate": 0.1,
-        "triangle_fraction": 0.5,
-    }
-    config.update(kwargs)
-    return VisionSimplicialTransformer(**config)
+    config = ViSETConfig(
+        img_size=32,
+        patch_size=4,
+        in_chans=3,
+        num_classes=num_classes,
+        embed_dim=192,
+        depth=2,
+        num_heads=8,
+        hopfield_hidden_dim=192,
+        et_steps=6,
+        drop_rate=0.1,
+        triangle_fraction=0.5,
+    )
+    config.apply_overrides(**kwargs)
+    return config.build()
 
 
 def viset_4l_cifar(
     num_classes: int = 100, **kwargs: Any
 ) -> VisionSimplicialTransformer:
     """4-layer ViSET for CIFAR datasets."""
-    config: dict[str, Any] = {
-        "img_size": 32,
-        "patch_size": 4,
-        "in_chans": 3,
-        "num_classes": num_classes,
-        "embed_dim": 192,
-        "depth": 4,
-        "num_heads": 8,
-        "hopfield_hidden_dim": 192,
-        "et_steps": 5,
-        "drop_rate": 0.1,
-        "triangle_fraction": 0.5,
-    }
-    config.update(kwargs)
-    return VisionSimplicialTransformer(**config)
+    config = ViSETConfig(
+        img_size=32,
+        patch_size=4,
+        in_chans=3,
+        num_classes=num_classes,
+        embed_dim=192,
+        depth=4,
+        num_heads=8,
+        hopfield_hidden_dim=192,
+        et_steps=5,
+        drop_rate=0.1,
+        triangle_fraction=0.5,
+    )
+    config.apply_overrides(**kwargs)
+    return config.build()
 
 
 def viset_6l_cifar(
     num_classes: int = 100, **kwargs: Any
 ) -> VisionSimplicialTransformer:
     """6-layer ViSET for CIFAR datasets."""
-    config: dict[str, Any] = {
-        "img_size": 32,
-        "patch_size": 4,
-        "in_chans": 3,
-        "num_classes": num_classes,
-        "embed_dim": 192,
-        "depth": 6,
-        "num_heads": 8,
-        "hopfield_hidden_dim": 192,
-        "et_steps": 4,
-        "drop_rate": 0.1,
-        "triangle_fraction": 0.5,
-    }
-    config.update(kwargs)
-    return VisionSimplicialTransformer(**config)
+    config = ViSETConfig(
+        img_size=32,
+        patch_size=4,
+        in_chans=3,
+        num_classes=num_classes,
+        embed_dim=192,
+        depth=6,
+        num_heads=8,
+        hopfield_hidden_dim=192,
+        et_steps=4,
+        drop_rate=0.1,
+        triangle_fraction=0.5,
+    )
+    config.apply_overrides(**kwargs)
+    return config.build()

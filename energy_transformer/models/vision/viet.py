@@ -16,6 +16,8 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+from energy_transformer.models.configs import ViETConfig
+
 __all__ = [
     "VisionEnergyTransformer",
     "viet_2l_cifar",
@@ -221,58 +223,58 @@ class VisionEnergyTransformer(nn.Module):
 
 def viet_tiny(**kwargs: Any) -> VisionEnergyTransformer:
     """ViET-Tiny configuration."""
-    config: dict[str, Any] = {
-        "embed_dim": 192,
-        "depth": 12,
-        "num_heads": 3,
-        "hopfield_hidden_dim": 768,  # 4x embed_dim
-        "et_steps": 4,
-        "in_chans": 3,
-    }
-    config.update(kwargs)
-    return VisionEnergyTransformer(**config)
+    config = ViETConfig(
+        embed_dim=192,
+        depth=12,
+        num_heads=3,
+        hopfield_hidden_dim=768,
+        et_steps=4,
+        in_chans=3,
+    )
+    config.apply_overrides(**kwargs)
+    return config.build()
 
 
 def viet_small(**kwargs: Any) -> VisionEnergyTransformer:
     """ViET-Small configuration."""
-    config: dict[str, Any] = {
-        "embed_dim": 384,
-        "depth": 12,
-        "num_heads": 6,
-        "hopfield_hidden_dim": 1536,  # 4x embed_dim
-        "et_steps": 4,
-        "in_chans": 3,
-    }
-    config.update(kwargs)
-    return VisionEnergyTransformer(**config)
+    config = ViETConfig(
+        embed_dim=384,
+        depth=12,
+        num_heads=6,
+        hopfield_hidden_dim=1536,
+        et_steps=4,
+        in_chans=3,
+    )
+    config.apply_overrides(**kwargs)
+    return config.build()
 
 
 def viet_base(**kwargs: Any) -> VisionEnergyTransformer:
     """ViET-Base configuration."""
-    config: dict[str, Any] = {
-        "embed_dim": 768,
-        "depth": 12,
-        "num_heads": 12,
-        "hopfield_hidden_dim": 3072,  # 4x embed_dim
-        "et_steps": 4,
-        "in_chans": 3,
-    }
-    config.update(kwargs)
-    return VisionEnergyTransformer(**config)
+    config = ViETConfig(
+        embed_dim=768,
+        depth=12,
+        num_heads=12,
+        hopfield_hidden_dim=3072,
+        et_steps=4,
+        in_chans=3,
+    )
+    config.apply_overrides(**kwargs)
+    return config.build()
 
 
 def viet_large(**kwargs: Any) -> VisionEnergyTransformer:
     """ViET-Large configuration."""
-    config: dict[str, Any] = {
-        "embed_dim": 1024,
-        "depth": 24,
-        "num_heads": 16,
-        "hopfield_hidden_dim": 4096,  # 4x embed_dim
-        "et_steps": 4,
-        "in_chans": 3,
-    }
-    config.update(kwargs)
-    return VisionEnergyTransformer(**config)
+    config = ViETConfig(
+        embed_dim=1024,
+        depth=24,
+        num_heads=16,
+        hopfield_hidden_dim=4096,
+        et_steps=4,
+        in_chans=3,
+    )
+    config.apply_overrides(**kwargs)
+    return config.build()
 
 
 # CIFAR-specific configurations
@@ -283,20 +285,20 @@ def viet_tiny_cifar(
     **kwargs: Any,
 ) -> VisionEnergyTransformer:
     """ViET-Tiny for CIFAR datasets."""
-    config: dict[str, Any] = {
-        "img_size": 32,
-        "patch_size": 4,
-        "in_chans": 3,
-        "num_classes": num_classes,
-        "embed_dim": 192,
-        "depth": 12,
-        "num_heads": 3,
-        "hopfield_hidden_dim": 768,
-        "et_steps": 4,
-        "drop_rate": 0.1,
-    }
-    config.update(kwargs)
-    return VisionEnergyTransformer(**config)
+    config = ViETConfig(
+        img_size=32,
+        patch_size=4,
+        in_chans=3,
+        num_classes=num_classes,
+        embed_dim=192,
+        depth=12,
+        num_heads=3,
+        hopfield_hidden_dim=768,
+        et_steps=4,
+        drop_rate=0.1,
+    )
+    config.apply_overrides(**kwargs)
+    return config.build()
 
 
 def viet_small_cifar(
@@ -304,20 +306,20 @@ def viet_small_cifar(
     **kwargs: Any,
 ) -> VisionEnergyTransformer:
     """ViET-Small for CIFAR datasets."""
-    config: dict[str, Any] = {
-        "img_size": 32,
-        "patch_size": 4,
-        "in_chans": 3,
-        "num_classes": num_classes,
-        "embed_dim": 384,
-        "depth": 12,
-        "num_heads": 6,
-        "hopfield_hidden_dim": 1536,
-        "et_steps": 4,
-        "drop_rate": 0.1,
-    }
-    config.update(kwargs)
-    return VisionEnergyTransformer(**config)
+    config = ViETConfig(
+        img_size=32,
+        patch_size=4,
+        in_chans=3,
+        num_classes=num_classes,
+        embed_dim=384,
+        depth=12,
+        num_heads=6,
+        hopfield_hidden_dim=1536,
+        et_steps=4,
+        drop_rate=0.1,
+    )
+    config.apply_overrides(**kwargs)
+    return config.build()
 
 
 # Shallow CIFAR configurations for testing
@@ -328,20 +330,20 @@ def viet_2l_cifar(
     **kwargs: Any,
 ) -> VisionEnergyTransformer:
     """Vision Energy Transformer with only 2 layers for CIFAR datasets."""
-    config: dict[str, Any] = {
-        "img_size": 32,
-        "patch_size": 4,
-        "in_chans": 3,
-        "num_classes": num_classes,
-        "embed_dim": 192,
-        "depth": 2,  # Shallow!
-        "num_heads": 8,
-        "hopfield_hidden_dim": 576,  # 3x embed_dim
-        "et_steps": 6,
-        "drop_rate": 0.1,
-    }
-    config.update(kwargs)
-    return VisionEnergyTransformer(**config)
+    config = ViETConfig(
+        img_size=32,
+        patch_size=4,
+        in_chans=3,
+        num_classes=num_classes,
+        embed_dim=192,
+        depth=2,
+        num_heads=8,
+        hopfield_hidden_dim=576,
+        et_steps=6,
+        drop_rate=0.1,
+    )
+    config.apply_overrides(**kwargs)
+    return config.build()
 
 
 def viet_4l_cifar(
@@ -349,20 +351,20 @@ def viet_4l_cifar(
     **kwargs: Any,
 ) -> VisionEnergyTransformer:
     """Vision Energy Transformer with 4 layers for CIFAR datasets."""
-    config: dict[str, Any] = {
-        "img_size": 32,
-        "patch_size": 4,
-        "in_chans": 3,
-        "num_classes": num_classes,
-        "embed_dim": 192,
-        "depth": 4,
-        "num_heads": 8,
-        "hopfield_hidden_dim": 576,
-        "et_steps": 5,
-        "drop_rate": 0.1,
-    }
-    config.update(kwargs)
-    return VisionEnergyTransformer(**config)
+    config = ViETConfig(
+        img_size=32,
+        patch_size=4,
+        in_chans=3,
+        num_classes=num_classes,
+        embed_dim=192,
+        depth=4,
+        num_heads=8,
+        hopfield_hidden_dim=576,
+        et_steps=5,
+        drop_rate=0.1,
+    )
+    config.apply_overrides(**kwargs)
+    return config.build()
 
 
 def viet_6l_cifar(
@@ -370,17 +372,17 @@ def viet_6l_cifar(
     **kwargs: Any,
 ) -> VisionEnergyTransformer:
     """Vision Energy Transformer with 6 layers for CIFAR datasets."""
-    config: dict[str, Any] = {
-        "img_size": 32,
-        "patch_size": 4,
-        "in_chans": 3,
-        "num_classes": num_classes,
-        "embed_dim": 192,
-        "depth": 6,
-        "num_heads": 8,
-        "hopfield_hidden_dim": 576,
-        "et_steps": 4,
-        "drop_rate": 0.1,
-    }
-    config.update(kwargs)
-    return VisionEnergyTransformer(**config)
+    config = ViETConfig(
+        img_size=32,
+        patch_size=4,
+        in_chans=3,
+        num_classes=num_classes,
+        embed_dim=192,
+        depth=6,
+        num_heads=8,
+        hopfield_hidden_dim=576,
+        et_steps=4,
+        drop_rate=0.1,
+    )
+    config.apply_overrides(**kwargs)
+    return config.build()

@@ -50,6 +50,8 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+from energy_transformer.models.configs import ViTConfig
+
 __all__ = [
     "PatchEmbedding",
     "VisionTransformer",
@@ -383,54 +385,54 @@ class MLP(nn.Module):
 
 def vit_tiny(**kwargs: Any) -> VisionTransformer:
     """ViT-Tiny configuration."""
-    config: dict[str, Any] = {
-        "embed_dim": 192,
-        "depth": 12,
-        "num_heads": 3,
-        "mlp_ratio": 4.0,
-        "in_chans": 3,
-    }
-    config.update(kwargs)
-    return VisionTransformer(**config)
+    config = ViTConfig(
+        embed_dim=192,
+        depth=12,
+        num_heads=3,
+        mlp_ratio=4.0,
+        in_chans=3,
+    )
+    config.apply_overrides(**kwargs)
+    return config.build()
 
 
 def vit_small(**kwargs: Any) -> VisionTransformer:
     """ViT-Small configuration."""
-    config: dict[str, Any] = {
-        "embed_dim": 384,
-        "depth": 12,
-        "num_heads": 6,
-        "mlp_ratio": 4.0,
-        "in_chans": 3,
-    }
-    config.update(kwargs)
-    return VisionTransformer(**config)
+    config = ViTConfig(
+        embed_dim=384,
+        depth=12,
+        num_heads=6,
+        mlp_ratio=4.0,
+        in_chans=3,
+    )
+    config.apply_overrides(**kwargs)
+    return config.build()
 
 
 def vit_base(**kwargs: Any) -> VisionTransformer:
     """ViT-Base configuration."""
-    config: dict[str, Any] = {
-        "embed_dim": 768,
-        "depth": 12,
-        "num_heads": 12,
-        "mlp_ratio": 4.0,
-        "in_chans": 3,
-    }
-    config.update(kwargs)
-    return VisionTransformer(**config)
+    config = ViTConfig(
+        embed_dim=768,
+        depth=12,
+        num_heads=12,
+        mlp_ratio=4.0,
+        in_chans=3,
+    )
+    config.apply_overrides(**kwargs)
+    return config.build()
 
 
 def vit_large(**kwargs: Any) -> VisionTransformer:
     """ViT-Large configuration."""
-    config: dict[str, Any] = {
-        "embed_dim": 1024,
-        "depth": 24,
-        "num_heads": 16,
-        "mlp_ratio": 4.0,
-        "in_chans": 3,
-    }
-    config.update(kwargs)
-    return VisionTransformer(**config)
+    config = ViTConfig(
+        embed_dim=1024,
+        depth=24,
+        num_heads=16,
+        mlp_ratio=4.0,
+        in_chans=3,
+    )
+    config.apply_overrides(**kwargs)
+    return config.build()
 
 
 # CIFAR-specific configurations
@@ -438,33 +440,33 @@ def vit_large(**kwargs: Any) -> VisionTransformer:
 
 def vit_tiny_cifar(num_classes: int = 100, **kwargs: Any) -> VisionTransformer:
     """ViT-Tiny for CIFAR datasets."""
-    config: dict[str, Any] = {
-        "img_size": 32,
-        "patch_size": 4,
-        "in_chans": 3,
-        "num_classes": num_classes,
-        "embed_dim": 192,
-        "depth": 12,
-        "num_heads": 3,
-        "mlp_ratio": 4.0,
-        "drop_rate": 0.1,
-    }
-    config.update(kwargs)
-    return VisionTransformer(**config)
+    config = ViTConfig(
+        img_size=32,
+        patch_size=4,
+        in_chans=3,
+        num_classes=num_classes,
+        embed_dim=192,
+        depth=12,
+        num_heads=3,
+        mlp_ratio=4.0,
+        drop_rate=0.1,
+    )
+    config.apply_overrides(**kwargs)
+    return config.build()
 
 
 def vit_small_cifar(num_classes: int = 100, **kwargs: Any) -> VisionTransformer:
     """ViT-Small for CIFAR datasets."""
-    config: dict[str, Any] = {
-        "img_size": 32,
-        "patch_size": 4,
-        "in_chans": 3,
-        "num_classes": num_classes,
-        "embed_dim": 384,
-        "depth": 12,
-        "num_heads": 6,
-        "mlp_ratio": 4.0,
-        "drop_rate": 0.1,
-    }
-    config.update(kwargs)
-    return VisionTransformer(**config)
+    config = ViTConfig(
+        img_size=32,
+        patch_size=4,
+        in_chans=3,
+        num_classes=num_classes,
+        embed_dim=384,
+        depth=12,
+        num_heads=6,
+        mlp_ratio=4.0,
+        drop_rate=0.1,
+    )
+    config.apply_overrides(**kwargs)
+    return config.build()
