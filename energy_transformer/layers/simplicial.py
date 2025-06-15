@@ -258,6 +258,11 @@ class SimplicialHopfieldNetwork(nn.Module):
         return self.compute_energy(g)
 
     @property
+    def cache_size(self) -> int:
+        """Number of cached simplex configurations."""
+        return len(self._simplices_cache)
+
+    @property
     def device(self) -> torch.device:
         """Device of the module parameters."""
         return self.patterns.device

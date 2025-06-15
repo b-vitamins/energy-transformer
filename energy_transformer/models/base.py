@@ -82,3 +82,8 @@ class EnergyTransformer(nn.Module):
             e_att, e_hop = self._compute_energies(out)
 
         return out, [(e_att, e_hop)]
+
+    @property
+    def num_parameters(self) -> int:
+        """Number of trainable parameters in the transformer."""
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)

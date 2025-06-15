@@ -236,6 +236,11 @@ class VisionTransformer(nn.Module):
 
         return cast(Tensor, self.head(x))
 
+    @property
+    def num_parameters(self) -> int:
+        """Number of trainable parameters."""
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+
 
 class TransformerBlock(nn.Module):
     """Transformer block with attention and MLP."""
