@@ -1,4 +1,4 @@
-r"""Energy-based LayerNorm implementation following Energy Transformer theory."""
+"""Energy-based LayerNorm implementation following Energy Transformer theory."""
 
 import math
 from collections.abc import Sequence
@@ -26,7 +26,9 @@ class EnergyLayerNorm(nn.Module):
     layer-normalized representation is:
 
     .. math::
-        g_i = \gamma \frac{x_i - \bar{x}}{\sqrt{\frac{1}{D}\sum_j(x_j - \bar{x})^2 + \varepsilon}} + \delta_i
+        g_i = \gamma \frac{x_i - \bar{x}}{\sqrt{
+            \tfrac{1}{D}\sum_j (x_j - \bar{x})^2 + \varepsilon
+        }} + \delta_i
 
     where :math:`\bar{x} = \frac{1}{D}\sum_{k=1}^D x_k`.
 
@@ -34,7 +36,9 @@ class EnergyLayerNorm(nn.Module):
     Lagrangian:
 
     .. math::
-        L = D\gamma\sqrt{\frac{1}{D}\sum_j(x_j - \bar{x})^2 + \varepsilon} + \sum_j \delta_j x_j
+        L = D \gamma \sqrt{
+            \frac{1}{D} \sum_j (x_j - \bar{x})^2 + \varepsilon
+        } + \sum_j \delta_j x_j
 
     such that :math:`g_i = \frac{\partial L}{\partial x_i}`. This property is
     crucial for proving energy decrease in the Energy Transformer dynamics. The
@@ -46,12 +50,14 @@ class EnergyLayerNorm(nn.Module):
     ----------
     normalized_shape : int or tuple of ints
         Input shape from an expected input of size
-        ``[* x normalized_shape[0] x normalized_shape[1] x ... x normalized_shape[-1]]``.
+        ``[* x normalized_shape[0] x normalized_shape[1] x ... x
+        normalized_shape[-1]]``.
         If a single integer is used, it is treated as a singleton list.
     eps : float, default=1e-5
         Small constant for numerical stability in the denominator.
     regularization : float, default=0.0
-        Regularization coefficient \u03bb that adds \u03bbx to preserve input information.
+        Regularization coefficient \u03bb that adds \u03bbx to preserve
+        input information.
     enforce_positive_gamma : bool, default=True
         If True, uses log-parameterization with softplus to ensure \u03b3 > 0.
         This guarantees the energy L is bounded below, essential for
@@ -64,8 +70,10 @@ class EnergyLayerNorm(nn.Module):
     Attributes
     ----------
     gamma : nn.Parameter
-        Scalar scaling parameter \u03b3. If enforce_positive_gamma=True,
-        this is actually log(\u03b3) and \u03b3 is computed as softplus(log_gamma).
+        Scalar scaling parameter \u03b3.
+        If ``enforce_positive_gamma=True``, this
+        is actually ``log(\u03b3)`` and \u03b3 is computed as
+        ``softplus(log_gamma)``.
     delta : nn.Parameter
         Vector bias parameter \u03b4 \u2208 \u211d\u1d05.
     normalized_shape: tuple[int, ...]
@@ -74,13 +82,16 @@ class EnergyLayerNorm(nn.Module):
     Notes
     -----
     Mathematical Foundation:
-    The Energy LayerNorm operation emerges as the gradient of a Lagrangian function,
-    providing a principled activation function for energy-based models.
+    The Energy LayerNorm operation emerges as the gradient of a Lagrangian
+    function, providing a principled activation function for energy-based
+    models.
 
     Given input x \in \mathbb{R}^D, the operation computes:
 
     .. math::
-        g_i = \gamma \frac{x_i - \bar{x}}{\sqrt{\frac{1}{D}\sum_j(x_j - \bar{x})^2 + \varepsilon}} + \delta_i
+        g_i = \gamma \frac{x_i - \bar{x}}{\sqrt{
+            \tfrac{1}{D}\sum_j (x_j - \bar{x})^2 + \varepsilon
+        }} + \delta_i
 
     where:
     - \gamma \in \mathbb{R} is a learnable scalar scaling parameter
@@ -91,19 +102,23 @@ class EnergyLayerNorm(nn.Module):
     This operation is the gradient of the Lagrangian:
 
     .. math::
-        L(x) = D \cdot \gamma \cdot \sqrt{\frac{1}{D}\sum_j(x_j - \bar{x})^2 + \varepsilon} + \sum_j \delta_j x_j
+        L(x) = D \cdot \gamma \cdot \sqrt{
+            \tfrac{1}{D}\sum_j (x_j - \bar{x})^2 + \varepsilon
+        } + \sum_j \delta_j x_j
 
-    such that :math:`g_i = \frac{\partial L}{\partial x_i}`. This property ensures that the
-    Energy Transformer's dynamics minimize a well-defined energy function.
+    such that :math:`g_i = \frac{\partial L}{\partial x_i}`.
+    This property ensures that the Energy Transformer's dynamics
+    minimize a well-defined energy function.
 
     Energy Decrease Guarantee:
-    The Hessian :math:`M_{ij} = \frac{\partial^2 L}{\partial x_i \partial x_j}` is positive
-    semi-definite, which guarantees that the energy decreases during the forward dynamics
-    of the Energy Transformer. This is crucial for the convergence proof in equation (7)
-    of the paper [Hoover2023]_.
+    The Hessian :math:`M_{ij} = \frac{\partial^2 L}{\partial x_i \partial x_j}`
+    is positive semi-definite, which guarantees that the energy decreases during
+    the forward dynamics of the Energy Transformer. This is crucial for the
+    convergence proof in equation (7) of the paper [Hoover2023]_.
 
-    The regularization term \u03bbx can be added to help preserve input information during
-    the iterative refinement process, though it's not part of the original formulation.
+    The regularization term \u03bbx can be added to help preserve input
+    information during the iterative refinement process, though it's not part of
+    the original formulation.
 
     Examples
     --------
@@ -120,8 +135,9 @@ class EnergyLayerNorm(nn.Module):
 
     References
     ----------
-    .. [Hoover2023] Hoover, B., Liang, Y., Pham, B., Panda, R., Strobelt, H., Chau, D. H.,
-       Zaki, M. J., & Krotov, D. (2023). Energy Transformer.
+    .. [Hoover2023] Hoover, B., Liang, Y., Pham, B., Panda, R.,
+       Strobelt, H., Chau, D. H., Zaki, M. J.,
+       & Krotov, D. (2023). Energy Transformer.
        arXiv preprint arXiv:2302.07253. See equations (1) and (2).
     """
 
@@ -270,7 +286,8 @@ class EnergyLayerNorm(nn.Module):
         Computes:
 
         .. math::
-            L = D \\cdot \\gamma \\cdot \\sqrt{\frac{1}{D}\\sum_j(x_j - \bar{x})^2 + \varepsilon} + \\sum_j \\delta_j x_j
+            L = D \cdot \gamma \cdot \sqrt{\frac{1}{D}\sum_j(x_j - \bar{x})^2 + \varepsilon}
+            + \sum_j \delta_j x_j
         """
         dims = [-(i + 1) for i in range(len(self.normalized_shape))]
 
